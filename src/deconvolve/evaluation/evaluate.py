@@ -10,7 +10,13 @@ import numpy as np
 from rich.console import Console
 from rich.table import Table
 
-from ..coretypes import EVENT_DTYPE, RUN_DIR, DatasetName, artifacts_dir
+from ..coretypes import (
+    EVENT_DTYPE,
+    METRIC_DISPLAY_SCALE,
+    RUN_DIR,
+    DatasetName,
+    artifacts_dir,
+)
 from ..data import (
     DeconvolveDataset,
     gaussian_config_from_run_config,
@@ -398,19 +404,17 @@ def _triangular_from_histograms(
 ) -> NDArray[np.double]:
     """Triangular discriminator (Vincze-LeCam divergence) per dimension.
 
-    Delta(p,q) = sum (p_i - q_i)^2 / (p_i + q_i)  x  1e3
+    Delta(p,q) = sum (p_i - q_i)^2 / (p_i + q_i)
 
     The bin-width factor cancels analytically, so this works directly on
-    normalized histograms.
+    normalized histograms. Unscaled, like the other two metrics: every display
+    multiplies all three by `METRIC_DISPLAY_SCALE`.
     """
     denom: NDArray[np.double] = p + q
     nonempty: NDArray[np.bool] = denom > 0
     diff: NDArray[np.double] = p - q
-    return (
-        np.sum(
-            a=np.where(nonempty, diff**2 / np.where(nonempty, denom, 1.0), 0.0), axis=1
-        )
-        * 1e3
+    return np.sum(
+        a=np.where(nonempty, diff**2 / np.where(nonempty, denom, 1.0), 0.0), axis=1
     )
 
 
@@ -540,6 +544,13 @@ def evaluate_run(run_dir: Path, force: bool = False) -> dict[str, Any]:
     return metrics
 
 
+_METRIC_LABELS: tuple[tuple[str, str], ...] = (
+    ("wasserstein", "Wasserstein"),
+    ("jensenshannon", "JS div"),
+    ("triangular", "Delta"),
+)
+
+
 def render_metrics(
     run_name: str,
     metrics: dict[str, Any],
@@ -557,34 +568,24 @@ def render_metrics(
         ]
         if not level_metrics:
             continue
-        table = Table(title=f"{run_name} — {level.title()} level")
+        table = Table(
+            title=f"{run_name} — {level.title()} level",
+            caption=f"All distances x{METRIC_DISPLAY_SCALE:g}",
+        )
         table.add_column(header="Variable")
         table.add_column(header="Metric")
         table.add_column(header="Before", justify="right")
         table.add_column(header="After", justify="right")
         table.add_column(header="Improvement", justify="right")
         for var, m in level_metrics:
-            table.add_row(
-                var,
-                "Wasserstein",
-                f"{m['wasserstein_before']:.4f}",
-                f"{m['wasserstein_after']:.4f}",
-                f"{m['wasserstein_improvement_pct']:+.1f}%",
-            )
-            table.add_row(
-                "",
-                "JS div",
-                f"{m['jensenshannon_before']:.6f}",
-                f"{m['jensenshannon_after']:.6f}",
-                f"{m['jensenshannon_improvement_pct']:+.1f}%",
-            )
-            table.add_row(
-                "",
-                "Delta (x1e3)",
-                f"{m['triangular_before']:.4f}",
-                f"{m['triangular_after']:.4f}",
-                f"{m['triangular_improvement_pct']:+.1f}%",
-            )
+            for i, (key, label) in enumerate(_METRIC_LABELS):
+                table.add_row(
+                    var if i == 0 else "",
+                    label,
+                    f"{m[f'{key}_before'] * METRIC_DISPLAY_SCALE:.4f}",
+                    f"{m[f'{key}_after'] * METRIC_DISPLAY_SCALE:.4f}",
+                    f"{m[f'{key}_improvement_pct']:+.1f}%",
+                )
         active_console.print(table)
 
 

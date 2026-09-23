@@ -25,6 +25,7 @@ from ..coretypes import (
     ARTIFACTS_DIR,
     JET_OBS,
     JET_VARIABLE_GROUPS,
+    METRIC_DISPLAY_SCALE,
     artifacts_dir,
     display_order,
     figure_pages,
@@ -289,15 +290,6 @@ def timing_rows(timings: Mapping[str, Any], /) -> str:
     return "\n".join(lines)
 
 
-# Scaling each metric's column before printing. Raw, a real twelve-observable
-# run spans 6.2e-3 to 3.0e-1 (Wasserstein) and 8.5e-5..1.3e-2 (JS). `triangular` is NOT
-# scaled here because `evaluate._triangular_from_histograms` already multiplies by 1e3
-_SCALE: Final[dict[str, float]] = {
-    "wasserstein": 1e3,
-    "jensenshannon": 1e3,
-    "triangular": 1.0,
-}
-
 # Column groups, in the order the report presents them.
 _METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("WASSERSTEIN", "wasserstein"),
@@ -368,7 +360,6 @@ def _method_cells(
     level: str,
     variable: str,
     metric: str,
-    scale: float,
     /,
     *,
     is_best: bool = False,
@@ -383,7 +374,7 @@ def _method_cells(
     )
     if entry is None:
         return (_DASH, _DASH)
-    val: str = decimal(entry[f"{metric}_after"] * scale)
+    val: str = decimal(entry[f"{metric}_after"] * METRIC_DISPLAY_SCALE)
     impr: str = decimal(entry[f"{metric}_improvement_pct"])
     if is_best:
         if val != _DASH:
@@ -412,25 +403,21 @@ def _row(
         JET_OBS[variable].symbol if variable in JET_OBS else latex_text(variable)
     )
     label: str = rf"{symbol}\(^\dag\)" if daggered else symbol
-    scale: float = _SCALE[metric]
     ours: Mapping[str, float] = ran[f"{level}_{variable}"]
 
     best: frozenset[str] = _best_methods(
         variable, level, metric, ran, ibu, omnifold, daggered
     )
 
-    cells: list[str] = [label, decimal(ours[f"{metric}_before"] * scale)]
+    cells: list[str] = [
+        label,
+        decimal(ours[f"{metric}_before"] * METRIC_DISPLAY_SCALE),
+    ]
+    cells.extend(_method_cells(ibu, level, variable, metric, is_best="ibu" in best))
     cells.extend(
-        _method_cells(ibu, level, variable, metric, scale, is_best="ibu" in best)
+        _method_cells(omnifold, level, variable, metric, is_best="omnifold" in best)
     )
-    cells.extend(
-        _method_cells(
-            omnifold, level, variable, metric, scale, is_best="omnifold" in best
-        )
-    )
-    cells.extend(
-        _method_cells(ran, level, variable, metric, scale, is_best="ran" in best)
-    )
+    cells.extend(_method_cells(ran, level, variable, metric, is_best="ran" in best))
     return " & ".join(cells) + r" \\"
 
 

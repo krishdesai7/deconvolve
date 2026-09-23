@@ -1,12 +1,13 @@
+<!-- markdownlint-disable no-inline-html -->
 # Reporting & Artifacts
 
-RAN produces self-contained run directories containing models, training histories, evaluated metrics, and compiled LaTeX/PDF reports.
+<span style="font-variant: small-caps;">Deconvolve</span> produces self-contained run directories containing models, training histories, evaluated metrics, and compiled LaTeX/PDF reports.
 
 ---
 
 ## Run Directory Layout
 
-Each execution of `deconvolve train` creates a timestamped run directory under `runs/`:
+Each execution of `deconvolve train` creates a timestamped run directory under `runs/` with the following structure:
 
 ```shell
 runs/2026-09-19-164500_tag/
@@ -28,10 +29,10 @@ runs/2026-09-19-164500_tag/
 
 ## Automated LaTeX Dossiers
 
-Running `deconvolve report` compiles a comprehensive report dossier:
+Running `deconvolve report` compiles a comprehensive report dossier. E.g.,
 
 ```shell
-ran report --run-dir runs/2026-09-19-164500
+deconvolve report runs/2026-09-19-164500
 ```
 
 ### Generated Content

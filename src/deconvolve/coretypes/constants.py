@@ -47,6 +47,14 @@ COMPILE_CACHE_DIR: Final[Path] = CACHE_DIR / "jax"
 
 RUN_DIR: Final[Path] = Path("runs")
 
+# Every distance metric is *displayed* multiplied by this -- in the report, the
+# terminal table and the leakage-check log alike -- and *stored* unscaled.
+# `metrics.json` is a machine interface, so it holds the divergences as
+# defined; raw, a real twelve-observable run spans 6.2e-3..3.0e-1
+# (Wasserstein) and 8.5e-5..1.3e-2 (JS), which is what a human reader needs
+# scaled.
+METRIC_DISPLAY_SCALE: Final[float] = 1e3
+
 # A run directory is read by people. `config.json` and `report.pdf` stay at the
 # root because they are what a person opens; everything else -- checkpoints,
 # arrays, figures, the metrics and timing JSON -- is supporting material and

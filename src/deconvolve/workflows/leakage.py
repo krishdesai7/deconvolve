@@ -7,6 +7,7 @@ import numpy as np
 
 from ..coretypes import (
     EVENT_DTYPE,
+    METRIC_DISPLAY_SCALE,
     POISON_SENTINEL,
     TRUTH_SENTINEL,
     Events,
@@ -96,12 +97,13 @@ def run_leakage_check(poison: bool, sentinel: float, seed: int, init_seed: int) 
         td_b: float = _triangular_per_dim(ref, comp)[0]
         td_a: float = _triangular_per_dim(ref, comp, weights=w)[0]
         logger.info(
-            "%10s  Wasserstein: %.4f → %.4f (%+.1f%%)   Δ × 1e3: %.2f → %.2f (%+.1f%%)",
+            "%10s (x%g)  Wasserstein: %.2f → %.2f (%+.1f%%)  Δ: %.2f → %.2f (%+.1f%%)",
             level,
-            wd_b,
-            wd_a,
+            METRIC_DISPLAY_SCALE,
+            wd_b * METRIC_DISPLAY_SCALE,
+            wd_a * METRIC_DISPLAY_SCALE,
             _improvement(before=wd_b, after=wd_a),
-            td_b,
-            td_a,
+            td_b * METRIC_DISPLAY_SCALE,
+            td_a * METRIC_DISPLAY_SCALE,
             _improvement(before=td_b, after=td_a),
         )
