@@ -1,6 +1,7 @@
+<!-- markdownlint-disable no-inline-html -->
 # Evaluation & Metrics
 
-RAN evaluates the quality of reweighted distributions using three complementary distance metrics, comparing simulation against data before and after reweighting.
+<span style="font-variant: small-caps;">Deconvolve</span> evaluates the quality of reweighted distributions using three complementary distance metrics, comparing MC against nature distributions before and after reweighting.
 
 ---
 
@@ -8,27 +9,27 @@ RAN evaluates the quality of reweighted distributions using three complementary 
 
 All metrics are evaluated across every feature dimension on the held-out test split:
 
-### 1. 1D Wasserstein-1 Distance
+### 1. Wasserstein–1 Distance
 
-The earth mover's distance between the cumulative distribution functions $F_{\text{ref}}$ and $F_{\text{comp}}$:
+The earth mover's distance:
 
-$$\mathcal{W}_1 = \int |F_{\text{ref}}(t) - F_{\text{comp}}(t)| \, dt$$
+\[\mathcal{W}_1(p, q) = \int \left\vert\int_{-\infty}^t \lbrack p(x) - q(x) \rbrack \, \d x\right\vert \, \d t\]
 
-In RAN's implementation, the two CDFs are **never accumulated separately**. Accumulating them separately causes catastrophic cancellation when subtracting two numbers near 1. Instead, signed weights are accumulated in a single scan, keeping the running value at the size of the answer and preserving float32 precision.
+In <span style="font-variant: small-caps;">Deconvolve</span>'s implementation, the two CDFs are intentionally not accumulated separately. Accumulating them separately causes catastrophic cancellation when subtracting two numbers near 1. Instead, signed weights are accumulated in a single scan, keeping the running value at the size of the answer while maintaining single-precision accuracy.
 
-### 2. Jensen-Shannon Divergence
+### 2. Jensen–Shannon Divergence
 
-The symmetrized, bounded version of the Kullback-Leibler divergence:
+The JS Divergence is a symmetrized, bounded version analog to the Kullback-Leibler divergence:
 
-$$\text{JSD}(P \parallel Q) = \frac{1}{2} D_{\text{KL}}(P \parallel M) + \frac{1}{2} D_{\text{KL}}(Q \parallel M)$$
+\[\text{JSD}(p \parallel q) = \frac{1}{2} D_{\text{KL}}(p \parallel m) + \frac{1}{2} D_{\text{KL}}(q \parallel m)\]
 
-where $M = \frac{1}{2}(P + Q)$. Computed across uniform bins over the combined feature range.
+where \(m = \frac{1}{2}(p + q)\). The JS Divergence is computed across uniform bins over the combined feature range.
 
-### 3. Triangular Discriminator
+### 3. Vinze–LeCam Divergence (Triangular Discriminator)
 
-A symmetric $f$-divergence with desirable numerical properties near zero:
+A symmetric \(f-\)divergence with desirable numerical properties near zero. The Vinze--LeCam Divergence is defined as:
 
-$$\Delta(P, Q) = \int \frac{(p(x) - q(x))^2}{p(x) + q(x)} \, dx$$
+\[\Delta(p, q) = \int \frac{(p(x) - q(x))^2}{p(x) + q(x)} \, \d x\]
 
 ---
 
