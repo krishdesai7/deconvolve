@@ -24,7 +24,8 @@ class Split(Flag):
     TRAIN = auto()
     VAL = auto()
     TEST = auto()
-    ALL = TRAIN | VAL | TEST
+    FIT = TRAIN | VAL
+    ALL = FIT | TEST
 
 
 @dataclass(frozen=True, eq=False, slots=True)

@@ -1,6 +1,7 @@
+<!-- markdownlint-disable no-inline-html -->
 # Comparison Baselines
 
-RAN includes built-in implementations of standard unfolding baselines in High Energy Physics: **Iterative Bayesian Unfolding (IBU)** and **OmniFold**.
+<span style="font-variant: small-caps;">Deconvolve</span> includes built-in implementations of Iterative Bayesian Unfolding (IBU) and <span style="font-variant: small-caps;">OmniFold</span>, two standard unfolding methods in HEP.
 
 ---
 
@@ -8,7 +9,7 @@ RAN includes built-in implementations of standard unfolding baselines in High En
 
 To ensure a fair scientific comparison, baselines in `deconvolve.baselines._shared` adhere to a strict evaluation protocol:
 
-1. **Identical Datasets**: Baselines load the exact same event populations (`fit` and `test` splits) generated for a RAN run.
+1. **Identical Datasets**: Baselines load byte-for-byte identical event populations (`fit` and `test` splits) generated for a <span style="font-variant: small-caps;">Deconvolve</span> run.
 2. **Train/Val Only for Fitting**: Baselines fit their response models exclusively on `Split.TRAIN | Split.VAL`.
 3. **Identical Held-out Evaluation**: The test split is evaluated using the exact same vectorized metrics (`deconvolve.evaluation.evaluate`).
 
@@ -21,34 +22,34 @@ Iterative Bayesian Unfolding (also known as D'Agostini unfolding) is a classic b
 ### Implementation Details
 
 - **Module**: `deconvolve.baselines.ibu`
-- **Binning**: Automatically determines purity-based binning per variable.
+- **Binning**: Computes purity-based bins per observable.
 - **Weights**: Converts unfolded bin probabilities back into per-event weights for evaluation.
 
 ### Running IBU
 
 ```shell
-ran baseline ibu runs/2026-09-19-164500
+deconvolve baseline ibu runs/2026-09-19T164500Z
 ```
 
 ---
 
-## 2. OmniFold
+## 2. <span style="font-variant: small-caps;">OmniFold</span>
 
-OmniFold is an unbinned machine learning unfolding algorithm that alternates training two neural network classifiers using full phase-space event information.
+<span style="font-variant: small-caps;">OmniFold</span> is an unbinned machine learning unfolding algorithm that iteratively trains pairs of neural network classifiers using full phase-space event information. The particular implmentation relevant to this comparison is <span style="font-variant: small-caps;">MultiFold</span>, which unfolds a specific, pre-selected set of multiple high-level observables.
 
 ### The Isolated Worker Architecture
 
-OmniFold depends on TensorFlow, which cannot coexist in the main Python runtime:
+<span style="font-variant: small-caps;">OmniFold</span> depends on <span style="font-variant: small-caps;">TensorFlow</span>, which cannot coexist in <span style="font-variant: small-caps;">Deconvolve</span>'s primary Python runtime because:
 
-- TensorFlow has no official wheels for the project's Python version floor.
-- TensorFlow cannot share a Keras backend with JAX within a single process.
+- <span style="font-variant: small-caps;">TensorFlow</span> has no official wheels for Python > 3.13 at the time of writing, but the project supports all python versions >= 3.12.
+- <span style="font-variant: small-caps;">TensorFlow</span> cannot share a Keras backend with JAX within a single process.
 
-To resolve this, RAN uses an **isolated worker pattern**:
+To resolve this, <span style="font-variant: small-caps;">Deconvolve</span> uses an [_isolated worker pattern_](https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata) established under the [PEP 723](https://peps.python.org/pep-0723/) standard to run <span style="font-variant: small-caps;">OmniFold</span>.
 
 ```mermaid
 flowchart LR
-    Host["RAN Host Process (Python 3.14 + JAX)"]
-    Worker["_omnifold_worker.py (Python 3.13 + TensorFlow)"]
+    Host["<span style="font-variant: small-caps;">Deconvolve</span> Host Process (Python 3.14 + JAX)"]
+    Worker["_omnifold_worker.py (Python 3.13 + <span style="font-variant: small-caps;">TensorFlow</span>)"]
     Data["Interchange (.npz)"]
 
     Host -->|"Writes splits"| Data
@@ -58,12 +59,12 @@ flowchart LR
     Host -->|"Scores weights with JAX metrics"| Data
 ```
 
-1. **Host (`ran/baselines/omnifold.py`)**: Prepares populations from `config.json`, serializes them to a temporary `.npz` file, and invokes the worker.
-2. **Worker (`ran/baselines/_omnifold_worker.py`)**: A standalone PEP 723 script executed via `uv run --isolated --python 3.13` with pinned TensorFlow dependencies.
-3. **Scoring**: The worker writes the resulting event weights back to the `.npz` file, and the host evaluates them using RAN's JAX metric pipeline.
+1. **Host (`deconvolve/baselines/omnifold.py`)**: Prepares populations from `config.json`, serializes them to a temporary `.npz` file, and invokes the worker.
+2. **Worker (`deconvolve/baselines/_omnifold_worker.py`)**: A standalone PEP 723 script executed via `uv run --isolated --python 3.13` with pinned <span style="font-variant: small-caps;">TensorFlow</span> dependencies.
+3. **Scoring**: The worker writes the resulting event weights back to the `.npz` file, and the host evaluates them using <span style="font-variant: small-caps;">Deconvolve</span>'s JAX metric pipeline.
 
-### Running OmniFold
+### Running <span style="font-variant: small-caps;">OmniFold</span>
 
 ```shell
-ran baseline omnifold runs/2026-09-19-164500
+deconvolve baseline omnifold runs/2026-09-19T164500Z
 ```
