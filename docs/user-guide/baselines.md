@@ -47,21 +47,24 @@ deconvolve baseline ibu runs/2026-09-19T164500Z
 To resolve this, <span style="font-variant: small-caps;">Deconvolve</span> uses an [_isolated worker pattern_](https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata) established under the [PEP 723](https://peps.python.org/pep-0723/) standard to run <span style="font-variant: small-caps;">OmniFold</span>.
 
 ```mermaid
-flowchart LR
-    Host["<span style="font-variant: small-caps;">Deconvolve</span> Host Process (Python 3.14 + JAX)"]
-    Worker["_omnifold_worker.py (Python 3.13 + <span style="font-variant: small-caps;">TensorFlow</span>)"]
-    Data["Interchange (.npz)"]
+%%{init: {'flowchart': {'wrappingWidth': 375}}}%%
+flowchart TD
+    A["<b style="font-variant: small-caps;">Deconvolve</b><br/>Construct the run's train/val/test events from config.json."]
+    B["<b style="font-variant: small-caps;">OmniFold</b><br/> In an isolated Python 3.13 process with <span style="font-variant: small-caps;">TensorFlow</span>,<br/>Train on the events.<br/>Compute one weight per test event"]
+    C["<b style="font-variant: small-caps;">Deconvolve</b><br/>Score with the same metrics as other methods.<br/>Write metrics_omnifold.json and omnifold_weights.npz to run folder."]
 
-    Host -->|"Writes splits"| Data
-    Host -->|"Spawns PEP 723 script"| Worker
-    Worker -->|"Reads splits & trains"| Data
-    Worker -->|"Writes weights"| Data
-    Host -->|"Scores weights with JAX metrics"| Data
+    A -->|"events, in an .npz file"| B
+    B -->|"weights, in an .npz file"| C
+
+    classDef deconvolve fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef omnifold fill:#fef3c7,stroke:#d97706,color:#78350f
+    class A,C deconvolve
+    class B omnifold
 ```
 
-1. **Host (`deconvolve/baselines/omnifold.py`)**: Prepares populations from `config.json`, serializes them to a temporary `.npz` file, and invokes the worker.
-2. **Worker (`deconvolve/baselines/_omnifold_worker.py`)**: A standalone PEP 723 script executed via `uv run --isolated --python 3.13` with pinned <span style="font-variant: small-caps;">TensorFlow</span> dependencies.
-3. **Scoring**: The worker writes the resulting event weights back to the `.npz` file, and the host evaluates them using <span style="font-variant: small-caps;">Deconvolve</span>'s JAX metric pipeline.
+1. **Host (`deconvolve/baselines/omnifold.py`)**: Rebuilds the run's populations from `config.json`, the same way the other baselines do. It writes the arrays <span style="font-variant: small-caps;">OmniFold</span> needs to `in.npz` in a temporary directory: the fit split's `x_data`, `x_sim` and `z_gen`, and the test split's `z_gen`, whose weights will be scored. \(z_\text{true}\) is never written, so the worker cannot see it.
+2. **Worker (`deconvolve/baselines/_omnifold_worker.py`)**: A standalone script whose PEP 723 header pins Python 3.13 and <span style="font-variant: small-caps;">TensorFlow</span>. The host runs it with `uv run --no-project`, so uv provisions that environment from the header rather than using the project's. It trains <span style="font-variant: small-caps;">MultiFold</span> and writes one weight per test event to `out.npz`.
+3. **Scoring**: The host reads the weights back and scores them with the same metrics as every other method, writing `artifacts/metrics_omnifold.json` and `artifacts/omnifold_weights.npz` (see [Evaluation & Metrics](evaluation.md)).
 
 ### Running <span style="font-variant: small-caps;">OmniFold</span>
 
