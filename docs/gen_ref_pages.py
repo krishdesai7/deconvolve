@@ -74,12 +74,16 @@ for pkg in packages:
         for child, is_pkg in children(pkg):
             kind = "package" if is_pkg else "module"
             fd.write(f"| {link(child, package=is_pkg, base=pkg)} | {kind} |\n")
-    mkdocs_gen_files.set_edit_path(OUT / doc_path(pkg, package=True), ROOT.joinpath(*pkg, "__init__.py"))
+    mkdocs_gen_files.set_edit_path(
+        OUT / doc_path(pkg, package=True), ROOT.joinpath(*pkg, "__init__.py")
+    )
 
 for mod in modules:
     with mkdocs_gen_files.open(OUT / doc_path(mod, package=False), "w") as fd:
         fd.write(f"::: {'.'.join(mod)}\n")
-    mkdocs_gen_files.set_edit_path(OUT / doc_path(mod, package=False), ROOT.joinpath(*mod).with_suffix(".py"))
+    mkdocs_gen_files.set_edit_path(
+        OUT / doc_path(mod, package=False), ROOT.joinpath(*mod).with_suffix(".py")
+    )
 
 
 def write_nav(fd, pkg: tuple[str, ...], depth: int) -> None:
