@@ -63,9 +63,18 @@ src/deconvolve/
 Dependencies point in one direction. Nothing depends on `cli` or `workflows`, and no two packages depend on each other. Every package may use `coretypes` and `instrumentation`; those edges are omitted below for clarity. An arrow into a group means a dependency on every package in it.
 
 ```mermaid
-
+---
+# ELK routes the group-to-group edges around Methods; dagre drops them straight down.
+config:
+  layout: dagre
+  flowchart:
+    curve: stepAfter
+---
 flowchart TB
+    %% Junctions: dagre aims each edge at the target's centre, so fanned-out edges leave cli's
+    %% sides and land on coretypes' corners. Routing them through a point gives a clean bus.
     cli(cli)
+    cliHub@{ shape: f-circ }
 
     reporting(reporting)
 
@@ -86,12 +95,14 @@ flowchart TB
     subgraph infrastructure["Infrastructure"]
         data(data)
         config(config)
+        infraHub@{ shape: f-circ }
         coretypes(coretypes)
     end
 
-    cli --> reporting
-    cli --> orchestration
-    cli --> config
+    cli --- cliHub
+    cliHub --> orchestration
+    cliHub --> reporting
+    cliHub --> config
 
     workflows --> methods
     orchestration --> execution
@@ -101,8 +112,9 @@ flowchart TB
 
     execution --> data
 
-    data --> coretypes
-    config --> coretypes
+    data --- infraHub
+    config --- infraHub
+    infraHub --> coretypes
 
     %% Translucent fills: pastel over the light theme, a tint over the dark one.
     classDef pkg fill:#526cfe1a,stroke:#526cfe
@@ -111,6 +123,9 @@ flowchart TB
     style methods fill:#14b8a614,stroke:#14b8a6
     style execution fill:#f9731614,stroke:#f97316
     style infrastructure fill:#06b6d414,stroke:#06b6d4
+    %% currentColor follows the page theme; Mermaid's style parser rejects var().
+    classDef junction fill:currentColor,stroke:currentColor
+    class cliHub,infraHub junction
 ```
 
 The dashed edge is an import deferred to the one function that needs it, which keeps `reporting` free of JAX at import time. `coretypes` imports nothing from the rest of the package at run time.
