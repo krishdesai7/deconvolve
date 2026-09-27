@@ -398,7 +398,7 @@ Each selected substructure variable is z-score standardized using the MC gen-lev
   The order is load-bearing, not cosmetic: column `i` is filled from `variables[i]`, `_save_run` records that order in `config.json`, and a later `deconvolve evaluate` or `deconvolve baseline ibu` must reproduce it to label the columns — or to hand a trained generator its own features. A `set` or `frozenset` is refused outright, because its iteration order depends on per-process randomized string hashes and so cannot survive into the second process. Duplicate and unknown names are refused too.
 
 - `seed: int = 42` Dataset seed, controlling the shuffle, the train/val/test split and the per-epoch batch order. Independent of the weight-init seed passed to `train`.
-  There is no `dtype` argument. The npz caches on disk are the float64 the Zenodo release ships, and the standardization statistics are computed in that precision; the narrowing to `EVENT_DTYPE` happens once, here, on the way into the pipeline.
+  There is no `dtype` argument. The npz caches on disk are the float64 the Zenodo release ships; the narrowing to `EVENT_DTYPE` happens once, here, on the way into the pipeline, so the standardization statistics are computed on the float32 columns.
 
 Narrowing _after_ the observables are computed is deliberate, not incidental: `deconvolve.data.download._get_var` upcasts to float64 first, because the ε it uses to protect degenerate jets is below the smallest float32 denormal. Narrow before that and it rounds to zero, handing back `NaN` for exactly the jets the ε exists to protect.
 

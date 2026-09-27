@@ -1,6 +1,7 @@
+<!-- markdownlint-disable no-inline-html -->
 # Caching & Seeding
 
-Reproducibility and execution speed in RAN rely on a unified cache directory hierarchy and deterministic PRNG key management.
+Reproducibility and execution speed in <span style="font-variant: small-caps;">Deconvolve</span> rely on a unified cache directory hierarchy and deterministic PRNG key management.
 
 ---
 
@@ -20,30 +21,30 @@ All regenerable artifacts share a common cache root configured by `deconvolve.co
 
 ### Relocating the Cache (`DECONVOLVE_CACHE_DIR`)
 
-On high-performance computing (HPC) clusters where `$HOME` has strict quotas, set `DECONVOLVE_CACHE_DIR` to point to scratch storage:
+On high-performance computing (HPC) clusters where `$HOME` has strict quotas, set `DECONVOLVE_CACHE_DIR` to point to scratch storage. E.g.,
 
 ```shell
 export DECONVOLVE_CACHE_DIR=$SCRATCH/deconvolve_cache
 ```
 
-Deconvolve deliberately avoids `XDG_CACHE_HOME` because that variable often points to `~/.cache`, which would silently displace local checkouts.
+<span style="font-variant: small-caps;">Deconvolve</span> deliberately avoids `XDG_CACHE_HOME` because that variable often points to `~/.cache`, which would silently displace local checkouts.
 
 ---
 
 ## Two-Tier Seeding Architecture
 
-Deconvolve separates dataset generation from model initialization using two independent seeds:
+<span style="font-variant: small-caps;">Deconvolve</span> separates dataset generation from model initialisation using two independent seeds:
 
 | Seed Parameter | Default | Role           | What it Controls                                                   |
 | :------------- | :------ | :------------- | :----------------------------------------------------------------- |
 | `data_seed`    | `42`    | **Data Axis**  | Synthetic Gaussian draws, train/val/test splits, event subsampling |
-| `seed`         | `42`    | **Model Axis** | Neural network weight initialization, batch reshuffling            |
+| `seed`         | `42`    | **Model Axis** | Neural network weight initialisation, batch reshuffling            |
 
 ### Why Two Seeds?
 
-In variance estimation, keeping `data_seed` fixed while varying `seed` allows measuring the **initialization variance** of the algorithm on the exact same dataset.
+In variance estimation, keeping `data_seed` fixed while varying `seed` allows measuring the initialisation variance of the algorithm on the exact same dataset.
 
-Conversely, keeping `seed` fixed while varying `data_seed` or bootstrapping allows measuring **sample variance** (statistical uncertainty) independent of optimizer stochasticity.
+Conversely, keeping `seed` fixed while varying `data_seed` or bootstrapping allows measuring sample variance (statistical uncertainty) independent of optimiser stochasticity.
 
 ---
 

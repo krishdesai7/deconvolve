@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import Any
 
+    from deconvolve.coretypes import EventArray
+
 import numpy as np
 import pytest
 import yaml
@@ -299,6 +301,32 @@ class TestLabelledAndPhysicsForms:
         with pytest.raises(ValueError, match="row-aligned"):
             _ = Events(
                 np.zeros((5, 1), dtype=np.single), np.zeros((4, 1), dtype=np.single)
+            )
+
+    def test_populations_reject_a_float64_source(self) -> None:
+        """A source that forgot to narrow is caught where its events enter."""
+        valid = self._populations()
+        with pytest.raises(ValueError, match="data is float64"):
+            _ = Populations(
+                mc=valid.mc,
+                data=cast("EventArray", valid.data.astype(np.double)),
+                truth=valid.truth,
+            )
+
+    def test_populations_reject_a_flat_array(self) -> None:
+        """One feature is a column, not a vector: (n, 1), never (n,)."""
+        valid = self._populations()
+        with pytest.raises(ValueError, match="truth has shape"):
+            _ = Populations(mc=valid.mc, data=valid.data, truth=valid.truth.ravel())
+
+    def test_populations_reject_a_feature_count_mismatch(self) -> None:
+        """Truth describes the same features as the generated sample."""
+        valid = self._populations()
+        with pytest.raises(ValueError, match="truth has 2 features"):
+            _ = Populations(
+                mc=valid.mc,
+                data=valid.data,
+                truth=np.hstack([valid.truth, valid.truth]),
             )
 
     def test_labels_must_be_zero_or_one(self) -> None:

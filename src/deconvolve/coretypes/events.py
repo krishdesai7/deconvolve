@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, NamedTuple, cast
 
 import numpy as np
 
-from .constants import TRUTH_SENTINEL
+from .constants import EVENT_DTYPE, TRUTH_SENTINEL
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -64,6 +64,38 @@ class Populations:
     truth: EventArray
 
     def __post_init__(self) -> None:
+        # `EventArray` pins the dtype for the type checkers only, so a source
+        # that forgot to narrow would otherwise travel as far as the first
+        # jitted function, which fails far from the cause or silently casts.
+        # Every source builds one of these, which makes it the one boundary
+        # worth checking at run time.
+        arrays: dict[str, EventArray] = {
+            "mc.z": self.mc.z,
+            "mc.x": self.mc.x,
+            "data": self.data,
+            "truth": self.truth,
+        }
+        for name, array in arrays.items():
+            if array.dtype != EVENT_DTYPE:
+                raise ValueError(
+                    f"{name} is {array.dtype}; events must be "
+                    f"{np.dtype(EVENT_DTYPE)}, narrowed where the source builds them"
+                )
+            if array.ndim != 2:
+                raise ValueError(
+                    f"{name} has shape {array.shape}; events must be 2-D, "
+                    "(events, features), even with a single feature"
+                )
+        for name, array, reference in (
+            ("truth", self.truth, "mc.z"),
+            ("data", self.data, "mc.x"),
+        ):
+            if array.shape[1] != arrays[reference].shape[1]:
+                raise ValueError(
+                    f"{name} has {array.shape[1]} features and {reference} has "
+                    f"{arrays[reference].shape[1]}; they describe the same "
+                    "observables"
+                )
         if self.data.shape[0] != self.truth.shape[0]:
             raise ValueError(
                 f"data has {self.data.shape[0]} rows and truth has "

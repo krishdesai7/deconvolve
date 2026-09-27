@@ -72,9 +72,10 @@ def load_jet_dataset(
     Passing a `set` or `frozenset` here is a bug, not a convenience.
     """
     _reject_unordered(variables)
-    # The npz caches on disk are float64 (what the Zenodo release ships, and
-    # what the standardization statistics are computed in). Narrowing happens
-    # once here, on the way into the pipeline.
+    # The npz caches on disk are float64, as the Zenodo release ships them.
+    # Narrowing happens once here, on the way into the pipeline, so the
+    # standardization statistics below are float32 reductions (pairwise
+    # summation keeps them accurate).
     scalar: np.dtype[np.single] = np.dtype(EVENT_DTYPE)
 
     missing: list[str] = [
