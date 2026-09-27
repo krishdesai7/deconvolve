@@ -490,7 +490,7 @@ def test_freeze_writes_exactly_the_spec_declares(project: Path) -> None:
     import json
     from typing import Any
 
-    from deconvolve.config_spec import build_spec
+    from deconvolve.config.spec import build_spec
 
     design = project / "design"
     result = runner.invoke(app, ["uncertainty", "freeze", str(design)])

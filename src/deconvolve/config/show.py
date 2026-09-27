@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.table import Column, Table
 
-from .coretypes.constants import CACHE_ENV_VAR
+from ..coretypes.constants import CACHE_ENV_VAR
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .config import Layer, Resolved
+    from .layers import Layer, Resolved
 
 # Resolved at import in their own modules, so they cannot join the layered
 # stack. See the spec's "Deferred" section.

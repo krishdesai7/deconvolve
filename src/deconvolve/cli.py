@@ -12,8 +12,8 @@ from typer.core import TyperGroup, TyperOption
 
 from .baselines import ibu_evaluate_runs, omnifold_evaluate_runs
 from .config import ConfigError, default_map, discover, load, origins_for
-from .config_show import render
-from .config_spec import build_spec
+from .config.show import render
+from .config.spec import build_spec
 from .coretypes import (
     DEFAULT_PURITY_THRESHOLD,
     POISON_SENTINEL,
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from typer._click.core import Command, Context, ParameterSource
 
     from .config import Resolved
-    from .config_spec import CommandSpec
+    from .config.spec import CommandSpec
 
 logger: Logger = logging.getLogger(name=__name__)
 

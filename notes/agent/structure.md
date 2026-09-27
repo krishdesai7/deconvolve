@@ -8,6 +8,10 @@ src/deconvolve/                      Python package
 ├── __main__.py                Fallback entry point (python -m ran)
 ├── cli.py                    Unified Typer command tree; `ran` script targets cli:app
 ├── py.typed                  PEP 561 marker
+├── config/                    Layered CLI configuration (see configuration.md)
+│   ├── layers.py               Discovery and merge of TOML layers; stdlib-only leaf
+│   ├── spec.py                 Command tree introspected from the live Typer app
+│   └── show.py                 `deconvolve config show` rendering (Rich)
 ├── coretypes/
 │   ├── events.py              Split, Events, ZXY, Populations, DatasetSplits
 │   ├── configs.py             GaussianConfig, RunConfig, REQUIRED_KEYS

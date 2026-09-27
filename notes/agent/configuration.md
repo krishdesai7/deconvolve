@@ -13,7 +13,7 @@ preference lives in a file instead of a person's shell history or a
 | 4 | Environment | `DECONVOLVE_<COMMAND>_<OPTION>`, via Click's `auto_envvar_prefix` |
 | 5 | Command line | `--n-epochs 500` |
 
-Each layer overrides everything above it. Layers 2-3 are files `src/deconvolve/config.py`
+Each layer overrides everything above it. Layers 2-3 are files `src/deconvolve/config/layers.py`
 discovers and merges into a Click `default_map`; the module is a stdlib-only
 leaf (`tomllib`, `pathlib`, `difflib`) so discovery and merge stay unit-
 testable without importing JAX, Keras or Typer. It does not import `os` itself
@@ -79,7 +79,7 @@ repository it terminates at the filesystem root.
 Exactly one project-level file ever contributes, so "which file did this value
 come from" has exactly one answer — the alternative, merging every file on the
 path, was rejected for exactly this reason (see the design spec's
-"Alternatives considered"). `src/deconvolve/config.py`'s `_project_layer` implements
+"Alternatives considered"). `src/deconvolve/config/layers.py`'s `_project_layer` implements
 the walk; `_project_layer_in` implements the shadowing within one directory.
 
 ## Schema
@@ -116,7 +116,7 @@ and `uncertainty run`/`freeze`, but 50 for `baseline omnifold`; `batch_size`
 is 1024 in most commands but 512 for `baseline omnifold`
 (`cli.py:omnifold_command`). A flat `n-epochs = 500` would silently retune a
 baseline while the author believed they were configuring training.
-`config_spec.build_spec` derives the tree straight from the live Typer app —
+`config.spec.build_spec` derives the tree straight from the live Typer app —
 command names, their option names, the denylist below — so a new command or
 flag is validated the moment it is added, with no parallel table to keep in
 sync.
@@ -156,13 +156,13 @@ Every Typer **Option** is layerable except:
 - `load_run` on `train` — names one specific prior run, not a preference.
 - `as_json` on `config show` — a per-invocation output-format toggle.
 
-`config_spec.NOT_LAYERABLE` keys this denylist by command path (empty tuple
+`config.spec.NOT_LAYERABLE` keys this denylist by command path (empty tuple
 for the root) so the error names which command rejected the key. A config key
 naming one of these is a hard `ConfigError` explaining why, not merely
 "unknown key".
 
 **`uncertainty run` is excluded by a different mechanism**, not the denylist
-above: `config_spec.FROZEN_COMMANDS` removes it from the command tree
+above: `config.spec.FROZEN_COMMANDS` removes it from the command tree
 `build_spec` walks entirely, so a `[uncertainty.run]` table anywhere is an
 unknown-table error regardless of what it contains, and no discovered file
 can populate any part of its `default_map` even by accident. `NOT_LAYERABLE`
@@ -248,7 +248,7 @@ would reveal it. The bootstrap-versus-seed decomposition depends on every cell
 having trained under identical settings; a silently split design produces a
 number that looks like a variance estimate and is not one.
 
-So `uncertainty run` does not read the config layers at all. `config_spec.
+So `uncertainty run` does not read the config layers at all. `config.spec.
 FROZEN_COMMANDS` excludes `("uncertainty", "run")` from the command tree
 `build_spec` walks, which means no discovered file can populate its
 `default_map` even by accident. Instead:

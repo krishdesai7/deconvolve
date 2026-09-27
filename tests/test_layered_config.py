@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 from deconvolve.cli import app
 from deconvolve.config import ConfigError, Layer, default_map, discover, load
-from deconvolve.config_spec import CommandSpec, build_spec
+from deconvolve.config.spec import CommandSpec, build_spec
 
 if TYPE_CHECKING:
     from pathlib import Path

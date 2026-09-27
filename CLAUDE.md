@@ -59,7 +59,7 @@ Source files carry no pointers into `notes/`; this is the map. Line numbers drif
 | `instrumentation/timing.py:356` `write`, `:252` `_ordered`        | [timing.md](notes/agent/timing.md)                       |
 | `baselines/omnifold.py:1` module docstring                        | [omnifold.md](notes/agent/omnifold.md)                   |
 | `baselines/omnifold.py:229` `_record_iteration_timings`, `:334`   | [timing.md](notes/agent/timing.md)                       |
-| `config_show.py:1` module docstring                               | [configuration.md](notes/agent/configuration.md)         |
+| `config/show.py:1` module docstring                               | [configuration.md](notes/agent/configuration.md)         |
 
 ## Maintaining This File
 

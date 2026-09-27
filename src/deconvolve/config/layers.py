@@ -2,7 +2,7 @@
 
 A leaf module: it imports only the standard library, so it can be unit-tested
 without paying for JAX, Keras or Typer. The command tree it validates against
-is built separately in `config_spec.py` and passed in.
+is built separately in `spec.py` and passed in.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from typing import Any, Final, LiteralString
 
-    from .config_spec import CommandSpec
+    from .spec import CommandSpec
 
 # `tool.deconvolve` in a pyproject; the whole document in a `deconvolve.toml`.
 _PYPROJECT_TABLE: Final[tuple[LiteralString, ...]] = ("tool", "deconvolve")
