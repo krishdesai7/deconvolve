@@ -1,65 +1,68 @@
+<!-- markdownlint-disable no-inline-html -->
 # Data Model
 
-Deconvolve represents particle-level events in two distinct forms at opposite ends of the pipeline: the **physics representation** (`Populations`) and the **machine learning transport representation** (`ZXY`).
+<span style="font-variant: small-caps;">Deconvolve</span> holds a set of events in one of two forms, both defined in `deconvolve.coretypes`. `Populations` groups the events by origin (simulation, data and, where it exists, the particle-level truth of the data) and is used wherever the analysis must distinguish them: when a dataset is constructed, and when results are evaluated. `ZXY` stores all events as a single labelled sample, which is the form required for shuffling, splitting and training.
 
 ---
 
-## 1. Physics Representation: `Populations`
+## `Populations`
 
-`Populations` represents the physical origin of events before training or during evaluation:
+A `Populations` has three fields:
 
-- **`mc` (`Events`)**: The simulation, pairing generated particle-level truth `mc.z` with simulated detector response `mc.x` row-by-row.
-- **`data` (`EventArray`)**: The observed detector measurement.
-- **`truth` (`EventArray`)**: The particle-level answer key (available only in synthetic closure tests).
+| Field | Type | Contents |
+| :--- | :--- | :--- |
+| `mc` | `Events` | The simulation: particle-level events `mc.z` (\(z_\text{gen}\)) and their detector-level counterparts `mc.x` (\(x_\text{sim}\)), paired row by row. |
+| `data` | array | The detector-level measurement, \(x_\text{data}\). |
+| `truth` | array | The particle-level events underlying the data, \(z_\text{true}\). |
 
-### The Truth Isolation Boundary
+### Isolation of the truth
 
-In a real experimental measurement, the particle-level truth does not exist. To prevent networks or baselines from accidentally accessing this answer key:
+In a real measurement, \(z_\text{true}\) does not exist, and no part of the method may depend on it. The type is structured to make accidental access difficult:
 
-1. `truth` sits strictly outside `mc`. Any function passed `mc` cannot access `truth`.
-2. When truth is unavailable, `truth` is filled with `TRUTH_SENTINEL = -2^15`.
-3. The property `populations.has_truth` indicates whether truth is present.
-4. Accessing truth requires an explicit call to `populations.require_truth()`, which raises an exception if the sentinel is encountered.
+- `truth` is a separate field, not part of `mc`. A function that receives the simulation, `mc`, has no route to the truth.
+- When no truth is available, `truth` is filled with a sentinel value, `TRUTH_SENTINEL` \(= -2^{15}\).
+- `has_truth` reports whether real truth is present. Code that needs the truth, such as the particle-level metrics, obtains it through `require_truth()`, which raises an error when only the sentinel is present.
 
 ---
 
-## 2. Transport Representation: `ZXY`
+## `ZXY`
 
-`ZXY` represents events formatted for batching and optimization:
+A `ZXY` stores data and simulation together, one row per event:
 
-- **`z`**: Particle-level features (or sentinels for nature rows).
-- **`x`**: Detector-level features.
-- **`y`**: Binary domain labels ($y = 1$ for data, $y = 0$ for simulation).
+| Field | Contents |
+| :--- | :--- |
+| `z` | Particle-level features: \(z_\text{gen}\) for simulated events, and the `truth` field for data events. |
+| `x` | Detector-level features: \(x_\text{sim}\) or \(x_\text{data}\). |
+| `y` | The label: \(y = 1\) for data, \(y = 0\) for simulation. |
 
-### Representation Conversion
+In this form the events can be shuffled and divided into training, validation and test splits without regard to their origin.
+
+### Conversion between the two forms
 
 ```mermaid
 flowchart LR
-    Pop["Populations (Physics Form)"] -->|"interleave()"| ZXY["ZXY (Transport Form)"]
-    ZXY -->|"partition()"| Pop
+    P["Populations"] -->|"interleave()"| Z["ZXY"]
+    Z -->|"partition()"| P
 ```
 
-- **`Populations.interleave()`**: Converts physics populations into transport form (data rows first with $y=1$, followed by simulation rows with $y=0$).
-- **`ZXY.partition()`**: Partitions batched arrays back into distinct populations.
+`Populations.interleave()` concatenates the data events (\(y = 1\)) followed by the simulated events (\(y = 0\)). `ZXY.partition()` separates the events by label into a `Populations` again.
 
-!!! note "Lossless Conversion"
-Converting `Populations` to `ZXY` is lossless. Partitioning `ZXY` back to `Populations` reconstructs the samples, but row ordering from shuffling is discarded.
+A `Populations` converted to `ZXY` and back is recovered exactly. The reverse does not hold: `partition()` does not preserve the order of a shuffled `ZXY`, so a `ZXY` should not be expected to survive a round trip through `Populations`.
+
+### Training form
+
+Before training, the splits of a `ZXY` are transferred once to the accelerator as JAX arrays (`deconvolve.data.device`). All batches are drawn from these on the device, so no further transfers between host and device take place during a run.
 
 ---
 
-## 3. Sentinels & Gradient Safety
+## Why the sentinel is finite
 
-Why is `TRUTH_SENTINEL` defined as `-2^15` instead of `np.nan`?
+In training, the generator is evaluated on the `z` column of every row, including the data rows. The data rows' outputs are then discarded by the weight normalization,
 
-During training, `z` is passed to the generator $g(z)$. For nature events ($y=1$), the generator's output is masked out:
+\[w_i = y_i + (1 - y_i)\, \hat{g}(z_i),\]
 
-$$w_i = (1 - y_i) \cdot g(z_i)$$
+where \(\hat{g}\) is the generator's output normalized over the simulated events. Each data row receives weight exactly 1, and its \(z\) contributes nothing to the weights, the loss or the gradients.
 
-Under IEEE 754 floating-point arithmetic:
+This relies on the discarded values being finite. In IEEE 754 arithmetic, \(0 \times c = 0\) for any finite \(c\), but \(0 \times \text{NaN} = \text{NaN}\). A NaN sentinel would therefore propagate through the normalization sum to every weight in the batch, and from there to every gradient. \(-2^{15}\) is finite, lies far outside the range of any standardized feature, and is exactly representable in every IEEE binary format down to half precision, so `has_truth` can test for it by exact comparison.
 
-- $0 \times (-2^{15}) = 0.0$ (finite numbers are annihilated).
-- $0 \times \text{NaN} = \text{NaN}$ (NaNs propagate).
-
-If `np.nan` were used as the sentinel, NaNs would propagate through the weight normalization sum to every weight in the batch, causing gradients in `jax.grad` to immediately become NaN.
-
-`-2^15` is an ordinary finite number that survives narrowing to float16 and is cleanly annihilated by the mask.
+`deconvolve leakage-check` verifies the masking end to end (see [System Design](system-design.md#the-truth-is-isolated-by-type)).
