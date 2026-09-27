@@ -1,0 +1,1557 @@
+\documentclass[12pt]{article}
+\overfullrule=5mm
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{cochineal}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\usepackage[thmset=rich,sepcounters=true,proofref={always,margin},qedsymbolblacksquare=false]{phfthm}
+\phfMakeTheorem[proofref=false,thmstyle=definition]{example}{Example}
+\phfMakeTheorem[proofref=false,thmstyle=definition]{assumption}{Assumption}
+
+\usepackage{siunitx}
+\sisetup{
+    uncertainty-mode = separate,
+    parse-units=false
+}
+\DeclareSIUnit\nat{nat}
+\DeclareSIUnit\event{event}
+
+\usepackage{enumitem}
+\usepackage{fixdif}
+\usepackage{physics2}
+\usephysicsmodule{ab}
+
+\usepackage{bbm}
+
+\usepackage[style=numeric,backend=biber,sorting=none]{biblatex}
+\addbibresource{references.bib}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={What's so Universal about Universal Responses?}
+}
+
+\usepackage{cleveref}
+\crefname{phfthm@theorem}{theorem}{theorems}
+\crefname{phfthm@definition}{definition}{definitions}
+\crefname{phfthm@proposition}{proposition}{propositions}
+\crefname{phfthm@lemma}{lemma}{lemmata}
+\crefname{phfthm@corollary}{corollary}{corollaries}
+\crefname{phfthm@remark}{remark}{remarks}
+\crefname{phfthm@example}{example}{examples}
+\crefname{phfthm@assumption}{assumption}{assumptions}
+\crefname{property}{property}{properties}
+\crefname{source}{source}{sources}
+
+% --- Notation ---------------------------------------------------------------
+\newcommand{\Herwig}{\mathrm{H}}
+\newcommand{\Pythia}{\mathrm{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prb}{\mathbb{P}}
+\newcommand{\KL}{D_{\mathrm{KL}}}
+\newcommand{\kl}{d_{\mathrm{KL}}}
+\newcommand{\TV}{d_{\mathrm{TV}}}
+\newcommand{\JS}{\mathrm{JS}}
+\newcommand{\indep}{\perp\!\!\!\perp}
+\newcommand{\Gens}{\mathcal{S}}
+\newcommand{\Meas}{\mathcal{P}}
+\newcommand{\Sgn}{\mathcal{M}}
+\newcommand{\Borel}{\mathcal{B}}
+\newcommand{\Normal}{\mathcal{N}}
+\newcommand{\Bern}{\mathrm{Bern}}
+\newcommand{\supp}{\mathcal{Z}_{\cap}}
+\newcommand{\1}{\mathbbm{1}}
+\newcommand{\pushf}[1]{#1_{\#}}
+\newcommand{\TODO}[1]{\textcolor{red!70!black}{[\textbf{TODO:} #1]}}
+\renewcommand{\[}{\begin{equation}}
+\renewcommand{\]}{\end{equation}}
+
+\title{What's so Universal about Universal Responses?\\[0.5em]
+       \large On Violations of Transfer-Kernel Factorisation in Unfolding Problems}
+\author{Krish Desai}
+
+\begin{document}
+\maketitle
+
+% =============================================================================
+\section*{TL;DR}
+    Likelihood-based and reweighting-based unfolding methods in high energy physics assume that the detector response is \emph{universal}, that is, that the conditional probability density of the detector--level event given the particle--level event is the same in nature and in simulation.
+    %
+    This note demonstrates that this assumption is representation dependent.
+    
+    Universality of the response conditional on the complete particle--level state neither implies nor is implied by universality of the response induced on a chosen pair of particle-- and detector--level summaries, and neither property implies identifiability of a particle--level observable from detector--level data.
+    %
+    This note characterises the induced response exactly as a mixture of the full response over the generator--dependent conditional law of the omitted particle--level information, and gives necessary and sufficient conditions for universality to survive coarse--graining.
+    %
+    It then shows that induced universality is equivalent to a conditional independence statement whose violation is measured by a conditional mutual information, and that this quantity equals the population gain in binary cross-entropy between two nested Bayes optimal classifiers.
+    
+    Applying the resulting test to paired \textsc{Herwig}+\textsc{Delphes} and \textsc{Pythia}+\textsc{Delphes} samples \cite{andreassen_2019_3548091}, one finds that the detector--level value carries generator information beyond the corresponding particle--level value for ungroomed jet mass and, with decreasing confidence, for four of the other five jet substructure observables unfolded in \textcite{Andreassen:2019cjw}; the evidence for jet width is inconclusive.
+    %
+    The effect is largest for ungroomed jet mass, \qty{9.061(465)}{\milli\nat\per\event}, which is \num{4.2} times the next--largest observable.
+    %
+    This finding is mathematically compatible with, but not diagnostic of, the particle--identity explanation offered in \textcite{Andreassen:2019cjw} for the poor unfolding performance on jet mass. The note proposes conditional tests that separate response misspecification from non-identifiability.
+    
+\section{Introduction.}
+\label{sec:intro}
+
+    Unfolding, the estimation of a particle--level distribution from detector--level observations, requires a model of the detector response~\cite{Cowan:2002in,Blobel:2011fih}.
+    %
+    In practice, the response is learned from simulated pairs of particle-- and detector--level events and is then applied to measured data.
+    %
+    This transfer is valid only if the conditional distribution of the detector--level event given the particle--level event is the same in simulation as in nature.
+    %
+    This is referred to as \emph{response universality}.
+    
+    It is assumed, explicitly or implicitly, by iterative Bayesian unfolding~\cite{DAgostini:1994fjx}, by regularized matrix inversion methods, and by machine learning methods such as \textsc{OmniFold}~\cite{Andreassen:2019cjw,Arratia:2021otl}.
+
+    The purpose of this note is to separate three properties that may be conflated:
+    \begin{enumerate}[label=(U\arabic*)]
+        \item\label[property]{it:U1} \emph{universality of the full response}, i.e., of the detector response conditional on the complete particle--level state;
+        \item\label[property]{it:U2} \emph{universality of an induced response}, i.e., of the response obtained after particle-- and detector--level events are projected to chosen summary observables;
+        \item\label[property]{it:U3} \emph{identifiability} of the distribution of a particle--level observable from the distribution of detector--level events.
+    \end{enumerate}
+    
+    This note will show that \cref{it:U1} does not imply \cref{it:U2}, that \cref{it:U2} does not imply \cref{it:U1}, and that \cref{it:U1} does not imply \cref{it:U3}.
+
+    \subsection{Summary of results.}
+    \begin{enumerate}
+        \item The induced response on a pair of summaries is the full response averaged against the generator dependent conditional law of the particle--level information discarded by the summary (\cref{lem:mixture}).
+        %
+        Consequently, the induced response fails to be universal precisely when the generators disagree on this conditional law in directions that the projected detector response does not annihilate (\cref{thm:coarse}).
+        %
+        An explicit model in which the full response is universal but the induced response is not universal at every value of the summary is given in \cref{ex:species}.
+
+        \item Induced universality is equivalent to the conditional independence \(X\indep S\mid Z\) between the detector--level summary \(X\) and a generator label \(S\), given the particle--level summary \(Z\) (\cref{prop:response-eq}).
+        %
+        Its failure is quantified by the conditional mutual information \(I(S;X\mid Z)\), which is a weighted Jensen--Shannon divergence between the two induced responses (\cref{prop:js}) and equals the difference in population binary cross-entropy between Bayes optimal classifiers of \(S\) from \(Z\) and from \((Z,X)\) (\cref{prop:bayes}).
+        %
+        For learned classifiers, the population gain differs from \(I(S;X\mid Z)\) precisely by the difference of excess risks, which (\cref{cor:finite}) makes explicit.
+
+        \item Applied to the benchmark samples of \textcite{andreassen_2019_3548091}, all six scalar observables exhibit a positive held-out gain, although only for jet mass does the gain exceed the run-to-run variability of a constructed null by a wide margin.
+        %
+        The gain for ungroomed jet mass is approximately four times the next-largest value and sixteen times the smallest (\cref{tab:scalar-results}).
+        %
+        This constitutes strong evidence that the induced mass response is not universal between \textsc{Herwig} and \textsc{Pythia}, notwithstanding the use of an identical detector simulation.
+
+        \item This finding does not establish \(Y\not\indep S\mid T\), where \(T\) and \(Y\) denote the full particle-- and detector--level representations supplied to \textsc{OmniFold}.
+        %
+        The explanation given in \textcite{Andreassen:2019cjw} for the mass residual, namely that particle identity affects jet mass but is only partially observed at detector--level, is a mechanism that produces induced non-universality and non-identifiability simultaneously, even under an exactly universal full response (\cref{prop:compatible}).
+        
+        However, the within--generator technical closure test reported in \textcite{Andreassen:2019cjw} has no power against a cross--generator violation of the full response (\cref{prop:closure}).
+        %
+        The attribution of the mass residual therefore remains empirically open. This note proposes tests that resolve it (\cref{sec:tests}).
+    \end{enumerate}
+
+    \subsection{Outline.}
+    \Cref{sec:setup} fixes notation and definitions.
+    %
+    \Cref{sec:coarse} analyses the effect of coarse--graining on universality.
+    %
+    \Cref{sec:classification} develops the classification based test.
+    %
+    \Cref{sec:empirical} reports the empirical study.
+    %
+    \Cref{sec:unfolding} derives the consequences for unfolding in a reduced space and for identifiability in the full space.
+    %
+    \Cref{sec:omnifold} applies these results to the \textsc{OmniFold} jet mass result, and \cref{sec:tests} proposes follow-up tests.
+    %
+    All proofs are collected in \cref{app:proofs}.
+
+\section{Setup and definitions.}
+\label{sec:setup}
+
+    Throughout, this note
+    \begin{description}[
+      align=right,
+      labelwidth=2.8cm,
+      labelsep=0.3cm,
+      itemsep=0.2ex,
+      font=\normalfont
+    ]
+      \item[\(T \in \mathcal T\)] denotes the complete particle--level representation of an event,
+      \item[\(Y \in \mathcal Y\)] denotes the complete detector--level representation,
+      \item[\(Z = f(T)\in\mathcal Z\)] denotes a particle--level summary, and
+      \item[\(X = g(Y)\in\mathcal X\)] denotes the corresponding detector--level summary.
+    \end{description}
+    
+    For example, \(Z\) and \(X\) may be the particle-- and detector--level jet mass, respectively.
+    %
+    The generator label takes values in \(\Gens = \{\Herwig,\Pythia\}\), with \textsc{Herwig} playing the role of nature and \textsc{Pythia} the role of simulation.
+
+    For any topological space \(\mathcal{V}\), let \(\Borel(\mathcal{V})\) denote its Borel \(\sigma\)-algebra (the collection of measurable subsets of \(\mathcal{V}\)). When \((\mathcal{V}, \Borel(\mathcal{V}))\) is a standard Borel space, let \(\Meas(\mathcal{V})\) denote the convex set of Borel probability measures on \((\mathcal{V}, \Borel(\mathcal{V}))\), and let \(\Sgn(\mathcal{V})\) denote the Banach space of finite signed Borel measures on \((\mathcal{V}, \Borel(\mathcal{V}))\) equipped with the total variation norm.
+
+    \begin{assumption}[Measurable structure]
+    \label{ass:borel}
+        The sample spaces \(\mathcal{T}, \mathcal{Y}, \mathcal{Z}, \mathcal{X}\) are standard Borel spaces (each equipped with its respective Borel \(\sigma\)-algebra \(\Borel(\cdot)\)), and the maps \(f \colon \mathcal{T} \to \mathcal{Z}\) and \(g \colon \mathcal{Y} \to \mathcal{X}\) are Borel measurable.
+    \end{assumption}
+
+    For \(s \in \Gens\), let \(\Prb_s \in \Meas(\mathcal{T} \times \mathcal{Y})\) be the joint law of \((T,Y)\) under generator \(s\), let \(Q_s \in \Meas(\mathcal{T})\) be the marginal law of \(T\), and let \(\mu_s = \pushf{f}Q_s \in \Meas(\mathcal{Z})\) be the induced law of \(Z = f(T)\).
+
+    \begin{lemma}[Regular conditional distributions and disintegration~\cite{Kallenberg:2021}]
+        \noproofref
+        \label{lem:disintegration}
+        Under \cref{ass:borel},  \(\forall s \in \Gens\;\exists\) Markov kernels
+            \begin{equation*}
+                K_s : \mathcal{T} \to \Meas(\mathcal{Y}), \quad
+                r_s : \mathcal{Z} \to \Meas(\mathcal{X}), \quad \text{and} \quad
+                Q_s^{(\cdot)} : \mathcal{Z} \to \Meas(\mathcal{T})
+            \end{equation*}
+            \(\forall B \in \Borel(\mathcal{T})\; \forall A \in \Borel(\mathcal{Y})\;\forall B' \in \Borel(\mathcal{Z})\;\forall C \in \Borel(\mathcal{X})\)
+            
+            \begin{align}
+                \Prb_s(T \in B,\; Y \in A) &= \int_B K_s(A \mid t)\,Q_s(\d t), \label{eq:full-disint}\\
+                \Prb_s(Z \in B',\; X \in C) &= \int_{B'} r_s(C \mid z)\,\mu_s(\d z), \label{eq:induced-disint}\\
+                \Prb_s(Z \in B',\; T \in B) &= \int_{B'} Q_s^z(B)\,\mu_s(\d z). \label{eq:truth-disint}
+            \end{align}
+            
+            Each kernel is uniquely determined up to a null set of its driving marginal (\(Q_s\), \(\mu_s\), and \(\mu_s\), respectively).
+            %
+            Furthermore,
+            \[
+                \mu_s\ab\{z\in\mathcal Z \;\Big|\; Q_s^z(f^{-1}(\{z\})) = 1\} = 1.
+            \]
+        \end{lemma}
+
+    \begin{definition}[Full and induced response]
+    \label{def:responses}
+        \(\forall s\in\Gens, K_s\) of \cref{eq:full-disint} is the \emph{full response} of generator \(s\), and \(r_s\) of \cref{eq:induced-disint} is the \emph{response induced on \((f,g)\)}.
+        %
+        \(Q_s^{z}\) of \cref{eq:truth-disint} is the \emph{conditional composition law} of generator \(s\) at \(Z=z\).
+    \end{definition}
+
+    Since a conditional law is determined only up to null sets of the conditioning marginal, universality is properly defined as the existence of a common kernel.
+
+\begin{definition}[Universality]
+    \label{def:universal-response}
+        \leavevmode
+        \begin{enumerate}
+            \item The full response is \emph{universal} across \(\Gens\) if 
+            \[
+                \begin{split}
+                  \exists K : \mathcal{T} \to \Meas(\mathcal{Y}) \;\;
+                  &\forall s \in \Gens \;\; \forall B \in \Borel(\mathcal{T}) \;\; \forall A \in \Borel(\mathcal{Y}) \\
+                  &\Prb_s(T \in B,\; Y \in A) = \int_B K(A \mid t)\,Q_s(\d t).
+                \end{split}
+            \]
+            
+            That is to say,
+            \[
+                \forall s \in \Gens \;\; Q_s\ab\big\{t \in \mathcal T \mid K \ab( \cdot \mid t) = K_s \ab( \cdot \mid t)\} = 1
+            \]
+
+            \item The induced response on \(\ab(f, g)\) is \emph{universal} across \(\Gens\) if
+            \[
+                \begin{split}
+                    \exists r : \mathcal Z \to \Meas \ab( \mathcal X) \;\; &\forall s \in \Gens \;\; \forall B' \in \Borel \ab(\mathcal Z) \;\; \forall C \in \Borel \ab(\mathcal X) \\
+                    &\Prb_s \ab(Z \in B',\; X \in C) = \int_{B'} r \ab(C \mid z)\,\mu_s \ab(\d z).
+                \end{split}
+            \]
+            
+            That is to say,
+            \[
+                \forall s \in \Gens \;\; \mu_s\ab\big\{z \in \mathcal Z \mid r \ab( \cdot \mid z) = r_s \ab( \cdot \mid z)\} = 1
+            \]
+
+            \item The \(g\)-projected full response is \emph{universal} across \(\Gens\) if
+            \[
+                \begin{split}
+                    \exists K^g : \mathcal T \to \Meas \ab(\mathcal X) \;\; &\forall s \in \Gens \;\; \forall B \in \Borel \ab(\mathcal T) \;\; \forall C \in \Borel \ab(\mathcal X) \\
+                    &\Prb_s \ab( T \in B,\; X \in C) = \int_B K^g \ab(C \mid t) \, Q_s \ab(\d t).
+                \end{split}
+            \]
+        \end{enumerate}
+    \end{definition}
+
+    If the full response is universal with common version \(K\), then the \(g\)-projected full response is universal with common version
+    \[
+    \label{eq:projected-kernel}
+        K^g \ab(A \mid t) = K \ab[g^{-1}\ab(A)\mid t].
+    \]
+    The converse is false in general.
+    %
+    The assumption made in the likelihood derivation of \textsc{OmniFold} is universality of the full response in the sense of \cref{def:universal-response} (see \cref{eq:omnifold-assumption}).
+
+    \begin{remark}[Common essential support and non-uniqueness]
+    \noproofref
+    \label{rem:common-support}
+        \(\forall s \in \Gens\;\;\nu = \frac{\mu_\Herwig + \mu_\Pythia}2, m_s = \frac{\d\mu_s}{\d\nu}\) is Borel versions of the Radon--Nikodym derivatives, and 
+        \[
+            \supp = \ab\{ z \in \mathcal{Z} \mid m_\Herwig(z) > 0 \land m_\Pythia(z) > 0 \}
+        \]
+        denotes the common essential support of \(\mu_\Herwig\) and \(\mu_\Pythia\) (well-defined up to a set of measure \num0 under \(\nu\)).
+        %
+        The induced response is universal across \(\Gens\) if and only if
+        \[
+            \nu\ab\{z\in\supp \;\Big|\; r_\Herwig(\cdot \mid z) = r_\Pythia(\cdot \mid z)\} = 1.
+        \]
+        %
+        Indeed, any common version \(r\) must satisfy
+        \[
+            \forall s \in \Gens\;\;\mu_s\ab\{ z\in\supp \;\Big|\; r(\cdot \mid z) = r_s(\cdot \mid z) \} = 1.
+        \]
+        Since \(\mu_\Herwig, \mu_\Pythia, \nu\) are mutually absolutely continuous on \(\supp\), they share identical null sets on \(\supp\), forcing agreement \(\nu\)-a.e. on \(\supp\).
+        %
+        Conversely, if \(r_\Herwig\) and \(r_\Pythia\) agree \(\nu\)-a.e.\ on \(\supp\), the composite kernel defined by
+        \[
+            r(\cdot \mid z) = 
+            \begin{cases}
+                r_\Herwig(\cdot \mid z) & \text{if } m_\Herwig(z) > 0, \\
+                r_\Pythia(\cdot \mid z) & \text{if } m_\Herwig(z) = 0
+            \end{cases}
+        \]
+        defines a valid Markov kernel that serves as a common version for both generators.
+        %
+        Consequently, universality imposes no constraints on the behaviour of the response kernels outside \(\supp\).
+        %
+        An identical equivalence holds for the full response with respect to \(Q_\Herwig\), \(Q_\Pythia\), and their mixture on \(\mathcal{T}\).
+    \end{remark}
+
+    \begin{definition}[Forward operator]
+    \label{def:forward}
+        For every \(\lambda\in\Sgn(\mathcal V)\) and every Markov kernel \(\kappa: \mathcal V \to \mathcal W, \kappa\) acts on \(\lambda\) by
+        \[
+        \label{eq:forward}
+            \forall A\in\Borel(\mathcal W)\;\; (\kappa\lambda)(A) = \int_{\mathcal V}\kappa(A\mid v)\,\lambda(\d v).
+        \]
+        The map \(\lambda\mapsto\kappa\lambda\) is linear, maps \(\Meas(\mathcal V)\) into \(\Meas(\mathcal W)\), and is a contraction in total variation.
+        %
+        Its null space is denoted \(\ker\kappa\subseteq\Sgn(\mathcal V)\).
+    \end{definition}
+
+\section{Universality under coarse--graining.}
+\label{sec:coarse}
+
+    \begin{lemma}[Mixture representation of the induced response]
+    \label{lem:mixture}
+        If the \(g\)-projected full response is universal across \(\Gens\) with common version \(K^g: \mathcal{T} \to \Meas(\mathcal{X})\) then
+        \[
+        \label{eq:coarse-grain}
+            \forall s\in \Gens \;\; z \mapsto \int_{\mathcal T} K^g \ab(\cdot \mid t) Q_s^z \ab(\d t) \text{ is a version of } r_s: \mathcal{Z} \to \Meas(\mathcal{X}),
+        \]
+        where \(r_s\) is the induced response kernel and \(Q_s^z\) is the disintegration of \(Q_s\) along the fibres of \(f\). In particular, if \(\mathcal{T} = \mathcal{Z} \times \mathcal{U}\) where \(\mathcal{U}\) is a standard Borel space collecting the latent particle--level coordinates omitted by \(Z\), so that \(f(z, u) = z\), and if \(p_s(\cdot \mid z) \in \Meas(\mathcal{U})\) denotes the conditional distribution of \(U \mid Z = z\) under \(Q_s\), then
+        \[
+        \label{eq:latent-mixture}
+            \forall s\in\Gens \;\; \forall C \in \Borel \ab(\mathcal X) \;\; \mu_s \ab\{ z \in \mathcal Z \middle\mid r_s \ab(C \mid z) = \int_{\mathcal{U}} K^g \ab(C \mid z, u)\,p_s \ab(\d u \mid z)\} = 1
+        \]
+    \end{lemma}
+
+    \Cref{lem:mixture} shows that the induced response is not an intrinsic property of the detector alone.
+    %
+    Rather, it is a functional of the pair \((K^g, Q_s^{(\cdot)})\), in which the second argument depends explicitly on the event generator.
+
+    \begin{theorem}[Universality under coarse--graining]
+    \label{thm:coarse}
+        If the \(g\)-projected full response is universal with common version \(K^g\) then
+        \[
+        \label{eq:kernel-difference}
+            \nu \ab\{ z\in\supp \;\Big|\; r_\Herwig \ab(\cdot \mid z) - r_\Pythia \ab(\cdot \mid z) = K^g \ab(Q_\Herwig^z - Q_\Pythia^z)\} = 1,
+        \]
+        where the linear operator \(K^g : \Sgn \ab(\mathcal{T}) \to \Sgn \ab(\mathcal{X})\) acts by
+        \[
+            (K^g \eta) \ab(C) = \int_{\mathcal{T}} K^g \ab(C \mid t)\,\eta \ab(\d t).
+        \]
+        
+        Consequently:
+        \begin{enumerate}[label=\labelcref{thm:coarse} (\alph*)]
+            \item\label[phfthm@theorem]{it:coarse-iff} 
+             \(r\) is universal across \(\Gens \iff \nu \ab\big\{ z \in \supp \mid Q_\Herwig^z - Q_\Pythia^z \in \ker K^g\} = 1 \)
+
+            \item\label[phfthm@theorem]{it:coarse-suff} 
+            Agreement of the generator conditional laws along the fibres of \(f\) is sufficient:
+            \[
+                \nu \ab\big\{ z \in \supp \mid Q_\Herwig^z = Q_\Pythia^z \} = 1 \implies r \text{ is universal across } \Gens.
+            \]
+
+            \item\label[phfthm@theorem]{it:coarse-inj} 
+            \[
+                \begin{split}
+                    &\nu \ab\{z \in \supp \;\Big | \; K^g: \Sgn \ab(f^{-1} \ab\{ z \} ) \hookrightarrow \Sgn \ab(\mathcal X)\} = 1 \\
+                    &\quad \implies \ab\Big[r \text{ is universal across } \Gens \iff \nu\ab\big\{ z \in \supp \mid Q_\Herwig^z = Q_\Pythia^z \} = 1.]
+                \end{split}
+            \]
+        \end{enumerate}
+    \end{theorem}
+
+    \Cref{it:coarse-iff} makes precise the two ways in which universality can survive coarse-graining when the generators disagree on composition.
+    %
+    Either the projected detector response is insensitive to every direction in which the conditional composition laws differ, or its action on the difference cancels.
+    %
+    The following sufficient condition corresponds to the first case holding uniformly.
+
+\begin{proposition}[Response-sufficient summaries]
+    \label{prop:sufficient}
+        If the \(g\)-projected full response is universal with common version \(K^g\), and if 
+        \[
+        \label{eq:response-sufficient}
+            \exists \text{ Markov kernel } \kappa \colon \mathcal Z \to \Meas(\mathcal X) \;\; \forall s \in \Gens \;\; Q_s \ab\{ t \; \Big| \; K^g(\cdot\mid t)=\kappa\ab( \cdot \mid f(t))\} = 1,
+        \]
+        then \(\kappa\) is a common version of \(r_\Herwig\) and \(r_\Pythia\).
+        
+        In particular, the induced response is universal for every pair of generator laws \((Q_\Herwig,Q_\Pythia)\) satisfying \cref{eq:response-sufficient}.
+    \end{proposition}
+
+    \begin{definition}[Response sufficient summary]  A summary \(f\) is defined to be \emph{response-sufficient} for \(g\) if it satisfies \cref{eq:response-sufficient}.
+        
+    \end{definition}
+
+    %
+    Jet observables are, in general, not response-sufficient.
+    %
+    The following example, shows that the failure of induced universality can be total even when the full response is exactly universal.
+
+\begin{example}[Latent-species model]
+    \label{ex:species}
+        Fix a shift parameter \(a \ne 0\), detector resolution \(\sigma > 0\), and distinct generator fractions \(\pi_\Herwig \ne \pi_\Pythia\) in \((0, 1)\).
+        %
+        \begin{description}
+            \item[Particle--level] Let \(\mathcal{T} = \mathbb{R} \times \{0, 1\}\) and \(T = (V, U)\), where under generator \(s \in \Gens\), the kinematic feature \(V \sim \Normal(0, 1)\) and the latent particle species \(U \sim \Bern(\pi_s)\) are independent.
+            The particle--level summary observable is
+            \[
+                Z = f(V, U) = V + a U.
+            \]
+
+            \item[Detector--level] Let \(\mathcal{Y} = \mathcal{X} = \mathbb{R}\), let \(g \colon \mathcal{Y} \to \mathcal{X}\) be the identity map, and suppose the detector measures only the raw kinematics \(V\) with Gaussian smearing:
+            \begin{equation}
+            \label{eq:species-kernel}
+                K(\cdot \mid v, u) = \Normal(v, \sigma^2).
+            \end{equation}
+        \end{description}
+        The full response, \(K,\) is universal across \(\Gens\) by construction and is completely blind to the species label \(U\).
+        
+        However, the induced response on \(Z\) is \emph{not} universal. By \cref{lem:mixture}, along the fibre \(f^{-1}(\{z\}), V = z - a U\), which gives the mixture
+        \[
+            r_s(\cdot \mid z) = \sum_{u \in \{0, 1\}} p_s(u \mid z) \, \Normal(z - a u, \sigma^2),
+        \]
+        where the posterior species probability under generator \(s\) is
+        \[
+            w_s(z) = p_s(1 \mid z) = \Prb_s(U = 1 \mid Z = z) = \frac{\pi_s \phi(z - a)}{\pi_s \phi(z - a) + (1 - \pi_s)\phi(z)},
+        \]
+        with \(\phi\) denoting the standard Gaussian density. Because \(\pi_\Herwig \ne \pi_\Pythia\) and \(a \ne 0\), we have \(p_\Herwig(1 \mid z) \ne p_\Pythia(1 \mid z)\) for almost every \(z\). Consequently,
+        \[
+            \forall z \in \mathcal{Z} \;\; r_\Herwig(\cdot \mid z) \ne r_\Pythia(\cdot \mid z),
+        \]
+        demonstrating that universality of the full detector response does not imply universality of the induced observable response.
+    \end{example}
+
+\begin{lemma}[Properties of the latent-species model]
+    \label{lem:species}
+        For the construction in \cref{ex:species}
+        \begin{enumerate}[label=\labelcref{lem:species} (\alph*)]
+            \item\label[phfthm@lemma]{it:species-full} The full response is universal.
+            \item\label[phfthm@lemma]{it:species-support} \(\mu_\Herwig\) and \(\mu_\Pythia\) are equivalent to Lebesgue measure, so \(\supp=\mathbb R\).
+            \item\label[phfthm@lemma]{it:species-induced} \[
+                \begin{split}
+                    \forall z \in \mathbb R \;\; &r_s ( \cdot \mid z ) = \ab[ 1 -w_s (z) ] \, \Normal (z, \sigma^2 ) + w_s (z) \, \Normal(z-a,\sigma^2) \\
+                    \land  \;&r_\Herwig ( \cdot \mid z ) \ne r_\Pythia ( \cdot \mid z ).
+                \end{split}
+            \]
+            \item\label[phfthm@lemma]{it:species-null} \(KQ_\Herwig=KQ_\Pythia=\Normal(0,1+\sigma^2)\), whereas \(\pushf{f}Q_\Herwig\ne\pushf{f}Q_\Pythia\).
+        \end{enumerate}
+    \end{lemma}
+
+    \begin{proposition}[Logical independence of \cref{it:U1,it:U2}]
+    \label{prop:nonimplication}
+        \begin{enumerate}[label=\labelcref{prop:nonimplication} (\alph*)]
+            \item\label[phfthm@proposition]{it:U1-not-U2} Universality of the full response does not imply universality of an induced response.
+            \item\label[phfthm@proposition]{it:U2-not-U1} Universality of an induced response does not imply universality of the full response.
+        \end{enumerate}
+    \end{proposition}
+
+    \begin{remark}[Identical detector simulation]
+    \noproofref
+    \label{rem:same-detector}
+        Processing both generators with the same \textsc{Delphes} executable and detector card~\cite{deFavereau:2013fsa} fixes the full response \(K\) (up to the caveats of \cref{cor:omitted}), but it does not fix the conditional composition laws \(Q_s^{(\cdot)}\).
+        %
+        By \cref{lem:mixture}, the same stochastic map averaged against two different composition laws yields two different induced responses.
+        %
+        An identical detector simulation is therefore not sufficient for induced universality.
+    \end{remark}
+
+    The same mechanism applies when the nominal ``full'' representation omits variables on which the detector response depends.
+
+\begin{corollary}[Incomplete particle--level representation]
+    \label{cor:omitted}
+        If the detector response is causally determined by an augmented particle--level state \(\widetilde T = \ab(T, J) \in \mathcal T \times \mathcal J\) through a universal kernel \(\widetilde K : \mathcal T \times \mathcal J \to \Meas(\mathcal Y)\), where \((\mathcal J, \Borel(\mathcal J))\) is a standard Borel space and \(J\) is not included in the represented state \(T\),
+        %
+        then the represented nominal full response satisfies
+        \[
+        \label{eq:omitted}
+            \forall s\in\Gens \;\; Q_s \ab\{ t\in\mathcal T \;\big|\; K_s \ab( \cdot \mid t) = \int_{\mathcal J} \widetilde K \ab( \cdot \mid t, j) \, p_s \ab(\d j \mid t)\} = 1,
+        \]
+        where \(p_s(\cdot \mid t) \in \Meas(\mathcal J)\) is a regular conditional distribution of \(J \mid T = t\) under generator \(s \in \Gens\).
+        %
+        \(K_s\) is therefore an induced response obtained by marginalising over \(J\) in the sense of \cref{def:responses}.
+    
+        On the common essential support \(\mathcal T_\cap\) under the balanced mixture \(\overline Q = \frac{1}{2} \ab(Q_\Herwig + Q_\Pythia)\), disagreement of the conditional distributions,
+        \[
+            \overline Q \ab\{ t \in \mathcal T_\cap \mid p_\Herwig \ab(\cdot \mid t) \ne p_\Pythia \ab(\cdot \mid t) \} > 0,
+        \]
+        is necessary for non-universality of \(K\), and is also sufficient if for \(\overline Q\)-almost every \(t \in \mathcal T_\cap\), the fibre operator \(\eta \mapsto \int_{\mathcal J} \widetilde K \ab(\cdot \mid t, j)\,\eta(\d j)\) on \(\Sgn \ab(\mathcal J)\) is injective.
+    \end{corollary}
+
+\section{Conditional classification.}
+\label{sec:classification}
+
+    \subsection{Population quantities.}
+
+    \begin{definition}[Balanced mixture]
+            Let \(S\) be a generator indicator with the prior \( \Prb ( S = \Herwig ) = \Prb( S = \Pythia ) = \frac12 \), and let \(\Prb_s\) denote the regular conditional distribution of \((T, Y)\mid S = s\).
+            %
+            The resulting joint law \(\Prb\) of \((S,T,Y) \in \Gens \times \mathcal T \times \mathcal Y\) is defined to be the \emph{balanced mixture}.
+    \end{definition}
+
+    Under \(\Prb\), the marginal law of \(Z\) is \(\nu\) (see \cref{rem:common-support}), and \(r_s(\cdot\mid Z)\) is a version of the conditional distribution of \((X \mid Z,S=s)\).
+    
+    For a random element \(W\) defined on the same space, define
+    \[\eta_W = \Prb( S = \Herwig \mid W)\]
+    \[h(p) = -p\ln p-(1-p)\ln(1-p)\]
+    \[
+        \kl(p\,\|\,q) = p\ln\frac pq + (1-p) \ln \frac{1-p}{1-q}
+    \]
+    \(h\) is the binary entropy and \(\kl\) is the Kullback--Leibler divergence between \(\Bern(p)\) and \(\Bern(q)\).
+    
+    All logarithms are base \(e\) and all information quantities are in nats.
+    \begin{remark}
+        \noproofref
+        \label{rem:log-limits}
+        Note that
+        \[
+            \label{eq:log-limits}
+        \lim_{a\to0}a\ln a = 0 \qquad \lim_{a\to0} p\ln\frac pa = +\infty \text{ for } p>0
+        \]
+    \end{remark}
+
+
+    \begin{definition}[Conditional entropy]
+    \label{def:ce}
+        The \emph{conditional entropy} of \(S\) given \(W\) is \(H(S\mid W) = \E\ab[h(\eta_W)]\).
+    \end{definition}
+
+    \begin{definition}[Conditional mutual information]
+    \label{def:cmi}
+        The \emph{conditional mutual information} between \(S\) and \(X\) given \(Z\) is
+        \[
+        \label{eq:cmi-def}
+            I(S;X\mid Z) = \E\ab[\kl\ab(\eta_{(Z,X)}\,\middle\|\,\eta_Z)].
+        \]
+    \end{definition}
+
+    For a binary attribute, \cref{eq:cmi-def} coincides with the general definition~\cite{PolyanskiyWu:2024}
+    \[
+        I(S;X\mid Z)=\E_Z\ab[\KL\ab(\Prb_{(S,X)\mid Z}\,\|\,\Prb_{S\mid Z}\otimes\Prb_{X\mid Z})].
+    \]
+
+\begin{proposition}[Induced universality as conditional independence]
+\label{prop:response-eq}
+    Under the balanced mixture, the following are equivalent:
+    \begin{enumerate}[label=\labelcref{prop:response-eq} (\alph*)]
+        \item\label[phfthm@proposition]{it:req-univ} The induced response on \((f,g)\) is universal across \(\Gens\);
+        \item\label[phfthm@proposition]{it:req-ci} \(X\indep S\mid Z\);
+        \item\label[phfthm@proposition]{it:req-cmi} \(I(S;X\mid Z)=0\).
+    \end{enumerate}
+\end{proposition}
+
+    The magnitude of any violation admits a direct interpretation in terms of the discrepancy between the induced response kernels.
+
+    \begin{definition}[Skewed JS divergence]
+        For \(\alpha\in[0,1]\), and probability measures \(p, q \in \Meas(\mathcal{X})\), the \(\alpha\)-skewed Jensen--Shannon divergence is
+        \[
+            \JS_\alpha(p,q) = \alpha \,\KL\ab[ p \,\big\|\, \alpha p + ( 1 -\alpha ) q ] + (1-\alpha)\, \KL \ab[ q \,\big\|\,\alpha p + ( 1 -\alpha ) q]
+        \]
+    \end{definition}
+    
+\begin{proposition}[Conditional mutual information as a Jensen--Shannon divergence]
+    \label{prop:js}
+        \[
+        \label{eq:cmi-js}
+        \begin{split}
+            \forall z\in\mathcal Z\;\;&\eta(z) = \frac12 m_\Herwig(z) \;\land\; \bar r( \cdot \mid z) = \eta(z)\,r_\Herwig( \cdot \mid z) + ( 1 -\eta(z)) \, r_\Pythia( \cdot \mid z)\\
+            \implies & \eta(Z) \text{ is a version of the posterior } \eta_Z = \Prb(S = \Herwig \mid Z)\\
+            &\quad \land
+            I(S;X\mid Z)=\int_{\supp}\JS_{\eta(z)}\ab(r_\Herwig(\cdot\mid z),r_\Pythia(\cdot\mid z))\,\nu(\d z).
+        \end{split}
+        \]
+    \end{proposition}
+
+    \Cref{prop:js} shows that \(I(S;X\mid Z)\) aggregates the pointwise discrepancy between the two induced responses over the common support, weighted by the local generator balance, and that the non-overlapping regions of the particle--level spectrum do not contribute.
+    %
+    Since \(\JS_\alpha\le h (\alpha)\le\ln2\), the conditional mutual information is universally bounded by \(\ln2\approx\qty{0.693}{\nat}\).
+
+    \subsection{Classifier losses.}
+
+\begin{definition}[Binary log loss and BCE]
+    For a generator label \(s \in \Gens\) and predicted probability \(p \in \ab[0, 1]\), the \emph{binary logarithmic loss} \(\ell \ab(s, p) \in \ab[0, \infty]\) is
+    \[
+        \ell(s, p) = -\1_{s=\Herwig}\ln p - \1_{s=\Pythia}\ln \ab(1-p),
+    \]
+    continuously extended on the boundaries \(p \in \{0, 1\}\) through the conventions of \cref{rem:log-limits}.
+    
+    For a feature vector \(W\) taking values in a standard Borel space \(\mathcal{W}\), and any Borel--measurable classifier \(D: \mathcal{W} \to \ab[0, 1]\), the \emph{population cross-entropy risk} is
+    \[
+        L_W \ab(D) = \E \ab\big[ \ell \ab\{ S, D(W) \} ] \in \ab[0, \infty].
+    \]
+\end{definition}
+
+\begin{proposition}[Log--loss decomposition and Bayes identity]
+    \label{prop:bayes}
+        For every measurable classifier \(D : \mathcal{W} \to [0, 1]\),
+        \[
+        \label{eq:logloss-decomp}
+            L_W(D)=H(S\mid W)+\E\ab[\kl\ab\{\eta_W\,\big\|\,D(W)\}].
+        \]
+        Consequently, \(L_W(D)\ge H(S\mid W)\), with equality iff \( D(W) = \eta_W \) almost surely.
+        %
+        Furthermore, the Bayes-optimal classifiers \(D_Z^*(Z) = \eta_Z\) and \(D_{ZX}^*(Z, X) = \eta_{(Z, X)}\) attain the respective conditional entropies, yielding the identity
+        \[
+        \label{eq:bce-cmi}
+            L_Z( D_Z^* ) - L_{ZX} (D_{ZX}^*) = H(S \mid Z) - H(S \mid Z, X) = I( S; X \mid Z).
+        \]
+    \end{proposition}
+
+    \Cref{eq:logloss-decomp} is the statement that logarithmic loss is a strictly proper scoring rule~\cite{Gneiting:2007}.
+    %
+    The risk difference in \cref{eq:bce-cmi} establishes that the conditional mutual information \(I(S; X \mid Z),\) and hence the severity of response non-universality, is precisely the reduction in Bayes risk achieved by adding the detector observable \(X\) to a classifier already trained on the particle summary \(Z\).
+    %
+    Hence same decomposition controls the behaviour of learned classifiers.
+
+    \begin{corollary}[Learned classifiers]
+    \label{cor:finite}
+        For measurable \(D_Z\) and \(D_{ZX}\) with finite losses,
+        \begin{equation}
+        \label{eq:gain-decomp}
+        \ab\{
+        \begin{aligned}
+            \varepsilon_Z &= L_Z(D_Z) - H(S \mid Z) \ge 0 \\
+            \land\;\varepsilon_{ZX} &= L_{ZX}(D_{ZX}) - H(S \mid Z, X) \ge 0 \\
+            \land\quad\Delta &= L_Z(D_Z) - L_{ZX}(D_{ZX})
+        \end{aligned}
+        \}
+        \implies
+        \Delta = I(S; X \mid Z) + \varepsilon_Z - \varepsilon_{ZX}
+        \end{equation}
+        In particular:
+        \begin{enumerate}[label=\labelcref{cor:finite} (\alph*)]
+            \item\label[phfthm@corollary]{it:fin-null} \( I(S; X \mid Z) = 0 \implies \Delta = \varepsilon_Z - \varepsilon_{ZX} \), which is positive whenever the classifier using \(Z\) alone is fitted less well than the classifier using \((Z,X)\);
+            \item\label[phfthm@corollary]{it:fin-lower} \( \varepsilon_Z \le \varepsilon_{ZX} \implies \Delta \le I(S; X \mid Z) \), so that \( \Delta > 0 \implies I(S; X \mid Z) > 0 \);
+            \item\label[phfthm@corollary]{it:fin-upper} in all cases, \( \Delta \le I(S; X \mid Z) + \varepsilon_Z \).
+        \end{enumerate}
+    \end{corollary}
+
+    \Cref{it:fin-null} identifies the relevant failure mode of the test.
+    %
+    A positive gain under the null hypothesis requires the lower-dimensional classifier to be the worse-fitted of the two.
+    %
+    Held-out evaluation protects against overfitting of the training set but not against this asymmetry, which may arise from differences in approximation, optimisation, or calibration error.
+    %
+    \Cref{it:fin-lower} shows that, conversely, the gain is a conservative estimate of \(I(S;X\mid Z)\) whenever the lower-dimensional problem is fitted at least as well.
+
+    \subsection{Estimator.}
+
+    \begin{definition}[Paired, held out estimator]
+            Let \(\widehat D_Z\) and \(\widehat D_{ZX}\) be classifiers fitted on training and validation data, and let \( \ab\{(S_i,Z_i,X_i)\}_{i=1}^{n} \) be an independent test sample with \( n_\Herwig = n_\Pythia = \frac n2 \) events drawn independently from each generator.
+            %
+            The \emph{paired held-out estimator} is
+            \[
+            \label{eq:delta-hat}
+                \widehat\delta =\frac1n\sum_{i=1}^nd_i,\qquad d_i = \ell \ab( S_i, \widehat D_Z(Z_i))-\ell \ab( S_i, \widehat D_{ZX}( Z_i, X_i) ).
+            \]
+    \end{definition}
+    
+    Scoring both classifiers on the same events removes the component of event-to-event variance that is common to the two losses.
+
+\begin{proposition}[Conditional sampling properties]
+    \label{prop:estimator}
+        Conditional on the fitted classifiers \(\widehat D_Z\) and \(\widehat D_{ZX}\),
+        \[
+        \label{eq:estimator-moments}
+        \begin{split}
+            \forall &s\in\Gens\;\;\sigma_s^2 = \operatorname{Var}(d_i\mid S_i=s)<\infty\\
+            &\implies\E\ab[\widehat\delta\mid \widehat D_Z,\widehat D_{ZX}]=\Delta\ab(\widehat D_Z,\widehat D_{ZX}), \;
+            \operatorname{Var}\ab(\widehat\delta\mid \widehat D_Z,\widehat D_{ZX})=\frac{\sigma_\Herwig^2 + \sigma_\Pythia^2}{2n},
+        \end{split}
+        \]
+        where \(\Delta(\cdot,\cdot)\) is the population gain of \cref{cor:finite} under the balanced mixture.
+    \end{proposition}
+
+    The standard error reported below is the plug-in estimate
+    \[
+    \label{eq:se}
+        \widehat{\operatorname{SE}}_{\mathrm{event}} = \sqrt{ \frac{ \widehat{ \operatorname{Var}}(d_i\mid S_i=\Herwig) + \widehat{\operatorname{Var}}(d_i\mid S_i=\Pythia)}{2n}}.
+    \]
+    By construction, it quantifies test-event sampling variation conditional on the fitted classifiers only.
+    %
+    It does not include variation due to the training sample, random initialisation, hyperparameter selection, or multiplicity of analyses, and it does not account for the excess-risk asymmetry of \cref{cor:finite}.
+    %
+    The ratio \(\frac{\widehat\delta}{\widehat{\operatorname{SE}}_{\rm event}}\) is therefore reported as a scale diagnostic and not as a calibrated significance.
+
+\section{Empirical study.}
+\label{sec:empirical}
+
+    \subsection{Samples and implementation.}
+
+    The study uses the \textsc{Herwig}+\textsc{Delphes} and \textsc{Pythia}+\textsc{Delphes} samples of \textcite{andreassen_2019_3548091} (see \cref{sec:omnifold} for generator and detector versions).
+    %
+    The scalar observables are the six jet-substructure observables considered there: the ungroomed jet mass \(m\), the constituent multiplicity \(M\), the jet width \(w\), the logarithm of the soft-drop groomed jet mass normalised by the jet transverse momentum \(\ln\rho\)~\cite{Larkoski:2014wba}, the \(N\)-subjettiness ratio \(\tau_{21}\)~\cite{Thaler:2010tr}, and the soft-drop momentum fraction \(z_g\)~\cite{Larkoski:2014wba}.
+    %
+    For each observable, the classification data are the triples
+    \[
+        (Z,X,S)=
+        \begin{cases}
+            (z_{\mathrm{truth}},\,x_{\mathrm{data}},\,\Herwig), & \textsc{Herwig}+\textsc{Delphes},\\
+            (z_{\mathrm{gen}},\,x_{\mathrm{sim}},\,\Pythia), & \textsc{Pythia}+\textsc{Delphes}.
+        \end{cases}
+    \]
+    Particle-- and detector--level values remain paired event by event within each generator.
+
+    Each run uses \num{200000} events per generator.
+    %
+    Particle-- and detector--level values are standardised using the mean and standard deviation of \(z_{\mathrm{gen}}\).
+    %
+    The events are divided into fixed training, validation and test partitions, and the two generators are balanced exactly within each partition.
+    %
+    Two classifiers, \(\widehat D_Z\) and \(\widehat D_{ZX}\), are trained separately.
+    %
+    Each is a fully connected network with three hidden layers of \num{128} units, trained with the \textsc{Adam} optimiser~\cite{Kingma:2014} at learning rate \num{e-3} and batch size \num{1024} for at most \num{200} epochs, with early stopping at a patience of \num{10} epochs.
+    %
+    Both classifiers are evaluated on the same balanced test events, and \(\widehat\delta\) and \(\widehat{\operatorname{SE}}_{\mathrm{event}}\) are computed according to \cref{eq:delta-hat,eq:se}.
+
+    \subsection{Results.}
+
+\begin{table}
+        \centering
+        \caption{
+            Held-out conditional-classification results for the six scalar observables.
+            The columns give the paired held-out gain in binary cross-entropy from including the detector--level observable (see \cref{eq:delta-hat}), the conditional test-event standard error (see \cref{eq:se}), and their signal-to-noise ratio.
+        }
+        \label{tab:scalar-results}
+        \begin{tabular}{l S[table-format=1.3] S[table-format=1.3] S[table-format=2.1]}
+            \toprule
+            {Observable} & {\(\widehat\delta \ [\unit{\milli\nat\per\event}]\)} & {\(\widehat{\operatorname{SE}}_{\mathrm{event}} \ [\unit{\milli\nat\per\event}]\)} & {\(\widehat\delta / \widehat{\operatorname{SE}}_{\mathrm{event}}\)} \\
+            \midrule
+            \(m\)        & 9.061 & 0.465 & 19.5 \\
+            \(M\)        & 2.142 & 0.255 &  8.4 \\
+            \(w\)        & 0.562 & 0.122 &  4.6 \\
+            \(\tau_{21}\) & 1.102 & 0.161 &  6.8 \\
+            \(z_g\)      & 1.216 & 0.192 &  6.3 \\
+            \(\ln\rho\)  & 1.897 & 0.232 &  8.2 \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    The empirical findings are summarized in \cref{tab:scalar-results}.
+    %
+    All six observables yield a strictly positive empirical gain \(\widehat{\delta}\), spanning \num{4.6} to \num{19.5} conditional standard errors above zero.
+    %
+    The gain for the ungroomed jet mass \(m\) (\qty{9.061}{\milli\nat\per\event}) is particularly pronounced, exceeding the second-largest gain (\(M\)) by a factor of \num{4.2} and the smallest (\(w\)) by a factor of \num{16.1}; the remaining five observables fall within \qtyrange{0.562}{2.142}{\milli\nat\per\event}.
+
+    For the joint six-dimensional summary vector \((\mathbf{Z}, \mathbf{X}) \in \mathbb{R}^6 \times \mathbb{R}^6\), an identical evaluation protocol yields \(\widehat{\delta} = \qty{3.559(433)}{\milli\nat\per\event}\), where the parenthetical uncertainty denotes \(\widehat{\operatorname{SE}}_{\mathrm{event}}\).
+    %
+    The joint estimate is notably smaller than the sum of the univariate gains.
+    %
+    In fact, the joint gain is smaller than the mass gain alone.
+    %
+    This is consistent with the composition hypothesis, since the other truth observables may absorb part of the mass residual.
+    %
+    Such non-additivity is expected: by the chain rule for conditional mutual information, \(I(S; \mathbf{X} \mid \mathbf{Z}) \) need not be equal to \( \sum_k I(S; X_k \mid Z_k)\) because the conditioning particle summary \(\mathbf{Z}\) differs from each individual coordinate \(Z_k\), the substructure variables exhibit mutual statistical redundancy, and higher dimensional classifiers face different capacity and optimization trade-offs.
+
+    \subsection{Constructed-null diagnostic.}
+
+    To probe the excess-risk asymmetry \(\varepsilon_Z - \varepsilon_{ZX}\) of \cref{it:fin-null}, construct synthetic pseudo-domains that satisfy the conditional-independence null hypothesis exactly.
+    %
+    Within a single generator sample \(s \in \Gens\), define a measurable propensity function \(\pi \colon \mathcal{Z} \to (0, 1)\) and assign a binary pseudo-label \(S' \in \{0, 1\}\) conditionally via \(\Prb(S' = 1 \mid Z, X) = \pi(Z)\).
+    %
+    By construction, \(X \indep S' \mid Z\), ensuring \(I(S'; X \mid Z) = 0\), while the marginal distributions of \(Z\) across the two pseudo-classes differ whenever \(\pi\) is non-constant.
+    %
+    Balancing the pseudo-domains by uniform rejection subsampling preserves the conditional law of \(X\) given \((Z, S')\), thereby maintaining the null property.
+    %
+    Evaluating the full training and estimation pipeline on these null samples (with half the per-class sample size of the primary analysis to allow balanced class splitting) yields an average gain over five independent runs of \(\widehat{\delta} = \qty{-0.329(777)}{\milli\nat\per\event}\) within \textsc{Herwig} and \(\qty{-0.458(328)}{\milli\nat\per\event}\) within \textsc{Pythia}, where uncertainties denote across run standard deviations.
+
+    Under the null, \cref{it:fin-null} dictates \(\Delta = \varepsilon_Z - \varepsilon_{ZX}\).
+    %
+    The corresponding standard errors of the mean are \qty{0.347}{\milli\nat\per\event} and \qty{0.147}{\milli\nat\per\event}, so the \textsc{Herwig} mean is consistent with zero, whereas the \textsc{Pythia} mean lies approximately \num{3.1} standard errors below it.
+    %
+    The sign indicates that the higher dimensional joint model \(D_{ZX}\) tends to incur a small optimization or generalization penalty (\(\varepsilon_{ZX} \ge \varepsilon_Z\)) rather than an artificial advantage, so that the test is, if anything, conservative.
+    %
+    The run-to-run standard deviations are the appropriate scale against which to compare the single-run gains of \cref{tab:scalar-results}.
+    %
+    The observed gain for \(m\) exceeds the null run-to-run standard deviation by more than an order of magnitude for either generator, and those for \(M\) and \(\ln\rho\) by more than a factor of two; the gains for \(z_g\) and \(\tau_{21}\) are distinguishable only relative to the smaller \textsc{Pythia} spread, and that for \(w\) is not distinguishable from the null.
+    %
+    Because this pseudo-domain construction operates at a reduced sample size with synthetic marginal separation, it is intended as an architectural diagnostic rather than a formal permutation calibrated hypothesis test for computing \(p\)--values.
+
+    \subsection{Interpretation.}
+    \label{sec:interpretation}
+
+    By \cref{prop:response-eq}, the conditional-independence hypothesis \(I(S; X_m \mid Z_m) = 0\) is mathematically equivalent to universality of the induced response for the ungroomed jet mass \(m\).
+    %
+    Under this null hypothesis, \cref{it:fin-null} and \cref{prop:estimator} dictate that the observed empirical gain of \qty{9.061}{\milli\nat\per\event} would have to originate entirely from an excess-risk asymmetry \(\varepsilon_Z - \varepsilon_{ZX}\) of identical magnitude, modulo test-sample fluctuations on the order of \qty{0.5}{\milli\nat\per\event}.
+    %
+    However, the synthetic null benchmark yields mean asymmetries that are more than an order of magnitude smaller and negative, with run-to-run standard deviations below \qty{1}{\milli\nat\per\event}.
+    %
+    \Cref{tab:scalar-results} can therefore be regarded as strong, though not formally calibrated, evidence that the induced mass response is not universal between \textsc{Herwig} and \textsc{Pythia}, and that among the tested observables this violation is by far the largest for ungroomed jet mass.
+    %
+    Only the statement that \(m\) carries by far the largest effect is robust to training variability; the ordering among the remaining five observables is not resolved at this sample size.
+
+    \begin{remark}[Scope of the conclusion]
+    \noproofref
+    \label{rem:scope}
+        Non-universality of the induced response rules out the existence of any single transition kernel \(r : \mathcal{Z} \to \Meas(\mathcal{X})\) that simultaneously factorizes the joint distribution of \((Z, X)\) via \(\mu_s(\d z)\,r(\d x \mid z)\) for both generators \(s \in \Gens\).
+        %
+        Crucially, this does not rule out the existence of a kernel \(r\) that successfully matches both detector--level \emph{marginal} distributions,
+        \[
+            \forall s \in \Gens \;\; \int_{\mathcal{Z}} r(\cdot \mid z)\,\mu_s(\d z) = \pushf{g}(K_s Q_s)
+        \]
+        which is a strictly weaker consistency condition.
+        %
+        Finally, as established by \cref{it:U1-not-U2}, non-universality of the induced response \(r\) does not imply failure of universality at the underlying microscopic \(K\).
+    \end{remark}
+
+\section{Consequences for unfolding.}
+\label{sec:unfolding}
+
+    \subsection{Unfolding with a misspecified induced response.}
+
+    Consider unfolding performed directly in the summary space \(\mathcal Z\).
+    %
+    By \cref{eq:induced-disint}, the law of the detector--level summary in nature is
+    \[
+    \label{eq:nature-forward}
+        \Prb_{\mathrm{data}} = \Prb_\Herwig ( X \in \cdot \, ) = r_\Herwig \mu_\Herwig,
+    \]
+    which holds without any modelling assumption.
+    %
+    An analysis that transfers the \textsc{Pythia} induced response instead uses the forward model
+    \[
+    \label{eq:pythia-forward}
+        \mu \mapsto r_\Pythia \mu,\qquad \mu \in \Meas_\Pythia = \{ \mu \in \Meas( \mathcal Z ) \mid \mu \ll \mu_\Pythia \},
+    \]
+    where absolute continuity with respect to \(\mu_\Pythia\) ensures that \( r_\Pythia \mu \) does not depend on the choice of version of \( r_\Pythia \).
+
+    \begin{definition}[Non-Cancellation]
+    \label{def:noncancellation}
+        The \emph{non-cancellation condition} is the strict inequality between the transferred forward fold of the true summary and the true detector law:
+        \[
+        \label{eq:noncancellation}
+            r_\Pythia\mu_\Herwig \ne r_\Herwig\mu_\Herwig.
+        \]
+    \end{definition}
+    
+    \begin{proposition}[Closure and truth are incompatible under a misspecified induced response]
+    \label{prop:misspecified}
+        If \(\mu_\Herwig \ll \mu_\Pythia,\;r_\Pythia\mu_\Herwig \ne r_\Herwig\mu_\Herwig\), and \(\Theta_{\mathrm{cl}} = \{ \mu \in \Meas_\Pythia \mid r_\Pythia \mu = \Prb_{\mathrm{data}} \}\) is the set of particle--level distributions achieving exact detector--level closure under the transferred response, then:
+        \begin{enumerate}[label=\labelcref{prop:misspecified} (\alph*)]
+            \item\label[phfthm@proposition]{it:mis-truth} \(\mu_\Herwig \notin \Theta_{\mathrm{cl}}\); that is, the true particle--level distribution, folded through the transferred response, does not reproduce the detector--level data;
+            \item\label[phfthm@proposition]{it:mis-ml} if \(\Theta_{\mathrm{cl}} \ne \varnothing\), then \(\Theta_{\mathrm{cl}} = \operatorname*{argmin}_{\mu \in \Meas_\Pythia} \KL\bigl(\Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu\bigr)\), so that every population maximum--likelihood solution differs from \(\mu_\Herwig\).
+        \end{enumerate}
+    \end{proposition}
+
+    Thus, for summary--level unfolding, even an exact optimiser of the misspecified forward model faces a forced choice: it can reproduce the true particle--level distribution or achieve detector--level closure, but not both.
+
+    \begin{remark}[Folded mismatch versus induced non-universality]
+    \noproofref
+    \label{rem:folded}
+        \Cref{eq:noncancellation} is strictly stronger than non-universality of the induced response, since the signed difference measure,
+        \[
+            r_\Pythia\mu_\Herwig-r_\Herwig\mu_\Herwig=\int_{\mathcal Z}\ab[r_\Pythia(\cdot\mid z)-r_\Herwig(\cdot\mid z)]\,\mu_\Herwig(\d z)
+        \]
+        can vanish through cancellation across \(z\) even when the integrand does not vanish \(\mu_\Herwig\)-almost everywhere.
+        %
+        The conditional classification test of \cref{sec:classification} detects pointwise discrepancies in the integrand, whereas integrated mismatch can be probed directly via closure tests with known truth (see \cref{sec:closure-matrix}).
+    \end{remark}
+
+    \subsection{Non-identifiability under a universal full response.}
+
+    The failure described above arises from a reduced and misspecified response.
+    %
+    A second, logically distinct failure persists even when the full response is exactly universal and exactly known.
+
+    Throughout this subsection, let:
+    \begin{itemize}
+        \item The full response be universal across \(\Gens\) with a known common version \(K: \mathcal{T} \to \Meas(\mathcal{Y})\).
+        \item \(\mathcal Q\subseteq\Meas(\mathcal T)\) be a statistical model of particle--level distributions.
+        \item The detector--level observations \(\ab\{Y_i\}_{i=1}^n\) be independent and identically distributed with law \(KQ\) for some \(Q\in\mathcal Q\).
+    \end{itemize}
+    
+    The target of inference is the pushforward distribution \(\pushf{f}Q\) of the particle--level summary.
+
+    \begin{definition}[Estimator]
+        An \emph{estimator} is a measurable map \(\widehat\phi_n: \mathcal{Y}^n \to \Meas(\mathcal{Z})\), where \(\Meas(\mathcal Z)\) is equipped with a metric \(d\) that metrises weak convergence, such as the bounded-Lipschitz metric.
+    \end{definition}
+    
+\begin{theorem}[Non-identifiability under a universal full response]
+    \label{thm:non-identifiable}
+        Let \(K \colon \mathcal{T} \to \Meas(\mathcal{Y})\) be a universal response kernel, and let \(\mathcal{Q} \subseteq \Meas(\mathcal{T})\) be a model class of particle--level distributions.
+        If
+        \begin{equation}
+        \label{eq:null-direction}
+            \exists Q_1, Q_2 \in \mathcal{Q} \;\; KQ_1 = KQ_2 \quad \land \quad \pushf fQ_1 \ne \pushf fQ_2,
+        \end{equation}
+        then:
+        \begin{enumerate}[label=\labelcref{thm:non-identifiable} (\alph*)]
+            \item\label[phfthm@theorem]{it:ni-consistent} For any sequence of measurable estimators \(\widehat\phi_n \colon \mathcal{Y}^n \to \Meas(\mathcal{Z}), \{\widehat\phi_n\}_{n\in\mathbb N}\) is not consistent for \(\pushf fQ\) simultaneously at \(Q_1\) and \(Q_2\); that is,
+            \[
+                \limsup_{n\to\infty} \max_{i \in \{1,2\}} \Prb_{Q_i} \ab( d(\widehat\phi_n, \pushf fQ_i) \ge \tfrac{1}{2}d(\pushf fQ_1, \pushf fQ_2) ) \ge \tfrac{1}{2},
+            \]
+            where \(d\) is any metric on \(\Meas(\mathcal{Z})\).
+            \item\label[phfthm@theorem]{it:ni-ml} For detector--level data generated under \(Q_1\),
+            \[
+                Q_2 \in \operatorname*{argmin}_{Q \in \mathcal{Q}} \KL\bigl(KQ_1 \,\|\, KQ\bigr) = \{Q \in \mathcal{Q} \mid KQ = KQ_1\},
+            \]
+            so that the set of population maximum--likelihood solutions contains distributions whose pushforwards strictly differ from \(\pushf fQ_1\).
+        \end{enumerate}
+    \end{theorem}
+
+    The difference \(Q_1-Q_2\in\ker K\) is a \emph{null direction} of the full detector response.
+    %
+    Along a null direction, the observation likelihood is strictly invariant, and the specific distribution returned by an unfolding procedure is determined entirely by inductive bias, such as its prior, regularisation functional, network architecture, parameter initialisation, or early-stopping criterion, rather than by the empirical data.
+    %
+    This is the precise sense in which a result is \emph{prior dependent}.
+    %
+    Exact null directions represent an idealisation; the following quantitative lower bound governs approximate null directions.
+
+\begin{proposition}[Near null directions]
+    \label{prop:near-null}
+        \[
+        \label{eq:lecam}
+            \begin{split}
+                \forall Q_1,&\, Q_2 \in \mathcal Q \;\; \forall n \in \mathbb N \;\; \forall \widehat\phi_n \colon \mathcal{Y}^n \to \Meas(\mathcal{Z}) \\
+                &\max_{i \in \{1,2\}} \Prb_{Q_i} \ab[ d \ab( \widehat\phi_n, \pushf fQ_i) \ge \frac12 d \ab( \pushf fQ_1,\pushf fQ_2)] \ge \frac12 - \frac n2 \TV \ab( KQ_1, KQ_2).
+            \end{split}
+        \]
+    \end{proposition}
+
+    Hence particle--level differences along directions with \( \TV \ab(KQ_1, KQ_2) \ll \frac1n \) are unresolvable by any method at sample size \(n\), including an oracle unfolding with exact knowledge of \(K\).
+
+    \subsubsection{Physical realisation.}
+    
+        At particle--level, the invariant mass of a jet depends on the \num{4}--momenta of all constituent particles, which in turn incorporate the rest masses tied to specific hadron species.
+        %
+        At detector--level, particle--flow reconstruction assigns reconstructed objects to broad experimental categories (e.g., charged hadrons, neutral hadrons, photons) with nominal mass hypotheses, losing fine-grained particle identification.
+        %
+        Consequently, distinct particle--level states with differing species compositions, and therefore differing true invariant masses, can produce detector signatures that are nearly or strictly indistinguishable.
+        
+        \Cref{ex:species} is an idealized model of this physical mechanism.
+        %
+        By \cref{it:species-null}, the generator distributions \(Q_\Herwig\) and \(Q_\Pythia\) realize the exact null direction condition of \cref{eq:null-direction}.
+        %
+        While an unbinned, high dimensional unfolding method can leverage subtle kinematic correlations elsewhere in the event to constrain the species mixture, it cannot reconstruct information that the detector response has fundamentally erased.
+        %
+        Thus, although unfolding in the full phase space avoids the information loss incurred by restricting to a low dimensional summary, it cannot overcome the intrinsic null directions of the detector response operator itself.
+
+\section{Application to the \textsc{OmniFold} jet-mass result.}
+\label{sec:omnifold}
+
+    \textcite{Andreassen:2019cjw} uses \textsc{Herwig}~7.1.5~\cite{Bellm:2015jjp} as ``Nature'' and \textsc{Pythia}~8.243~\cite{Sjostrand:2014zea} with Tune~26 as MC.  \textsc{Delphes}~3.4.2 with a CMS detector model~\cite{deFavereau:2013fsa} serves as the detector simulation.
+    %
+    \textsc{OmniFold} is implemented with Particle Flow Networks~\cite{Komiske:2018cqr} acting on sets of particles described by transverse momentum, rapidity, azimuth and a particle identification code, where at detector--level the identification is restricted to experimentally accessible categories.
+    %
+    The likelihood derivation of \textcite{Andreassen:2019cjw} assumes
+    \[
+    \label{eq:omnifold-assumption}
+        p_{\mathrm{Data\mid Truth}}(y\mid t)=p_{\mathrm{Sim\mid Gen}}(y\mid t),
+    \]
+    which, in the framework of \cref{sec:setup}, posits exact universality of the full response kernel across the represented state spaces \(\mathcal{T}\) and \(\mathcal{Y}\).
+
+    \Cref{tab:omnifold} is a reproduction of the paper's Table~I, which reports values of the triangular discriminator~\cite{Topsoe:2000},
+    \[
+        \Delta_{VLC}(p,q) = \frac12\int\frac{\ab(p(\lambda)-q(\lambda))^2}{p(\lambda)+q(\lambda)}\d\lambda
+    \]
+    between unfolded and particle--level histograms.
+
+    \begin{table}
+      \centering
+      \caption{Table~I of \textcite{Andreassen:2019cjw}, reproduced.
+      %
+      Entries are \(\Delta_{VLC}\times\num{e3}\) between unfolded and particle--level binned histograms.
+      %
+      ``Data'' denotes the uncorrected detector--level distribution and ``Generation'' the \textsc{Pythia} prior.}
+      \label{tab:omnifold}
+      \begin{tabular}{lSSSSSS}
+        \toprule
+        Method & {\(m\)} & {\(M\)} & {\(w\)} & {\(\ln\rho\)} & {\(\tau_{21}\)} & {\(z_g\)}\\
+        \midrule
+        \textsc{OmniFold}  & 2.77 & 0.33 & 0.10 & 0.35 & 0.53 & 0.68\\
+        \textsc{MultiFold} & 3.80 & 0.89 & 0.09 & 0.37 & 0.26 & 0.15\\
+        \textsc{UniFold}   & 8.82 & 1.46 & 0.15 & 0.59 & 1.11 & 0.59\\
+        IBU                & 9.31 & 1.51 & 0.11 & 0.71 & 1.10 & 0.37\\
+        Data               & 24.6 & 130  & 15.7 & 14.2 & 11.1 & 3.76\\
+        Generation         & 3.62 & 15   & 22.4 & 19   & 20.8 & 3.84\\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    Three features of \cref{tab:omnifold} are particularly notable:
+    \begin{enumerate}
+        \item \textsc{OmniFold} achieves its poorest performance on jet mass. The residual metric of \num{2.77e-3} is approximately four times larger than the next-highest entry (\num{0.68e-3}, for \(z_g\)) and between five and thirty times larger than each of the remaining observables.
+        \item The mass discrepancy contracts monotonically as richer event information is included in the deconvolution, decreasing from \num{8.82e-3} (\textsc{UniFold}) to \num{3.80e-3} (\textsc{MultiFold}) and \num{2.77e-3} (\textsc{OmniFold}), yet it remains away from zero.
+        \item Jet mass is the sole observable for which low-dimensional deconvolution (\textsc{UniFold} and IBU) degrades performance relative to the unweighted prior (\num{3.62e-3}); \textsc{MultiFold} likewise fails to improve upon the prior, leaving \textsc{OmniFold} as the only method to achieve a net reduction.
+    \end{enumerate}
+    
+    The third feature aligns directly with the distortion predicted by \cref{prop:misspecified} when summary--level unfolding is conducted under a misspecified induced response, although \cref{tab:omnifold} alone cannot isolate that mechanism uniquely.
+    %
+    The second feature is consistent with higher-dimensional architectures capturing indirect composition signatures from the broader shower, with the residual gap reflecting information either fundamentally erased by detector smearing (see \cref{thm:non-identifiable}) or distorted by cross-generator response misspecification.
+
+    \textcite{Andreassen:2019cjw} attributes the difficulty with mass to particle type information being relevant at particle--level but not fully known at detector--level, introducing additional prior dependence.
+    %
+    The following propositions disentangle the distinct physical and statistical mechanisms underlying this observation.
+
+    \begin{proposition}[Compatibility of the two explanations]
+    \label{prop:compatible}
+        There exists a data generating process in which a single latent particle--level variable simultaneously induces:
+        \begin{enumerate}[label=\labelcref{prop:compatible} (\alph*)]
+            \item\label[phfthm@proposition]{it:comp-full} an exactly universal full response kernel \(K\);
+            \item\label[phfthm@proposition]{it:comp-induced} a non-universal induced mass response \(r_\Herwig(\cdot \mid z) \ne r_\Pythia(\cdot \mid z)\) at every mass value \(z \in \mathcal{Z}\); and
+            \item\label[phfthm@proposition]{it:comp-ni} severe non-identifiability of the particle--level mass distribution under the known full response, where \(Q_\Herwig\) and \(Q_\Pythia\) form an exact null pair satisfying \(KQ_\Herwig = KQ_\Pythia\) while \(\pushf{f}Q_\Herwig \ne \pushf{f}Q_\Pythia\).
+        \end{enumerate}
+        Consequently, the particle--identity hypothesis of \textcite{Andreassen:2019cjw} and the non-universality of the induced mass response demonstrated in \cref{sec:interpretation} are mathematically consistent and can originate from the identical latent degree of freedom.
+    \end{proposition}
+
+    \Cref{prop:compatible} implies that the non-universality detected in \cref{sec:interpretation} is not, \textit{ipso facto}, incompatible with the full-response universality assumption in \cref{eq:omnifold-assumption}.
+    %
+    \textsc{OmniFold} does not presuppose agreement between the reduced kernels \(r_\Herwig\) and \(r_\Pythia\); it relies only on universality conditional on the full represented state \(T\), which by \cref{it:U1-not-U2} can hold even when the induced summary response breaks down.
+    %
+    Conversely, however, the empirical validation presented in \textcite{Andreassen:2019cjw} is insufficient to prove that \cref{eq:omnifold-assumption} holds, for two distinct reasons.
+
+    First, the operational ``full phase space'' consists strictly of the represented constituent list, which may not capture every latent coordinate that influences \textsc{Delphes} detector simulation, event selection, or jet-clustering thresholds.
+    %
+    If unrepresented response-relevant coordinates affect the simulation, \cref{cor:omitted} implies that the nominal response is itself an induced marginalization that can inherit generator dependence.
+
+    Second, the technical closure test of \textcite{Andreassen:2019cjw} is performed within a single generator, and such a test provides zero statistical power against cross-generator response misspecification.
+
+\begin{proposition}[Within-generator closure tests]
+    \label{prop:closure}
+        If \(\Phi\) is any test statistic evaluated exclusively on samples drawn from \(\Prb_\Pythia\), potentially augmented by independent auxiliary simulation randomness,
+        %
+        then the sampling distribution of \(\Phi\) is identical under any two joint specifications \((\Prb_\Herwig,\Prb_\Pythia)\) and \((\Prb'_\Herwig,\Prb_\Pythia)\) sharing the identical \textsc{Pythia} law \(\Prb_\Pythia\).
+        
+        In particular, for testing the null hypothesis of response universality \(H_0 \colon K_\Herwig = K_\Pythia\) against any alternative specification \((\Prb'_\Herwig,\Prb_\Pythia)\) under which \(K'_\Herwig \ne K_\Pythia\), any test based on \(\Phi\) has power identically equal to its size.
+    \end{proposition}
+
+    The numerical evidence of \textcite{Andreassen:2019cjw} therefore cannot and does not discriminate among at least three sources of the unfolded mass residual:
+    \begin{enumerate}[label=(S\arabic*)]
+        \item\label[source]{it:src-ni} intrinsic non-identifiability or near-null directions under an exactly universal full response (see \cref{thm:non-identifiable,prop:near-null});
+        \item\label[source]{it:src-mis} cross-generator response misspecification conditional on the represented state \(T\), including discrepancies induced by omitted phase-space coordinates (see \cref{cor:omitted});
+        \item\label[source]{it:src-fin} finite-sample variance, neural-network approximation error, optimization imperfections, or premature early stopping.
+    \end{enumerate}
+    The particle--identity hypothesis provides a coherent explanation for \cref{it:src-ni} and for the observed summary--level non-universality (\cref{prop:compatible}).
+    %
+    While within-generator technical closure tests provide checks on \cref{it:src-fin}, \cref{prop:closure} proves that they cannot constrain \cref{it:src-mis}.
+    %
+    Attributing the mass discrepancy solely to prior dependence is therefore plausible, but not an empirically verified conclusion.
+
+\section{Proposed tests.}
+\label{sec:tests}
+
+    The following tests would localise the source of the mass residual.
+
+    \subsection{Composition augmented conditioning.}
+
+    Let \(C = c(T)\) be a vector of particle--level composition variables, such as charged and neutral energy fractions, constituent multiplicities, species fractions, and species-resolved contributions to the jet mass.
+    %
+    Repeat the nested classification test of \cref{sec:classification} with the particle--level summary \((Z,C)\) in place of \(Z\), that is, using classifiers \(D_{Z,C}(Z,C)\) and \(D_{Z,C,X}(Z,C,X)\).
+
+\begin{corollary}[Composition-augmented test]
+    \label{cor:composition}
+        If the \(g\)-projected full response is universal with common version \(K^g\) and if \(K^g(\cdot \mid t)\) depends on \(t\) only through the augmented coordinates \((f(t), c(t))\), in the sense of \cref{eq:response-sufficient} with \(f\) replaced by the Borel map \((f,c) : \mathcal{T} \to \mathcal{Z} \times \mathcal{C}\), then
+        \[
+            I(S; X \mid Z, C) = 0.
+        \]
+    \end{corollary}
+
+    If \(I(S; X \mid Z, C_k)\) contracts monotonically towards zero along a sequence of increasingly expressive composition summaries \(C_1, C_2, \ldots\), this provides direct empirical evidence that omitted particle composition is the latent variable driving the non-universal induced mass response.
+    %
+    However, conditional mutual information is generally not monotone under refinement of the conditioning algebra~\cite{CoverThomas:2006}; hence, an intermediate increase along the sequence is mathematically permissible, while a vanishing terminal value remains consistent with, but does not strictly imply, universality of the underlying full response (see \cref{it:U2-not-U1}).
+
+    \subsection{Full-state conditional response test.}
+
+    Using the exact particle-- and detector--level representations supplied to \textsc{OmniFold}, consider the population target
+    \begin{equation}
+    \label{eq:full-test}
+        I(S; Y \mid T) = L_T(D_T^*) - L_{TY}(D_{TY}^*).
+    \end{equation}
+
+\begin{corollary}[Full-state test]
+    \label{cor:full-test}
+        \leavevmode
+        \begin{enumerate}[label=\labelcref{cor:full-test}~(\alph*)]
+            \item\label[phfthm@corollary]{it:ft-full} \(I(S; Y \mid T) = 0\) iff the full response is universal across \(\Gens\).
+            \item\label[phfthm@corollary]{it:ft-proj} \(I(S; X \mid T) = 0\) iff the \(g\)-projected full response is universal across \(\Gens\). Moreover, because \(X = g(Y)\), the data processing inequality guarantees
+            \[
+                I(S; X \mid T) \le I(S; Y \mid T).
+            \]
+        \end{enumerate}
+    \end{corollary}
+
+    A reproducibly positive estimate of \(I(S; Y \mid T)\) would formally reject universality of the full response for the represented state and directly invalidate the foundation in \cref{eq:omnifold-assumption}.
+    %
+    Conversely, an estimate consistent with a calibrated null would corroborate the hypothesis that the scalar discrepancy identified in \cref{sec:empirical} is strictly a coarse-graining artifact.
+    %
+    \Cref{it:ft-proj} establishes an intermediate diagnostic by conditioning on the full particle--level state while probing only the scalar detector--level mass \(X_m\).
+    %
+    Combined with \cref{lem:mixture}, this delivers an unambiguous dichotomy:
+    \begin{itemize}
+        \item If \(I(S; X_m \mid T) > 0\), the represented full response itself violates universality in the mass coordinate.
+        \item If \(I(S; X_m \mid T) = 0\), the \(g\)-projected full response is strictly universal, and the non-universality observed in the induced mass response arises solely from differences in generator conditional composition laws, as dictated by \cref{eq:kernel-difference}.
+    \end{itemize}
+
+    These high dimensional formulations are substantially more demanding than scalar evaluations for three technical reasons:
+    \begin{enumerate}
+        \item Variable length particle sets necessitate permutation invariant architectures (such as Particle Flow Networks~\cite{Komiske:2018cqr});
+        \item The network pairs \(D_T\) and \(D_{TY}\) must be carefully capacity matched to prevent the excess risk asymmetry \(\varepsilon_T - \varepsilon_{TY}\) of \cref{cor:finite} from dominating the estimate;
+        \item Failing to detect conditional dependence cannot be construed as affirmative evidence of conditional independence, since no conditional independence test can be uniformly valid and non-trivially powerful across general continuous alternatives without restricting smoothness or distribution classes~\cite{ShahPeters:2020}.
+    \end{enumerate}
+    Consequently, power analyses with synthetic response perturbations of known amplitude are necessary before any observed null result can be definitively claimed.
+
+    \subsection{Cross-generator oracle closure.}
+    \label{sec:closure-matrix}
+
+    Because synthetic truth is accessible in Monte Carlo benchmarks, deconvolution can be evaluated across the complete Cartesian product of detector--level data sources and response--simulation pairs:
+    \begin{center}
+    \begin{tabular}{lcc}
+        \toprule
+        & \textsc{Herwig} response pairs & \textsc{Pythia} response pairs\\
+        \midrule
+        \textsc{Herwig} detector data & Matched & Transferred\\
+        \textsc{Pythia} detector data & Transferred & Matched\\
+        \bottomrule
+    \end{tabular}
+    \end{center}
+    
+    The matched diagonal cells isolate pure deconvolution algorithmic artifacts and intrinsic non-identifiability (see \cref{it:src-ni,it:src-fin}); the discrepancy between off-diagonal transferred cells and matched cells isolates the empirical cost of cross-generator response misspecification (see \cref{it:src-mis}).
+    %
+    At the summary--level, the folded mismatch \(r_\Pythia\mu_\Herwig - r_\Herwig\mu_\Herwig\) (see \cref{rem:folded}) can be evaluated directly by reweighting \textsc{Pythia} response pairs to the \textsc{Herwig} particle--level distribution of \(Z\) and comparing the resulting folded distribution against the nominal \textsc{Herwig} detector--level observations.
+    %
+    Potential differences in generator support (\(\mu_\Herwig \not\ll \mu_\Pythia\) or the converse) must be audited to prevent truncation bias.
+
+    \subsection{Calibration and uncertainty quantification.}
+
+    To convert the scale diagnostic of \cref{sec:empirical} into a calibrated hypothesis test with a verified power envelope, the following protocol should be implemented:
+    \begin{enumerate}
+        \item Replicate the entire training, validation, and scoring sequence across independent Monte Carlo resamples and network parameter initialisations;
+        \item Implement \(K\)-fold cross-fitting~\cite{Chernozhukov:2018} to ensure that every evaluation event is strictly out of sample;
+        \item Calibrate empirical test statistics against synthetic conditional nulls or model-X conditional randomisation tests~\cite{Candes:2018} matched in sample size to the observed problem;
+        \item Construct empirical learning curves across sample sizes and network parameter scales to establish empirical bounds on the excess risks of \cref{cor:finite};
+        \item Validate the probability calibration of network outputs (or evaluate strictly proper scoring rules across model ensembles);
+        \item Lock the test partition until all neural network architectures, optimisation schedules, and hyperparameters are irrevocably finalised.
+    \end{enumerate}
+    
+\section{Conclusions.}
+\label{sec:conclusions}
+
+    The presented benchmark provides strong empirical evidence that the response induced on ungroomed jet mass is not universal between \textsc{Herwig} and \textsc{Pythia}, and weaker but consistent evidence for \(M\), \(\ln\rho\), \(z_g\) and \(\tau_{21}\), despite the use of an identical \textsc{Delphes} detector simulation.
+    %
+    Ungroomed jet mass is singled out among the tested observables because at fixed particle--level mass, the detector--level mass retains several times more residual generator information than the detector--level counterpart of any other substructure observable.
+
+    For unfolding performed directly in a reduced summary space, this lack of universality constitutes fundamental model misspecification.
+    %
+    Whenever the folded mismatch of \cref{eq:noncancellation} is non-zero, no estimator operating under the transferred response can simultaneously recover the true particle--level distribution and reproduce the detector--level data (see \cref{prop:misspecified}).
+    %
+    In this precise sense, no optimisation scheme or regularisation strategy can rescue summary--level unfolding under response transfer.
+
+    For full phase-space unfolding via \textsc{OmniFold}, the implications are more nuanced.
+    %
+    Even an exactly universal full response may admit non-trivial null directions, and the detector--level erasure of particle identity can render the particle--level mass distribution fundamentally prior dependent even when the response operator is known exactly (see \cref{thm:non-identifiable,prop:near-null}).
+    %
+    At the same time, neither the scalar findings of \cref{tab:scalar-results} nor within-generator technical closure tests can establish whether the represented full response is truly shared between \textsc{Herwig} and \textsc{Pythia} (see \cref{prop:nonimplication,prop:closure}).
+    %
+    The particle identity explanation of \textcite{Andreassen:2019cjw} is therefore plausible and mathematically consistent with the results established here (see \cref{prop:compatible}), but it remains an unverified hypothesis.
+
+    The central open question is whether the independence condition
+    \[
+        Y \indep S \mid T
+    \]
+    holds for the full represented particle-- and detector--level event states under the balanced mixture.
+    %
+    By \cref{cor:full-test}, evaluating this hypothesis directly on full paired particle sets will decisively distinguish a genuine breakdown of the foundational response assumption in \cref{eq:omnifold-assumption} from irreducible prior dependence under a universal but non-injective response operator.
+
+\printbibliography
+
+\appendix
+\crefalias{section}{appendix}
+\section{Proofs.}
+\label{app:proofs}
+
+    Throughout, it is understood that equalities between kernels are up to null sets of the relevant marginal and that two finite measures on a product of standard Borel spaces that agree on measurable rectangles are equal, since rectangles form a \(\pi\)-system generating the product \(\sigma\)-algebra.
+
+\begin{proof}[*lem:mixture]
+        By universality of the \(g\)-projected full response and the definition of the fibre disintegration in \cref{eq:truth-disint},
+        \[
+            \begin{split}
+                &\forall s\in\Gens\;\;\forall A \in \Borel( \mathcal X ) \;\; \forall B \in \Borel (\mathcal Z ) \\
+                &\qquad \Prb_s( Z\in B, \;X\in A) = \int_{f^{-1}(B)} K^g (A \mid t) \, Q_s(\d t) = \int_B \ab[ \int_{\mathcal T} K^g (A \mid t ) \, Q_s^{z} (\d t)] \mu_s(\d z).
+            \end{split}
+        \]
+        The second equality follows because \(\1_{f^{-1}(B)}(t) = \1_B(f(t))\), and \cref{eq:truth-disint} extends by standard monotone-class arguments to
+        \[
+            \E_s \ab[ \psi \ab (Z, T) ] = \int_{\mathcal{Z}} \int_{ \mathcal T } \psi(z, t) \, Q_s^z(\d t) \, \mu_s(\d z),
+        \]
+        for any bounded Borel-measurable function \(\psi\), applied here to \( \psi( z, t) = \1_B(z) K^g(A \mid t)\).
+        
+        The assignment \(z \mapsto \int_{\mathcal{T}} K^g(\cdot \mid t) \, Q_s^z( \d t ) \) defines a composition of Markov kernels and is therefore itself a Markov kernel \(\mathcal Z \to \mathcal X\).
+        %
+        Comparing this with the definition of the induced response in \cref{eq:induced-disint}, the two kernels assign identical probabilities to all measurable rectangles \(B \times A\), and hence define the same joint measure on \(\mathcal{Z} \times \mathcal{X}\).
+        By the uniqueness statement of \cref{lem:disintegration}, they are versions of one another.
+        %
+        For \cref{eq:latent-mixture}, identify \(\mathcal T\) with \(\mathcal Z\times\mathcal U\); then \(Q_s^{z}=\delta_z\otimes p_s(\cdot\mid z)\) for \(\mu_s\)-almost every \(z\), and \cref{eq:coarse-grain} reduces to \cref{eq:latent-mixture}.
+    \end{proof}
+
+\begin{proof}[*thm:coarse]
+    By \cref{lem:mixture},
+    \[
+        \forall s \in \Gens\;\; \exists N_s \in \Borel \ab(\mathcal Z) \;\;  \mu_s \ab(N_s) = 0 \;\land\; \forall z \in \mathcal Z \setminus N_s \;\; r_s \ab( \cdot \mid z) = K^g Q_s^z.
+    \]
+    On the common essential support \(\supp\), the Radon--Nikodym derivatives \(m_s = \frac{\d\mu_s}{\d\nu} > 0\) by definition, so \(\forall s \in \Gens \;\; \nu\restriction_{\supp} \ll \mu_s\).
+    
+    Consequently, \(\nu \ab(N_s \cap \supp) = 0\), and both representations hold simultaneously for \(\nu\)-almost every \(z \in \supp\).
+    %
+    Subtracting the two instances and using linearity of \(K^g\) on \(\Sgn(\mathcal T)\) (see \cref{def:forward}) yields \cref{eq:kernel-difference}.
+
+        \begin{description}
+            \item[\Cref{it:coarse-iff}] By \cref{rem:common-support}:
+                \[
+                    \text{The induced response is universal } \iff \nu \ab\{ z \in \supp \mid r_\Herwig(\cdot \mid z) - r_\Pythia(\cdot \mid z) = 0 \} = 1.
+                \]
+                
+                By \cref{eq:kernel-difference}, this is equivalent to \( K^g( Q_\Herwig^z - Q_\Pythia^z) = 0 \implies Q_\Herwig^z - Q_\Pythia^z \in \ker K^g\).
+            \item[\Cref{it:coarse-suff}] If \(Q_\Herwig^z = Q_\Pythia^z\), their difference is the zero measure, which is in \(\ker K^g\) trivially; hence the claim follows from \cref{it:coarse-iff}.
+            \item[\Cref{it:coarse-inj}] By \cref{lem:disintegration}, for \(\nu\)-almost every \(z \in \supp\;\; Q_\Herwig^z, Q_\Pythia^z \) are concentrated on the fibre \(f^{-1}\{z\}  \implies Q_\Herwig^z - Q_\Pythia^z \in \Sgn(f^{-1}\{z\})\).
+            %
+            Under the injectivity hypothesis on this subspace, \( K^g( Q_\Herwig^z - Q_\Pythia^z) = 0 \iff Q_\Herwig^z - Q_\Pythia^z = 0\).
+            %
+            The assertion then follows directly from \cref{it:coarse-iff}.
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*prop:sufficient]
+        \[
+            \begin{split}
+                &\forall A \in \Borel(\mathcal X) \;\; \forall B \in \Borel (\mathcal Z)\;\;\forall s \in \Gens \;\; \Prb_s(Z\in B,\; X\in A) \\
+                &\qquad  = \int_{f^{-1}(B)} K^g(A \mid t)\,Q_s(\d t) = \int_{f^{-1}(B)} \kappa \ab(A\mid f(t)) \, Q_s(\d t) = \int_B \kappa( A \mid z)\,\mu_s(\d z),
+            \end{split}
+        \]
+        where the first equality is the definition of the joint law under the universal version \(K^g\), the second uses \cref{eq:response-sufficient}, and the third is the change-of-variables formula for the pushforward measure \(\mu_s=\pushf fQ_s\).
+        %
+        Hence by the uniqueness part of \cref{lem:disintegration}, for every \( s \in \Gens \;\; \kappa \) is a version of \(r_s\).
+    \end{proof}
+
+ \begin{proof}[*lem:species]
+        \begin{description}
+            \item[\Cref{it:species-full}] The kernel of \cref{eq:species-kernel} does not depend on \(s\), and by independence of the detector noise \(\epsilon\) it is a version of the conditional law of \(Y\) given \(T\) under both generators.
+            \item[\Cref{it:species-support}] Under generator \(s,\;Z\) has density \( \ab( 1-\pi_s ) \phi \ab(z) + \pi_s \phi \ab(z-a)\), which is strictly positive everywhere on \(\mathbb R\).
+            \item[\Cref{it:species-induced}] Under generator \(s\), the joint density of \(\ab(Z,U)\) with respect to the product of Lebesgue and counting measure on \(\mathbb R \times \ab\{0,1\}\) is \( \ab( 1 - \pi_s ) \phi \ab(z) \) at \(u=0\) and \( \pi_s \phi \ab(z-a) \) at \(u=1\), so \( \Prb_s \ab(U=1\mid Z=z) = w_s \ab(z) \).
+            %
+            Given \(Z=z\) and \(U=u\), the kinematic variable equals \(z-au\), so with \(g = \mathrm{id}\), \(X = Y \sim \Normal \ab( z - au, \sigma^2) \).
+            %
+            Mixing over \(u\) yields the stated Gaussian mixture for \(r_s \ab( \cdot \mid z ) \).
+            
+            For fixed \(z\in\mathbb R\), let \(c = \phi \ab(z-a) > 0\) and \(e = \phi \ab(z) > 0\). Consider the map
+            \[
+                \xi : \ab(0,1) \to \ab(0,1), \qquad \pi \mapsto \frac{\pi c}{\pi c + \ab(1 - \pi) e}.
+            \]
+            Its derivative is
+            \[
+                \xi' \ab(\pi) = \frac{ce}{\ab\big[\pi c + \ab(1 - \pi) e]^2} > 0,
+            \]
+            so \(\xi\) is strictly increasing on \(\ab(0,1)\).
+            %
+            Since \(\pi_\Herwig \ne \pi_\Pythia\) and \( w_s \ab( z ) = \xi \ab(\pi_s)\), it follows that \(w_\Herwig \ab( z ) \ne w_\Pythia \ab(z)\).
+            %
+            The expectation of \(r_s \ab( \cdot \mid z)\) is \(z - a \, w_s \ab(z)\). Since \(a\ne0\), the means differ:
+            \[
+                z - a\,w_\Herwig(z) \ne z - a \, w_\Pythia \ab(z),
+            \]
+            and hence the measures \(r_\Herwig \ab(\cdot\mid z) \) and \(r_\Pythia \ab(\cdot\mid z) \) differ for every \(z\in\mathbb R\).
+            
+            \item[\Cref{it:species-null}] Under either generator, \(Y = V + \epsilon \) with \(V\sim\Normal(0,1)\) and \( \epsilon \sim \Normal( 0,\sigma^2 )\) independent, so \( KQ_s = \Normal( 0, 1+\sigma^2 ) \).
+            %
+            The mean of \(\pushf fQ_s\) is \(a\pi_s\), and since \(\pi_\Herwig \ne \pi_\Pythia\) and \(a \ne 0\), \(\pushf fQ_\Herwig \ne \pushf fQ_\Pythia\).
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*prop:nonimplication]
+        \begin{description}
+            \item[\Cref{it:U1-not-U2}] In \cref{ex:species}, the full response is universal by \cref{it:species-full}. By \cref{it:species-support,it:species-induced}, the induced responses differ at every point of the common support \(\supp=\mathbb R \implies \nu \ab\{z \in \supp \;\big|\; r_\Herwig(\cdot \mid z) = r_\Pythia(\cdot \mid z)\} = 0\). Hence, by \cref{rem:common-support}, the induced response is not universal.
+            \item[\Cref{it:U2-not-U1}] Let \(\mathcal T = \mathcal Y = \mathbb R\), \(Q_\Herwig = Q_\Pythia = \Normal(0,1)\), \(K_\Herwig(\cdot\mid t) = \Normal(t,1)\), and \(K_\Pythia( \cdot \mid t) = \Normal(t, 4)\).
+                %
+                These kernels differ at every \(t\in\mathbb R\), and the support of \(Q_s\) is all of \(\mathbb R\), so the full response is not universal.
+                
+                Now let \(f = \operatorname{id}_{\mathbb R}\) and let \(g(y) \equiv x_0\) for some fixed \(x_0 \in \mathcal X\).
+                %
+                Then \(X = g(Y) = x_0\) almost surely under both generators, so \(r_s(\cdot \mid z) = \delta_{x_0}\) for every \(z \in \mathcal Z\) and both \(s \in \Gens\).
+                The induced responses are therefore identical.
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*cor:omitted]
+        Apply \cref{lem:mixture} with \(\widetilde T = \ab(T, J)\) in the role of the full particle--level state, projection \(f: \ab(t,j) \mapsto t\), and \(g = \operatorname{id}_{\mathcal Y}\) so that \(\widetilde{K}^g = \widetilde{K}\).
+        %
+        The omitted variable of \cref{eq:latent-mixture} is \(U=J\), and \cref{eq:latent-mixture} reduces directly to \cref{eq:omitted}.
+
+        \begin{description}
+            \item[Necessity] If the conditional laws agree \(\overline Q\)-a.e.\ on \(\mathcal T_\cap\), then by \cref{eq:omitted} for \(\overline Q\)-almost every \(t \in \mathcal T_\cap\), their mixtures satisfy \(K_\Herwig \ab(\cdot \mid t) = K_\Pythia \ab(\cdot \mid t)\) which is the definition of universality across \(\Gens\); by contraposition, disagreement on a set of positive \(\overline Q\)-measure is necessary for non-universality.
+            \item[Sufficiency under fibre injectivity] The fibre of \(f\) over \(t\) is \(\ab\{t\} \times \mathcal J \cong \mathcal J\). When the fibre operator \(\eta \mapsto \int_{\mathcal J} \widetilde K \ab(\cdot \mid t, j)\,\eta \ab(\d j)\) is injective for \(\overline Q\)-almost every \(t \in \mathcal T_\cap\), the mapping from conditional laws to induced responses is injective, so \cref{it:coarse-inj} guarantees that \(K_\Herwig \ab(\cdot \mid t) \ne K_\Pythia \ab(\cdot \mid t)\) whenever \(p_\Herwig \ab(\cdot \mid t) \ne p_\Pythia \ab(\cdot \mid t)\), establishing non-universality.
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*prop:response-eq]
+    \begin{description}
+        \item[\Cref{it:req-univ}\(\implies\)\cref{it:req-ci}] Let \(r\) be a common version.
+            %
+            Under the balanced mixture,
+            \[
+                \begin{split}
+                &\forall A \in \Borel(\mathcal X)\;\;\forall B \in \Borel(\mathcal Z)\;\; \forall s\in\Gens \\
+                &\quad\Prb(S=s,\;Z\in B,\;X\in A)=\tfrac12\int_B r(A\mid z)\,\mu_s(\d z)=\E\ab[\1_{S=s}\1_{Z\in B}\,r(A\mid Z)].
+                \end{split}
+            \]
+            
+            Hence \(r(A\mid Z)\) is a version of \(\Prb(X\in A\mid Z,S)\).
+            %
+            Since it is \(\sigma(Z)\)-measurable, it is also a version of \(\Prb(X\in A\mid Z)\), and \(\Prb(X\in A\mid Z,S)=\Prb(X\in A\mid Z)\) almost surely for every \(A \in \Borel(\mathcal X)\).
+            %
+            This is equivalent to \(X\indep S\mid Z\)~\cite{Kallenberg:2021}.
+        \item[\Cref{it:req-ci}\(\implies\)\cref{it:req-univ}] Let \(\rho\) be a regular version of the conditional law \(\Prb( X \mid Z)\), which exists by \cref{ass:borel}.
+            %
+            Conditional independence gives \( \forall A \in \Borel(\mathcal X) \;\; \Prb( X\in A \mid Z,S) = \rho(A\mid Z)\) almost surely.
+            %
+            Hence,
+            \[
+                \begin{split}
+                    &\forall A \in \Borel(\mathcal X)\;\;\forall B \in \Borel(\mathcal Z)\;\;\forall s\in\Gens \\
+                    &\quad \frac12\Prb_s(Z\in B,\;X\in A) = \Prb( S=s,\;Z\in B,\;X\in A)\\
+                    &\qquad\qquad\qquad\qquad\quad= \E\ab[\1_{S=s}\1_{Z\in B}\,\rho(A\mid Z)] \\
+                    &\qquad\qquad\qquad\qquad\quad= \Prb(S=s)\,\E_s\ab[\1_B(Z)\,\rho(A\mid Z)] = \frac12\int_B\rho(A\mid z)\,\mu_s(\d z).
+                \end{split}
+            \]
+            Multiplying both sides by \num2 yields \(\Prb_s(Z\in B,\;X\in A) = \int_B\rho(A\mid z)\,\mu_s(\d z)\), so \(\rho\) is a version of both \(r_\Herwig\) and \(r_\Pythia\).
+        \item[\Cref{it:req-ci}\(\iff\)\cref{it:req-cmi}] Since \(\kl\ge0\) with equality almost surely if and only if its arguments coincide, \(I(S;X\mid Z)=\E\ab[\kl(\eta_{(Z,X)}\,\|\,\eta_Z)]=0\) if and only if \(\eta_{(Z,X)}=\eta_Z\) almost surely.
+            %
+            Because \(S\) is binary, this identity is equivalent to \(\Prb(S\in\cdot\mid Z,X) = \Prb( S\in\cdot\mid Z)\) almost surely, which states \( S \indep X\mid Z\)~\cite{Kallenberg:2021}, or equivalently \(X \indep S \mid Z\) by symmetry.
+    \end{description}
+\end{proof}
+
+\begin{proof}[*prop:js]
+        Under the balanced mixture \(\Prb\), \(\Prb(S=\Herwig,\,Z\in B)=\tfrac12\mu_\Herwig(B)=\int_B\tfrac12m_\Herwig\,\d\nu\), and the marginal law of \(Z\) is \(\nu\); hence \(\eta(Z)=\tfrac12m_\Herwig(Z)\) is a version of \(\eta_Z\), and \(1-\eta(Z)=\tfrac12m_\Pythia(Z)\) \(\nu\)-almost surely.
+        %
+        Let \(\eta_\Herwig(z) = \eta(z)\) and \(\eta_\Pythia(z) = 1 - \eta(z)\).
+        
+        \(\forall z \in \mathcal Z\;\;\eta_s(z) > 0 \implies \bar r(\cdot \mid z)\) is a version of the conditional law of \(X\mid Z=z\), and \(r_s(\cdot \mid z) \ll \bar r(\cdot\mid z)\).
+        %
+        By Doob's theorem on measurable densities~\cite{Kallenberg:2021},
+        \[
+            \begin{split}
+                \forall s \in\Gens \;\; \exists \rho_s\colon\mathcal Z\times\mathcal X\to[0,\infty) \;\; &\eta_s(z)\, r_s(\d x\mid z)=\eta_s(z)\,\rho_s(z,x)\,\bar r(\d x\mid z) \\ \land\;&\eta_\Herwig(z) \rho_\Herwig(z,x) + \eta_\Pythia(z) \rho_\Pythia(z,x)=1\quad \bar r(\cdot\mid z)\text{-a.e.}
+            \end{split}
+        \]
+        \[
+            \forall A \in \Borel(\mathcal X)\;\; \forall B \in \Borel(\mathcal Z)\;\;\Prb(S=\Herwig,\;Z\in B,\;X\in A)=\int_B\eta_\Herwig(z)\int_A\rho_\Herwig(z,x)\,\bar r(\d x\mid z)\,\nu(\d z),
+        \]
+        so that \(\eta_{(Z,X)}=\eta_\Herwig(Z)\rho_\Herwig(Z,X)\) and \(1-\eta_{(Z,X)}=\eta_\Pythia(Z)\rho_\Pythia(Z,X)\) almost surely.
+        Consequently, on \(\supp\) where \(\eta_s(Z) > 0\), the likelihood ratios satisfy
+        \[
+            \frac{\eta_{(Z,X)}}{\eta_Z} = \rho_\Herwig(Z,X) \quad \text{and} \quad \frac{1-\eta_{(Z,X)}}{1-\eta_Z} = \rho_\Pythia(Z,X).
+        \]
+        %
+        Substituting into \cref{eq:cmi-def} and conditioning on \(Z=z \in \supp\),
+        \[
+            \begin{split}
+            \E\ab[\kl\ab(\eta_{(Z,X)}\,\|\,\eta_Z)\mid Z=z]
+            &= \sum_{s\in\Gens}\eta_s(z)\int_{\mathcal X} \rho_s(z,x)\ln\ab(\frac{\eta_s(z)\rho_s(z,x)}{\eta_s(z)})\,\bar r(\d x\mid z) \\
+            &= \sum_{s\in\Gens}\eta_s(z)\int_{\mathcal X} \rho_s(z,x)\ln\rho_s(z,x)\,\bar r(\d x\mid z) \\
+            &= \sum_{s\in\Gens}\eta_s(z)\,\KL\ab(r_s(\cdot\mid z)\,\|\,\bar r(\cdot\mid z)) \\
+            &= \JS_{\eta(z)}(r_\Herwig(\cdot\mid z),r_\Pythia(\cdot\mid z)).
+            \end{split}
+        \]
+        %
+        Off \(\supp\), one of \(\eta_\Herwig(z)\), \(\eta_\Pythia(z)\) vanishes and \(\bar r(\cdot\mid z)\) coincides with the other induced response, so the integrand vanishes identically.
+        %
+        Integrating over \(\mathcal Z\) against \(\nu\) reduces to the integral over \(\supp\) and yields \cref{eq:cmi-js}.
+    \end{proof}
+
+\begin{proof}[*prop:bayes]
+        Conditional on \(W\), the label \(S\) is Bernoulli with parameter \(\eta_W\) (with \(S=\Herwig\) coded as \(1\)), so that
+        \[
+            \begin{split}
+                \E\ab[\ell\big\{S,D(W)\big\} \mid W] &= -\eta_W\ln D(W) - (1-\eta_W) \ln\ab[1-D(W)] \\
+                &= h(\eta_W) + \kl\ab[\eta_W\,\|\,D(W)],
+            \end{split}
+        \]
+        where \(\kl(p\,\|\,q) = p\ln\frac pq + (1-p)\ln\frac{1-p}{1-q}\) is extended continuously to the boundaries of \([0,1]\).
+        
+        Both terms on the right-hand side are non-negative, so taking unconditional expectations is justified and yields \cref{eq:logloss-decomp}.
+        %
+        The inequality and its equality condition follow immediately because \(h(\eta_W) \ge 0\) and \(\kl(p\,\|\,q) \ge 0\) with \(\kl(p\,\|\,q)=0 \iff p=q\).
+
+        For the identity, let \(\eta_{ZX} = \eta_{(Z,X)}\) and expand the definition of \(\kl\):
+        \[
+            \kl(\eta_{ZX}\,\|\,\eta_Z)= -h(\eta_{ZX}) -\eta_{ZX} \ln\eta_Z - (1-\eta_{ZX}) \ln(1-\eta_Z).
+        \]
+        Since \(-\ln\eta_Z\) and \(-\ln(1-\eta_Z)\) are non-negative and \(\sigma(Z)\)-measurable, and \(\E[\eta_{ZX}\mid Z]=\eta_Z\) almost surely by the tower property of conditional expectation,
+        \[
+            \begin{split}
+                \E\ab[-\eta_{ZX}\ln\eta_Z-(1-\eta_{ZX})\ln(1-\eta_Z)] &= \E\ab[ \E\ab\{ -\eta_{ZX} \ln\eta_Z - (1-\eta_{ZX}) \ln(1-\eta_Z) \;\Big|\; Z\} ] \\
+                &= \E\ab[-\eta_Z\ln\eta_Z-(1-\eta_Z)\ln(1-\eta_Z)] \\
+                &= H(S\mid Z) \\
+                &\le \ln 2.
+            \end{split}
+        \]
+        Taking expectations on both sides of the expansion yields
+        \[
+            \E\ab[\kl(\eta_{ZX}\,\|\,\eta_Z)] = H(S\mid Z) - \E\ab[h(\eta_{ZX})] = H(S\mid Z) - H(S\mid Z,X) = I(S;X\mid Z),
+        \]
+        where all terms are finite.
+        %
+        Finally, \cref{eq:bce-cmi} follows from \cref{eq:logloss-decomp} evaluated at the Bayes-optimal choices \(D_Z^*=\eta_Z\) and \(D_{ZX}^*=\eta_{ZX}\), for which the \(\kl\) terms vanish identically.
+    \end{proof}
+
+\begin{proof}[*cor:finite]
+        By \cref{eq:logloss-decomp}, \(L_Z(D_Z) = H(S \mid Z) + \varepsilon_Z\) and \(L_{ZX}(D_{ZX}) = H(S \mid Z, X) + \varepsilon_{ZX}\), where \(\varepsilon_Z = \E[\kl\{\eta_Z \,\|\, D_Z(Z)\}] \ge 0\) and \(\varepsilon_{ZX} = \E[\kl\{\eta_{ZX} \,\|\, D_{ZX}(Z, X)\}] \ge 0\).
+        Subtracting these two identities and substituting \(H(S \mid Z) - H(S \mid Z, X) = I(S; X \mid Z)\) from \cref{prop:bayes} yields \cref{eq:gain-decomp}.
+        %
+        \Cref{it:fin-null,it:fin-lower,it:fin-upper} then follow immediately from \cref{eq:gain-decomp} together with the non-negativity of \(\varepsilon_Z\), \(\varepsilon_{ZX}\), and \(I(S; X \mid Z)\).
+    \end{proof}
+
+\begin{proof}[*prop:estimator]
+        Since the test sample is stratified with \(n_\Herwig= n_\Pythia = n/2\), the estimator decomposes as
+        \[
+            \widehat\delta = \frac12 (\overline d_\Herwig + \overline d_\Pythia), \qquad \overline d_s = \frac1{n_s}\sum_{i \colon S_i = s}d_i.
+        \]
+        Conditional on \(\widehat D_Z\) and \(\widehat D_{ZX}\), the events within stratum \(s\) are independent and identically distributed with conditional mean \(\E[d_i \mid S_i=s]\) and finite variance \(\sigma_s^2\), and the two strata are independent.
+        %
+        Therefore,
+        \[
+            \E\ab[\widehat\delta \mid \widehat D_Z, \widehat D_{ZX}] = \frac12\E[d \mid S=\Herwig] + \frac12 \E[d \mid S=\Pythia] = \E[d] = \Delta(\widehat D_Z,\widehat D_{ZX}),
+        \]
+        which is the population expectation of \(d\) under the balanced mixture \(\Prb\).
+        %
+        For the conditional variance, the independence of the two strata gives
+        \[
+            \operatorname{Var}\ab(\widehat\delta \mid \widehat D_Z, \widehat D_{ZX}) = \frac14 \operatorname{Var}(\overline d_\Herwig) + \frac14 \operatorname{Var}(\overline d_\Pythia) = \frac14 \ab( \frac{\sigma_\Herwig^2}{n/2} ) + \frac14 \ab( \frac{\sigma_\Pythia^2}{n/2} ) = \frac{\sigma_\Herwig^2 + \sigma_\Pythia^2}{2n}.
+        \]
+    \end{proof}
+
+\begin{proof}[*prop:misspecified]
+        \begin{description}
+            \item[\Cref{it:mis-truth}] By \cref{eq:nature-forward}, the true detector--level law is \(\Prb_{\mathrm{data}} = r_\Herwig\mu_\Herwig \ne r_\Pythia\mu_\Herwig\) by hypothesis.
+                \(\mu_\Herwig \ll \mu_\Pythia \implies \mu_\Herwig \in \Meas_\Pythia \implies \mu_\Herwig \notin \Theta_{\mathrm{cl}}\).
+                
+            \item[\Cref{it:mis-ml}]
+                \[
+                    \forall \mu \in \Meas_\Pythia \;\; \KL \ab( \Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu ) \ge 0\; \land\; \KL \ab( \Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu ) = 0 \iff r_\Pythia\mu = \Prb_{\mathrm{data}}.\]
+                Therefore,
+                \[
+                    \mu \in \Theta_{\mathrm{cl}} \iff r_\Pythia\mu = \Prb_{\mathrm{data}} \iff \KL\ab(\Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu) = 0.
+                \]
+                \[ \Theta_{\mathrm{cl}} \ne \varnothing \implies \min_{\mu \in \Meas_\Pythia} \KL\ab(\Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu) = 0 \;\land \;
+                    \operatorname*{argmin}_{\mu \in \Meas_\Pythia} \KL \ab( \Prb_{\mathrm{data}} \,\|\, r_\Pythia\mu ) = \Theta_{\mathrm{cl}}.
+                \]
+                Since \(\mu_\Herwig \notin \Theta_{\mathrm{cl}}\) by \cref{it:mis-truth}, no population maximum--likelihood solution can coincide with the true particle--level law \(\mu_\Herwig\).
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*thm:non-identifiable]
+        \begin{description}
+            \item[\Cref{it:ni-consistent}] \(\forall \Delta_0 = d \ab( \pushf fQ_1, \pushf fQ_2 ) > 0 \;\; KQ_1 = KQ_2\)
+            
+            \(\implies\)the observable sample \(Y_{1:n} = \ab(Y_1, \ldots, Y_n)\) has the identical joint law \(\Prb_{Y_{1:n}} = \ab( KQ_1 )^{\otimes n} = \ab( KQ_2 )^{\otimes n}\) under both \(Q_1\) and \(Q_2\)
+            
+            \(\implies\) the estimator \(\widehat\phi_n \ab(Y_{1:n})\) has the identical sampling distribution under both hypotheses.
+                
+                \(\forall i \in \ab\{1,2\}\;\; \forall E_i = \ab\{ d \ab( \widehat\phi_n, \pushf fQ_i) < \Delta_0/2 \}\), by the triangle inequality, \[d \ab(\pushf fQ_1, \pushf fQ_2) \le d \ab( \widehat\phi_n, \pushf fQ_1) + d \ab(\widehat\phi_n, \pushf fQ_2) \implies E_1 \cap E_2 = \varnothing.\]
+                
+                Therefore, under the common sampling law,
+                \[
+                    \Prb_{Q_1}\ab(E_1) + \Prb_{Q_2}\ab(E_2) = \Prb_{Q_1}\ab(E_1) + \Prb_{Q_1}\ab(E_2) = \Prb_{Q_1}\ab(E_1 \cup E_2) \le 1.
+                \]
+                \(\implies \max_{i\in\{1,2\}} \Prb_{Q_i} \ab(E_i^c) \ge \frac12\)
+                
+                \(\implies\widehat\phi_n\) cannot converge in probability to both \(\pushf fQ_1\) under \(Q_1\) and \(\pushf fQ_2\) under \(Q_2\).
+            \item[\Cref{it:ni-ml}]
+                \[
+                    \forall Q \in \mathcal{Q}\;\;\KL \ab(KQ_1 \,\|\, KQ) \ge 0\;\land \;\KL \ab(KQ_1 \,\|\, KQ) = 0 \iff KQ = KQ_1.
+                \]
+                \[
+                    \therefore\operatorname*{argmin}_{Q \in \mathcal{Q}} \KL\ab(KQ_1 \,\|\, KQ) = \ab\{Q \in \mathcal{Q} \mid KQ = KQ_1\}.
+                \]
+                By \cref{eq:null-direction}, \(KQ_2 = KQ_1 \implies Q_2\) achieves the global minimum value of \(0\).
+                Since \(\pushf fQ_2 \ne \pushf fQ_1\), population likelihood maximization does not isolate \(\pushf fQ_1\).
+        \end{description}
+    \end{proof}
+
+\begin{proof}[*prop:near-null] By the triangle inequality,
+    \[
+        \begin{split}
+        &\forall \Delta_0 = d \ab(\pushf fQ_1,\pushf fQ_2)\;\; \forall P_i = \ab(KQ_i)^{\otimes n} \;\; \forall E = \ab\{ d \ab( \widehat\phi_n, \pushf fQ_1) < \frac{\Delta_0}2 \} \\
+        &\qquad d\ab( \widehat\phi_n,\pushf fQ_2 ) >\frac{\Delta_0}2.
+        \end{split}
+    \]
+    \[
+            \therefore E \subseteq \ab\{ d(\widehat\phi_n, \pushf fQ_2) > \frac{\Delta_0}{2} \} \subseteq \ab\{ d(\widehat\phi_n, \pushf fQ_2) \ge \frac{\Delta_0}{2} \}.
+        \]
+        Therefore,
+        \[
+            P_1 \ab[d\ab(\widehat\phi_n,\pushf fQ_1) \ge \frac{\Delta_0}2] + P_2\ab[ d \ab( \widehat\phi_n,\pushf fQ_2) \ge \frac{\Delta_0}2] \ge P_1(E^{\mathrm c}) + P_2(E) \ge 1 - \TV(P_1, P_2).
+        \]
+        The maximum of the two probabilities on the left is at least half of their sum:
+        \[
+            \max_{i \in \ab\{1,2\}} P_i \ab[ d \ab( \widehat\phi_n, \pushf fQ_i) \ge \frac{\Delta_0}{2} ] \ge \frac12 - \frac12 \TV \ab(P_1, P_2).
+        \]
+        Finally, \(\TV \ab(P_1, P_2) \le n\,\TV \ab(KQ_1, KQ_2)\) by subadditivity of total variation under product measures~\cite{Tsybakov:2009}, which yields \cref{eq:lecam}.
+    \end{proof}
+
+\begin{proof}[*prop:compatible]
+        Consider the latent-species model of \cref{ex:species}, where \(T = \ab(V, U) \in \mathbb R \times \{0, 1\}\), \(U\) represents the unobserved species indicator, \(Z = f\ab(V, U) = V + aU\) is the particle--level mass summary with \(a \ne 0\), and \(g = \operatorname{id}_{\mathbb R}\) so that \(X = Y = V + \epsilon\).
+        %
+        \Cref{it:comp-full} is established by \cref{it:species-full}.
+        %
+        \Cref{it:comp-induced} follows from \cref{it:species-support,it:species-induced}, where \(\supp = \mathbb R\) and the induced kernels differ for all \(z \in \mathbb R\).
+        %
+        \Cref{it:comp-ni} is established by \cref{it:species-null,thm:non-identifiable}, choosing any model class \(\mathcal Q \supseteq \ab\{Q_\Herwig, Q_\Pythia\}\).
+        %
+        All three properties are simultaneously driven by the dependence of \(Z\) on \(U\), the conditional independence of the detector observable \(Y\) from \(U\) given \(V\) (erasure of species by \(K\)), and the prior fraction discrepancy \(\pi_\Herwig \ne \pi_\Pythia\).
+    \end{proof}
+
+\begin{proof}[*prop:closure]
+        Let \(N \in \mathbb N\) denote the sample size drawn from \(\Prb_\Pythia\), and let \(\zeta : (\mathcal T \times \mathcal Y)^N \times \Omega_{\mathrm{aux}} \to [0, 1]\) be any test function based on \(\Phi\) and auxiliary randomness \(\omega \sim \Prb_{\mathrm{aux}}\).
+        
+        Because \(\Phi\) is a measurable function of a sample with law \(\Prb_\Pythia^{\otimes N} \otimes \Prb_{\mathrm{aux}}\), its sampling distribution depends exclusively on \(\Prb_\Pythia\) and \(\Prb_{\mathrm{aux}}\), and is invariant to \(\Prb_\Herwig\).
+        %
+        Therefore, under any two specifications \(\ab(\Prb_\Herwig,\Prb_\Pythia)\) and \((\Prb'_\Herwig,\Prb_\Pythia)\) that share \(\Prb_\Pythia\),
+        \[
+            \E_{(\Prb_\Herwig,\Prb_\Pythia)}[\zeta] = \E_{(\Prb'_\Herwig,\Prb_\Pythia)}[\zeta].
+        \]
+        Choosing \((\Prb_\Herwig, \Prb_\Pythia)\) to satisfy \(H_0\) with size \(\alpha \coloneqq \E_{(\Prb_\Herwig,\Prb_\Pythia)}[\zeta]\), the rejection probability under any alternative \((\Prb'_\Herwig,\Prb_\Pythia)\) is identically \(\alpha\).
+        The power against any such alternative is therefore equal to the size.
+    \end{proof}
+
+\begin{proof}[*cor:composition]
+        Let \((\mathcal C, \Borel(\mathcal C))\) be the standard Borel space in which \(C = c(T)\) takes values. By hypothesis
+        \[
+            \exists \kappa : \mathcal Z \times \mathcal C \to \Meas(\mathcal X)\;\;\forall s \in \Gens \;\; Q_s \ab\{ t \in \mathcal T \;\Big|\; K^g(\cdot \mid t) = \kappa\ab(\cdot \mid f(t), c(t)) \} = 1.
+        \]
+        Applying \cref{prop:sufficient} with the augmented summary \((f,c) \colon \mathcal T \to \mathcal Z \times \mathcal C\) in place of \(f\), the response induced on \(((f,c), g)\) is universal across \(\Gens\) with common version \(\kappa\).
+        %
+        Applying \cref{prop:response-eq} with the conditioning variable \((Z,C)\) in place of \(Z\), universality of the induced response is equivalent to \(X \indep S \mid (Z,C)\), which by \cref{it:req-cmi} holds iff \(I(S; X \mid Z, C) = 0\).
+    \end{proof}
+
+\begin{proof}[*cor:full-test]
+        \begin{description}
+            \item[\Cref{it:ft-full}] Set \(f = \operatorname{id}_{\mathcal T}\) and \(g = \operatorname{id}_{\mathcal Y}\), so that \(Z = T\) and \(X = Y\). The induced response on \((f,g)\) coincides identically with the full response \(K\). The equivalence between \(I(S; Y \mid T) = 0\) and universality of \(K\) across \(\Gens\) follows directly from \cref{it:req-cmi}.
+            \item[\Cref{it:ft-proj}] Set \(f = \operatorname{id}_{\mathcal T}\) and retain the detector--level projection \(g \colon \mathcal Y \to \mathcal X\), so that \(Z = T\) and \(X = g(Y)\). The induced response on \((f,g)\) is the \(g\)-projected full response \(K^g\), and the equivalence follows likewise from \cref{it:req-cmi}.
+                
+                For the inequality, because \(X = g(Y)\) is \(\sigma(Y)\)-measurable, \(\sigma(X, Y) = \sigma(Y)\). The chain rule for conditional mutual information~\cite{CoverThomas:2006} yields
+                \[
+                    I(S; Y \mid T) = I(S; (X, Y) \mid T) = I(S; X \mid T) + I(S; Y \mid T, X).
+                \]
+                Since conditional mutual information is non-negative, \(I(S; Y \mid T, X) \ge 0\), which establishes \(I(S; X \mid T) \le I(S; Y \mid T)\).
+        \end{description}
+    \end{proof}
+\end{document}
