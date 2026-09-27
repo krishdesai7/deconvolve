@@ -23,12 +23,22 @@ The evidence, because this is the kind of decision that gets re-litigated:
   within either precision is larger than the gap between them. See
   `benchmarks/precision.py` and `benchmarks/compare_precision.py`.
 
-Two things the pin does **not** cover:
+The pin is enforced twice. The type checkers enforce `EventArray` at author
+time, and `Populations.__post_init__` checks at run time that all four arrays
+are `EVENT_DTYPE` and 2-D, with `truth` matching `mc.z` and `data` matching
+`mc.x` in feature count. That check is the one runtime boundary: every source
+builds a `Populations`, and each of the three (`_draw_gaussian`,
+`load_jet_dataset`, and the sample construction in `workflows/leakage.py`)
+narrows explicitly before doing so. It validates rather than coerces, so a
+source that forgot to narrow fails where it built its events instead of deep
+inside a jitted function. Test doubles are held to the same contract: a
+float64 fixture fails there too. `EventArray` stays `NDArray[np.single]`
+rather than a jaxtyping `Float[Array, ...]`: it annotates host NumPy arrays
+of either rank (event matrices, single columns, weight vectors), and jaxtyping's
+`Float` admits any float dtype and is opaque to the static checkers.
 
-- **It is an annotation-level contract, not a runtime one.** Nothing coerces at
-  the `Populations` boundary; the checkers enforce it at author time, and the
-  three data sources (`_draw_gaussian`, `load_jet_dataset`, and the
-  sample-construction in `workflows/leakage.py`) narrow explicitly.
+One thing the pin does **not** cover:
+
 - **`deconvolve.data.download` stays float64 on purpose.** `_get_var` upcasts before
   computing observables, because the ε it uses to protect degenerate jets is
   below the smallest float32 denormal — narrowing there would hand back `NaN`

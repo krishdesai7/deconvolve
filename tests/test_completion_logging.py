@@ -68,7 +68,7 @@ def test_evaluation_records_metrics_artifact_completion(
     _ = (run_dir / "config.json").write_text('{"dataset": "gaussian", "dim": 1}')
     (run_dir / "artifacts").mkdir()
     (run_dir / "artifacts" / "generator.keras").touch()
-    z = np.array([[0.0], [1.0], [2.0], [3.0]])
+    z = np.array([[0.0], [1.0], [2.0], [3.0]], dtype=np.single)
     test_data = ZXY(Events(z, z.copy()), np.array([1, 1, 0, 0], dtype=np.ubyte))
 
     monkeypatch.setattr(keras.saving, "load_model", lambda _path: object())

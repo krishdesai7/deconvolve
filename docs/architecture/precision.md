@@ -11,7 +11,7 @@ The event dtype is defined once, as `EVENT_DTYPE = np.single` in `deconvolve.cor
 
 Single precision is sufficient for this problem. The jet observables lose at most half a unit in the last place when stored as float32. In a comparison over 320 paired seeds, float32 and float64 training gave indistinguishable unfolding performance: the difference between them was smaller than the variation between seeds within either precision (`benchmarks/precision.py`, `benchmarks/compare_precision.py`).
 
-The dtype is a static contract, checked by the type checkers rather than at run time. Each of the three data sources (the Gaussian generator, the jet loader and `leakage-check`) converts its output to float32 explicitly.
+Each of the three data sources (the Gaussian generator, the jet loader and `leakage-check`) converts its output to float32 explicitly. The dtype is checked twice: by the type checkers when code is written, and at run time when a source builds its events into a `Populations`, which rejects any array that is not float32 and two-dimensional (see [Data Model](data-model.md)).
 
 ---
 

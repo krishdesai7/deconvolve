@@ -15,6 +15,8 @@ A `Populations` has three fields:
 | `data` | array | The detector-level measurement, \(x_\text{data}\). |
 | `truth` | array | The particle-level events underlying the data, \(z_\text{true}\). |
 
+All four arrays are float32 and two-dimensional, with one row per event and one column per observable, even when there is only one observable. The particle-level arrays (`mc.z`, `truth`) must have the same number of columns, as must the detector-level ones (`mc.x`, `data`), and the arrays within each population must have the same number of rows. Constructing a `Populations` that violates any of these raises a `ValueError`. This catches a data source that has not converted its output to float32 at the point where it builds its events, rather than later inside training.
+
 ### Isolation of the truth
 
 In a real measurement, \(z_\text{true}\) does not exist, and no part of the method may depend on it. The type is structured to make accidental access difficult:
