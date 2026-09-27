@@ -60,55 +60,57 @@ src/deconvolve/
 
 ## Dependencies between packages
 
-Dependencies point in one direction. Nothing depends on `cli` or `workflows`, and no two packages depend on each other. Every package may use `coretypes` and `instrumentation`; those edges are omitted below for clarity.
+Dependencies point in one direction. Nothing depends on `cli` or `workflows`, and no two packages depend on each other. Every package may use `coretypes` and `instrumentation`; those edges are omitted below for clarity. An arrow into a group means a dependency on every package in it.
 
 ```mermaid
+
 flowchart TB
-    cli[cli]
+    cli(cli)
+
+    reporting(reporting)
 
     subgraph orchestration["Orchestration"]
-        reporting[reporting]
-        workflows[workflows]
+        workflows(workflows)
+        uncertainty(uncertainty)
     end
 
     subgraph methods["Methods"]
-        baselines[baselines]
-        uncertainty[uncertainty]
+        baselines(baselines)
     end
 
     subgraph execution["Execution"]
-        training[training]
-        evaluation[evaluation]
+        training(training)
+        evaluation(evaluation)
     end
 
     subgraph infrastructure["Infrastructure"]
-        data[data]
-        config[config]
+        data(data)
+        config(config)
+        coretypes(coretypes)
     end
 
-    coretypes[coretypes]
-
     cli --> reporting
-    cli --> workflows
-    cli --> uncertainty
+    cli --> orchestration
     cli --> config
 
-    workflows --> baselines
-    workflows --> training
-    workflows --> evaluation
-
-    baselines --> training
-    baselines --> evaluation
-    uncertainty --> training
-    uncertainty --> evaluation
+    workflows --> methods
+    orchestration --> execution
+    methods --> execution
 
     reporting -.-> training
 
-    training --> data
-    evaluation --> data
+    execution --> data
 
     data --> coretypes
     config --> coretypes
+
+    %% Translucent fills: pastel over the light theme, a tint over the dark one.
+    classDef pkg fill:#526cfe1a,stroke:#526cfe
+    class cli,workflows,uncertainty,reporting,baselines,training,evaluation,data,config,coretypes pkg
+    style orchestration fill:#a855f714,stroke:#a855f7
+    style methods fill:#14b8a614,stroke:#14b8a6
+    style execution fill:#f9731614,stroke:#f97316
+    style infrastructure fill:#06b6d414,stroke:#06b6d4
 ```
 
 The dashed edge is an import deferred to the one function that needs it, which keeps `reporting` free of JAX at import time. `coretypes` imports nothing from the rest of the package at run time.
