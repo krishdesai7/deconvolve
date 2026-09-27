@@ -5,7 +5,7 @@ This page summarizes a set of diagnostic studies to determine the theoretical li
 
 The findings are that the detector–level objective is essentially saturated, and that it does not identify the particle–level truth. The remaining particle–level error is therefore a property of the problem, not of the optimizer or the network capacity. The jet mass is further limited by a detector response that differs between the two generators.
 
-Unless stated otherwise, results use the six observables of the <span style="font-variant: small-caps;">OmniFold</span> [study](https://doi.org/10.1103/PhysRevLett.124.182001) \((m, M, w, \tau_{21}, z_g, \ln\rho)\), from the jet dataset (see [Datasets](../user-guide/datasets.md)), with \(10^6\) events. Section 3 also considers all twelve observables. Every number is reproducible with the scripts in `benchmarks/`, which are documented in `benchmarks/README.md`. Several of these diagnostics fit networks directly on \(z_\text{true}\). That is legitimate only because their purpose is to measure the method against the truth, and it is why they live outside the `deconvolve` package.
+Unless stated otherwise, results use the six observables of the <span style="font-variant: small-caps;">OmniFold</span> study[^andreassen2020] \((m, M, w, \tau_{21}, z_g, \ln\rho)\), from the jet dataset (see [Datasets](../user-guide/datasets.md)), with \(10^6\) events. Section 3 also considers all twelve observables. Every number is reproducible with the scripts in `benchmarks/`, which are documented in `benchmarks/README.md`. Several of these diagnostics fit networks directly on \(z_\text{true}\). That is legitimate only because their purpose is to measure the method against the truth, and it is why they live outside the `deconvolve` package.
 
 ---
 
@@ -105,6 +105,4 @@ The degree-2 tilt shows this most directly. Its 21 additional parameters improve
 - **Automatic model selection.** An automated search that maximizes a detector–level criterion will follow these trade-offs without regard to which observables matter physically.
 - **Jet mass.** The jet mass is limited separately by the non-universal response of Section 3, which no reweighting of particle–level simulation can correct.
 
-## References
-
-A. Andreassen, P. T. Komiske, E. M. Metodiev, B. Nachman and J. Thaler, "OmniFold: A Method to Simultaneously Unfold All Observables", *Phys. Rev. Lett.* **124** (2020) 182001.
+[^andreassen2020]: A. Andreassen, P. T. Komiske, E. M. Metodiev, B. Nachman and J. Thaler, "OmniFold: A Method to Simultaneously Unfold All Observables", *Phys. Rev. Lett.* **124** (2020) 182001.
