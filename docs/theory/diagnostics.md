@@ -22,8 +22,8 @@ After reweighting, a fresh, independently trained classifier finds only 0.087 mn
 
 Consider scoring the oracle weight function \(w^*(z)\), i.e. the true particle–level likelihood ratio fitted directly on unobserved truth, against <span style="font-variant: small-caps;">Deconvolve</span>'s weights using held-out detector–level and particle–level MMD:
 
-| Weights             |       Detector MMD²        |     Particle MMD²      | Effective Sample Size (ESS) |
-| :------------------ | :------------------------: | :--------------------: | :-------------------------: |
+| Weights             |       Detector MMD²          |     Particle MMD²        | Effective Sample Size (ESS) |
+| :------------------ | :------------------------:   | :--------------------:   | :-------------------------: |
 | **Unweighted**      |   \(3.96 \times 10^{-2}\)    | \(5.90 \times 10^{-2}\)  |            100%             |
 | **Oracle $w^*(z)$** |   \(+8.02 \times 10^{-4}\)   | \(-1.90 \times 10^{-4}\) |            80.1%            |
 | **RAN**             | **\(-2.32 \times 10^{-4}\)** | \(+4.58 \times 10^{-3}\) |            73.3%            |
