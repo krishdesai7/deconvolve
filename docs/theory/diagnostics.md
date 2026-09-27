@@ -20,15 +20,15 @@ After reweighting, a fresh, independently trained classifier finds only 0.087 mn
 
 ## 2. Detector-Level Objectives Do Not Identify Truth
 
-Consider scoring the oracle weight function \(w^*(z)\), i.e. the true particle–level likelihood ratio fitted directly on unobserved truth, against <span style="font-variant: small-caps;">Deconvolve</span>'s weights using held-out detector–level and particle–level MMD:
+Consider scoring the oracle weight function \(w^*(z)\), i.e. the true particle–level likelihood ratio fitted directly on unobserved truth, against <span style="font-variant: small-caps;">Deconvolve</span>’s weights using held-out detector–level and particle–level MMD:
 
 | Weights             |       Detector MMD²          |     Particle MMD²        | Effective Sample Size (ESS) |
 | :------------------ | :------------------------:   | :--------------------:   | :-------------------------: |
 | **Unweighted**      |   \(3.96 \times 10^{-2}\)    | \(5.90 \times 10^{-2}\)  |            100%             |
 | **Oracle $w^*(z)$** |   \(+8.02 \times 10^{-4}\)   | \(-1.90 \times 10^{-4}\) |            80.1%            |
-| **RAN**             | **\(-2.32 \times 10^{-4}\)** | \(+4.58 \times 10^{-3}\) |            73.3%            |
+| **Deconvolve**      | **\(-2.32 \times 10^{-4}\)** | \(+4.58 \times 10^{-3}\) |            73.3%            |
 
-Notice that <span style="font-variant: small-caps;">RAN</span> scores better than the truth on the detector–level criterion, despite scoring worse at particle–level.
+Notice that <span style="font-variant: small-caps;">Deconvolve</span> scores better than the truth on the detector–level criterion, despite scoring worse at particle–level.
 
 This is not overfitting or noise: the detector response \(p(x \mid z)\) is many-to-one. The particle–level likelihood ratio pushed through detector resolution is not identical to the detector–level likelihood ratio.
 
