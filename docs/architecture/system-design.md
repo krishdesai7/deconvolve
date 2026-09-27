@@ -1,7 +1,7 @@
 <!-- markdownlint-disable no-inline-html -->
 # System Design
 
-This page describes how <span style="font-variant: small-caps;">Deconvolve</span> is organized: the stages of an analysis, the package that implements each one, how the packages depend on each other, and the design decisions that shape the code as a whole. It is intended for readers who want to extend the package or understand its behaviour beyond the command line.
+This page describes how <span style="font-variant: small-caps;">Deconvolve</span> is organised: the stages of an analysis, the package that implements each one, how the packages depend on each other, and the design decisions that shape the code as a whole. It is intended for readers who want to extend the package or understand its behaviour beyond the command line.
 
 ---
 
@@ -63,23 +63,52 @@ src/deconvolve/
 Dependencies point in one direction. Nothing depends on `cli` or `workflows`, and no two packages depend on each other. Every package may use `coretypes` and `instrumentation`; those edges are omitted below for clarity.
 
 ```mermaid
-flowchart TD
+flowchart TB
+    cli[cli]
+
+    subgraph orchestration["Orchestration"]
+        reporting[reporting]
+        workflows[workflows]
+    end
+
+    subgraph methods["Methods"]
+        baselines[baselines]
+        uncertainty[uncertainty]
+    end
+
+    subgraph execution["Execution"]
+        training[training]
+        evaluation[evaluation]
+    end
+
+    subgraph infrastructure["Infrastructure"]
+        data[data]
+        config[config]
+    end
+
+    coretypes[coretypes]
+
+    cli --> reporting
     cli --> workflows
     cli --> uncertainty
-    cli --> reporting
     cli --> config
+
     workflows --> baselines
-    uncertainty --> training
-    baselines --> training
-    baselines --> evaluation
     workflows --> training
     workflows --> evaluation
+
+    baselines --> training
+    baselines --> evaluation
+    uncertainty --> training
     uncertainty --> evaluation
+
+    reporting -.-> training
+
     training --> data
     evaluation --> data
-    reporting -.-> training
-    config --> coretypes
+
     data --> coretypes
+    config --> coretypes
 ```
 
 The dashed edge is an import deferred to the one function that needs it, which keeps `reporting` free of JAX at import time. `coretypes` imports nothing from the rest of the package at run time.
