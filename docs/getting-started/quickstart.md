@@ -26,7 +26,7 @@ $ deconvolve train --config params/1d_default.yaml -u128 -l3 -e200
 $ deconvolve train --config params/1d_default.yaml --run-dir runs/test-run
 ```
 
-See the [API Reference](../api/training.md) for the full list of command line arguments and options.
+See the [CLI Reference](../user-guide/cli.md) for the full list of command line arguments and options.
 
 ---
 

@@ -70,7 +70,7 @@ At convergence, the discriminator cannot distinguish reweighted simulation from 
 
     The adversarial learning algorithm, Maximum Mean Discrepancy-based model selection, and empirical convergence diagnostics.
 
--   **[API Reference](api/overview.md)**
+-   **[API Reference](api/index.md)**
 
     ---
 

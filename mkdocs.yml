@@ -6,6 +6,10 @@ repo_name: "krishdesai7/deconvolve"
 
 docs_dir: "docs"
 site_dir: "site"
+# The generator script is build input, not a page to publish.
+exclude_docs: |
+  gen_ref_pages.py
+  api/SUMMARY.md
 
 theme:
   name: material
@@ -40,6 +44,12 @@ theme:
 
 plugins:
   - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
   - mkdocstrings:
       handlers:
         python:
@@ -51,6 +61,7 @@ plugins:
             show_category_heading: true
             merge_init_into_class: true
             docstring_style: google
+            filters: ["!^_", "!^logger$"]
 
 markdown_extensions:
   - admonition
@@ -107,15 +118,7 @@ nav:
       - Caching & Seeding: architecture/caching-seeding.md
       - Timing & Profiling: architecture/timing.md
       - Uncertainty Quantification: architecture/uncertainty.md
-  - API Reference:
-      - Overview: api/overview.md
-      - Training: api/training.md
-      - Data: api/data.md
-      - Evaluation: api/evaluation.md
-      - Baselines: api/baselines.md
-      - Uncertainty: api/uncertainty.md
-      - Types & Constants: api/coretypes.md
-      - Instrumentation: api/instrumentation.md
+  - API Reference: api/
   - Developer Guide:
       - Contributing: developer/contributing.md
       - Releasing: developer/releasing.md
