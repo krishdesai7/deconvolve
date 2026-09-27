@@ -240,6 +240,7 @@ These are the settings every cell of the design trains with; see [Uncertainty de
 | `lambda-dispersion` | float ≥ 0 |
 | `data-seed` | integer |
 | `init-seed` | integer |
+| `resample` | `"both"`, `"data"` or `"mc"` |
 
 </div>
 
@@ -266,6 +267,7 @@ Default:
     lambda-dispersion = 0.015
     data-seed = 42
     init-seed = 0
+    resample = "both"
     ```
     
 === "deconvolve.toml"
@@ -289,6 +291,7 @@ Default:
     lambda-dispersion = 0.015
     data-seed = 42
     init-seed = 0
+    resample = "both"
     ```
     
 

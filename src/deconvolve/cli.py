@@ -20,6 +20,7 @@ from .coretypes import (
     SUBSTRUCTURE_VARIABLES,
     DatasetName,
     LogLevel,
+    Resample,
 )
 from .evaluation import evaluate_runs
 from .instrumentation import configure_logging
@@ -348,6 +349,10 @@ def uncertainty_freeze_command(
     ] = 0.015,
     data_seed: Annotated[int, typer.Option()] = 42,
     init_seed: Annotated[int, typer.Option()] = 0,
+    resample: Annotated[
+        Resample,
+        typer.Option(help="Which samples the bootstrap resamples: both, data or mc."),
+    ] = Resample.both,
 ) -> None:
     """Fix the settings for a variance design before its cells are submitted.
 
@@ -376,6 +381,7 @@ def uncertainty_freeze_command(
         "lambda_dispersion": lambda_dispersion,
         "data_seed": data_seed,
         "init_seed": init_seed,
+        "resample": resample.value,
     }
 
     resolved: Resolved = ctx.meta["deconvolve.resolved"]
@@ -464,6 +470,7 @@ def uncertainty_run_command(
     ] = None,
     data_seed: Annotated[int | None, typer.Option()] = None,
     init_seed: Annotated[int | None, typer.Option()] = None,
+    resample: Annotated[Resample | None, typer.Option()] = None,
 ) -> None:
     """Train one (bootstrap dataset, init seed) cell of the design.
 
@@ -473,9 +480,9 @@ def uncertainty_run_command(
     """
     # Every option below is read back out of `settings`, not by name: that is
     # what lets an explicit flag override one frozen value without the other
-    # sixteen falling back to their bare code defaults. They still have to be
+    # seventeen falling back to their bare code defaults. They still have to be
     # declared as parameters for Typer to parse and validate them. Adding an
-    # eighteenth option here also means adding it to `uncertainty_freeze_command`
+    # nineteenth option here also means adding it to `uncertainty_freeze_command`
     # --- and removing one from this tuple without also removing it there is the
     # silent way to break that pairing, not adding one.
     _ = (
@@ -496,6 +503,7 @@ def uncertainty_run_command(
         lambda_dispersion,
         data_seed,
         init_seed,
+        resample,
     )
 
     try:
@@ -529,6 +537,7 @@ def uncertainty_run_command(
         lr_g=settings["lr_g"],
         lr_d=settings["lr_d"],
         lambda_dispersion=settings["lambda_dispersion"],
+        resample=Resample(settings["resample"]),
     )
 
 

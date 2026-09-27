@@ -231,6 +231,7 @@ deconvolve uncertainty freeze DESIGN_DIR
                                 [--lambda-dispersion <float>]
                                 [--data-seed <int>]
                                 [--init-seed <int>]
+                                [--resample {both|data|mc}]
 
 ```
 
@@ -260,6 +261,7 @@ Resolves the full config stack once and writes `DESIGN_DIR/design.json`, which e
 | `--lambda-dispersion` | | `float` | `0.015` |
 | `--data-seed` | | `int` | `42` |
 | `--init-seed` | | `int` | `0` |
+| `--resample` | | `Resample` | `both` |
 
 ### `deconvolve uncertainty run`
 
@@ -284,6 +286,7 @@ deconvolve uncertainty run CELL DESIGN_DIR
                                 [--lambda-dispersion <float>]
                                 [--data-seed <int>]
                                 [--init-seed <int>]
+                                [--resample {both|data|mc}]
 
 ```
 
@@ -314,6 +317,7 @@ Trains one `(bootstrap dataset, init seed)` cell of the design. Takes the same a
 | `--lambda-dispersion` | | `float` | Value from `design.json`. |
 | `--data-seed` | | `int` | Value from `design.json`. |
 | `--init-seed` | | `int` | Value from `design.json`. |
+| `--resample` | | `Resample` | Value from `design.json`. |
 
 ### `deconvolve uncertainty collect`
 

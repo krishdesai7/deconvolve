@@ -23,9 +23,28 @@ folding them into a quoted band inflates the error bar with something that is
 not a property of the data.
 
 Varying `data_seed` does **not** estimate the first: every run still sees the
-same 1M events, reshuffled. The nonparametric bootstrap does, which is why
-`data_seed` is held fixed across the whole design and the dataset axis is
-`bootstrap()`.
+same events, reshuffled. The nonparametric bootstrap does, so the dataset axis
+is a bootstrap replicate.
+
+Two details keep that axis purely statistical:
+
+- **The split varies per cell, independently of both axes** (`split_seed`,
+  which also sets the batch order and the MMD selection subsamples). A split
+  fixed by the replicate would have its variance charged to the dataset
+  component, the one reported as the statistical uncertainty. Drawn per cell,
+  it lands in the residual with the rest of the method variance.
+- **Events are split before they are resampled.** A replicate is a
+  multiplicity per original event (`bootstrap_multiplicities`), drawn once per
+  dataset index so every cell in a row trains on the same replicate; each
+  cell splits the *original* events and repeats each within its split
+  (`replicate_splits`). Splitting an already-resampled sample puts copies of
+  one event into different splits --- about half of every validation set
+  would also be training data --- and the epoch selection that reads the
+  validation set would no longer be the procedure being measured.
+
+`--resample data` or `--resample mc` resamples one side only, so two designs
+give the data and simulation statistics separately, as analyses usually quote
+them.
 
 ## Why a grid and not two sweeps
 
@@ -39,7 +58,9 @@ twice:
 \[\text{truth} = \sigma_a^2 + \sigma_b^2 + \sigma_eps^2\]
 
 `sigma_eps^2` is the part of a run that depends on the _combination_ and is
-attributable to neither axis. In a min-max game it is not small: the effect of
+attributable to neither axis --- here the interaction together with the
+per-cell split and order and any hardware non-determinism, which one run per
+cell cannot separate. All of it is method variance. In a min-max game it is not small: the effect of
 an init seed already fails to transfer across `lr_g` arms (measured
 `r = +0.04`), which is the same phenomenon in a different coordinate. So the
 naive sum is not a safe over-estimate to quote --- it is a wrong number in a
@@ -68,7 +89,11 @@ cell is read on exactly those. Two consequences:
 - No replicate can have trained on an evaluation event.
 - The finite size of the evaluation set shifts every cell together and cancels
   out of the across-cell contrast entirely, so it contributes nothing to any
-  component.
+  component. That makes it a missing term, not a negligible one: the unfolded
+  result *is* those weighted events. `evaluation_variance` and
+  `evaluation_covariance` supply it by the delta method,
+  `sum(w^2 (z - m)^2) / sum(w)^2` for the mean, averaged over cells, and
+  `collect` reports it as its own line to be added to the total.
 
 Only the MC side is reserved: `g` is evaluated on `z_gen` and never on a
 nature event, so there is nothing to hold out on that side.
@@ -96,14 +121,16 @@ so the raw between-dataset covariance estimates `Cov_a + Cov_eps / S` and has
 to be corrected before it means what its name says. Skipping the step inflates
 the off-diagonals in the flattering direction.
 
-**The closure floor.** RAN's weights preserve the total count, so a spectrum's
-bins sum to a fixed number, its covariance is singular with rank `K - 1`, and
-_that constraint alone_ forces negative off-diagonals. For equal-occupancy
-bins the pure-closure value is the multinomial `-1 / (K - 1)`, and
-`multinomial_off_diagonal` writes it into the output next to the measurement.
-Structure beyond that flat floor --- neighbouring bins correlating more than
-distant ones --- is the part normalization cannot explain, and the part the
-argument rests on.
+**The closure reference.** RAN's weights preserve the total count, so a
+spectrum's bins sum to a fixed number, its covariance is singular with rank
+`K - 1`, and every row sums to zero. For bins of equal variance that fixes the
+_average_ correlation of a bin with the others at `-1 / (K - 1)`, the
+multinomial value for equal-occupancy bins, which `multinomial_off_diagonal`
+writes into the output next to the measurement. The constraint fixes nothing
+else: individual entries are free and can lie on either side of it, so it is
+a reference, not a floor. Structure around it --- neighbouring bins
+correlating more than distant ones --- is the part normalization cannot
+explain, and the part the argument rests on.
 
 Bins are equal-occupancy (`quantile_edges`) because a `K x K` covariance from
 `B` replicates needs every bin to carry enough events to be a measurement
@@ -138,13 +165,26 @@ decomposing whatever landed would charge the imbalance to the dataset axis.
 
 - `variance.json` --- the per-observable decomposition of the **unfolded
   mean**, which is the summary because it depends on no binning choice, plus
-  what the naive quadrature sum would have claimed.
+  what the naive quadrature sum would have claimed, and the evaluation-sample
+  variance (`var_evaluation`, outside `var_total`).
 - `variance.npz` --- per observable, the bin edges, the mean spectrum, all
-  three component covariances and the bootstrap correlation matrix.
+  three component covariances, the evaluation-sample covariance and the
+  bootstrap correlation matrix.
 - `correlation.pdf` --- one heatmap per observable, each captioned with its
-  closure floor.
+  closure reference.
 
 ## What the design measured
+
+> **Measured under the previous design.** Everything below predates three
+> corrections made on 2026-09-27: replicates were split *after* resampling
+> (about half of each validation set was also training data), the split was
+> fixed by the replicate (so its variance was counted in the data
+> component), and the evaluation sample's own variance was not reported. The
+> data component and every figure derived from it --- in particular the
+> 0.63-0.80x ratio below --- are therefore not the statistical uncertainty
+> they are presented as, and must be re-measured. The structural findings
+> (no seed main effect; a large residual; strongly correlated neighbouring
+> bins) are the most likely to survive, but that too is to be confirmed.
 
 > **Superseded configuration.** Everything below was measured at
 > `-n1000000`. The shipped run is now `-n1600000` (`scripts/submit.sh`), and a
@@ -184,16 +224,17 @@ literature calls "ensemble spread" is, here, an interaction term.
 
 - Quadrature-summing two one-dimensional sweeps overstates the total SD by
   **18-26%** (mean 20.8%), which is the interaction being counted twice.
-- Ensembling over seeds at fixed data removes the interaction, leaving the
-  bootstrap component. The reportable SD is **0.63-0.80x** a single run's
-  spread (mean 0.73x). That factor is the value of ensembling, measured.
+- Ensembling over seeds at fixed data reduces the initialization and
+  residual terms in proportion to the ensemble size, converging on the
+  bootstrap component. Its SD is **0.63-0.80x** a single run's spread (mean
+  0.73x); that factor is the most ensembling can buy.
 - Which bootstrap replicate was drawn determines fit quality more than
   which seed did: at the 100x2 grid, 10 of the 19 datasets with at least one
   cell reading `mmd_test > 5e-4` (~4 floors) have it in _both_ seeds, against
   2.1 expected if the two seeds failed independently. A bad fit is a property
   of the dataset, not of the initialization drawn for it.
 
-**The off-diagonals are large, and coherent.** Against a closure floor of
+**The off-diagonals are large, and coherent.** Against a closure reference of
 `-1/19 = -0.053`, the measured adjacent-bin correlation of the unfolded
 spectrum is **0.90-0.94**, falling to 0.42-0.68 at lag 3 and to
 -0.09-0.27 at lag 5, then turning negative across the spectrum. The

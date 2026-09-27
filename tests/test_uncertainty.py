@@ -13,18 +13,22 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from deconvolve.coretypes import Events, Populations
+from deconvolve.coretypes import Events, Populations, Resample, Split
 from deconvolve.uncertainty import (
     DesignSpec,
     binned_spectra,
     bootstrap,
+    bootstrap_multiplicities,
     cell_path,
     component_covariances,
     correlation,
     decompose,
+    evaluation_covariance,
+    evaluation_variance,
     load_cells,
     multinomial_off_diagonal,
     quantile_edges,
+    replicate_splits,
     reserve_evaluation_set,
     weighted_means,
 )
@@ -388,6 +392,166 @@ class TestBootstrap:
         )
 
 
+def _sorted_rows(a: NDArray[Any]) -> NDArray[Any]:
+    """Rows in a canonical order, so two samples compare as multisets."""
+    return a[np.lexsort(keys=a.T[::-1])]
+
+
+class TestBootstrapMultiplicities:
+    def test_each_sample_keeps_its_size(self) -> None:
+        pops: Populations = _populations()
+
+        mc, nature = bootstrap_multiplicities(pops, seed=0)
+
+        assert int(mc.sum()) == len(pops.mc)
+        assert int(nature.sum()) == pops.data.shape[0]
+        # With replacement: some events are drawn more than once, some never.
+        assert (mc == 0).any()
+        assert (mc > 1).any()
+
+    @pytest.mark.parametrize(
+        argnames=("resample", "untouched"),
+        argvalues=[(Resample.data, "mc"), (Resample.mc, "nature")],
+    )
+    def test_the_other_sample_is_left_as_collected(
+        self, resample: Resample, untouched: str
+    ) -> None:
+        """Resampling one side at a time separates data from MC statistics."""
+        mc, nature = bootstrap_multiplicities(_populations(), seed=0, resample=resample)
+
+        fixed, varied = (mc, nature) if untouched == "mc" else (nature, mc)
+        assert np.all(fixed == 1)
+        assert not np.all(varied == 1)
+
+
+class TestReplicateSplits:
+    """Split the original events first, then expand each split by its draws.
+
+    Splitting a resampled sample instead puts copies of one event into
+    different splits: about half of every replicate's validation set would
+    also be in its training set, which is not the procedure being measured.
+    """
+
+    @staticmethod
+    def _splits(split_seed: int, *, bootstrap_seed: int = 0) -> DatasetSplits:
+        pops: Populations = _populations(n=2000)
+        return replicate_splits(
+            pops,
+            bootstrap_multiplicities(pops, seed=bootstrap_seed),
+            split_seed=split_seed,
+            batch_size=64,
+        )
+
+    def test_no_event_is_in_two_splits(self) -> None:
+        parts: list[Populations] = [
+            split.as_arrays().partition() for split in self._splits(split_seed=5)
+        ]
+
+        for side in ("mc", "data"):
+            keys: list[set[bytes]] = [
+                {row.tobytes() for row in (part.mc.z if side == "mc" else part.data)}
+                for part in parts
+            ]
+            assert not keys[0] & keys[1]
+            assert not keys[0] & keys[2]
+            assert not keys[1] & keys[2]
+
+    def test_the_split_does_not_change_the_replicate(self) -> None:
+        """So the dataset axis means the same sample in every cell of a row."""
+        one: Populations = self._splits(split_seed=1).select(Split.ALL).partition()
+        two: Populations = self._splits(split_seed=2).select(Split.ALL).partition()
+
+        np.testing.assert_array_equal(_sorted_rows(one.mc.z), _sorted_rows(two.mc.z))
+        np.testing.assert_array_equal(_sorted_rows(one.data), _sorted_rows(two.data))
+
+    def test_a_different_split_seed_splits_differently(self) -> None:
+        one: Populations = self._splits(split_seed=1).train.as_arrays().partition()
+        two: Populations = self._splits(split_seed=2).train.as_arrays().partition()
+
+        assert {r.tobytes() for r in one.mc.z} != {r.tobytes() for r in two.mc.z}
+
+    def test_every_draw_is_trained_on_somewhere(self) -> None:
+        pops: Populations = _populations(n=2000)
+        mc, nature = bootstrap_multiplicities(pops, seed=3)
+
+        splits: DatasetSplits = replicate_splits(
+            pops, (mc, nature), split_seed=4, batch_size=64
+        )
+
+        assert sum(len(split.as_arrays()) for split in splits) == int(
+            mc.sum() + nature.sum()
+        )
+
+
+class TestEvaluationUncertainty:
+    """The evaluation set's own sampling noise, which no cell contrast can see.
+
+    Every cell reads the same evaluation events, so their fluctuation cancels
+    from every component of the decomposition. It is still an uncertainty on
+    the unfolded result, which *is* those weighted events. Checked against its
+    definition: the spread of the result over repeated evaluation sets drawn
+    with the weight function held fixed.
+    """
+
+    @staticmethod
+    def _repeat(n_sets: int, n_events: int) -> tuple[NDArray[Any], ...]:
+        rng: np.random.Generator = np.random.default_rng(seed=0)
+        columns: NDArray[np.double] = rng.normal(size=(n_sets, n_events))
+        weights: NDArray[np.double] = np.exp(0.5 * columns)
+        return columns, weights
+
+    def test_the_variance_of_the_mean_matches_repeated_evaluation_sets(
+        self,
+    ) -> None:
+        columns, weights = self._repeat(n_sets=4000, n_events=2000)
+
+        means: list[float] = []
+        predicted: list[float] = []
+        for i in range(len(columns)):
+            column: NDArray[Any] = columns[i]
+            run: NDArray[Any] = weights[i][None]
+            means.append(float(weighted_means(column, run)[0]))
+            predicted.append(float(evaluation_variance(column, run)[0]))
+
+        assert np.var(means) == pytest.approx(expected=np.mean(predicted), rel=0.1)
+
+    def test_the_bin_covariance_matches_repeated_evaluation_sets(self) -> None:
+        columns, weights = self._repeat(n_sets=4000, n_events=2000)
+        edges: NDArray[np.double] = np.array(object=[-10.0, -0.5, 0.5, 10.0])
+
+        spectra_list: list[NDArray[np.double]] = []
+        covariances: list[NDArray[np.double]] = []
+        for i in range(len(columns)):
+            column: NDArray[Any] = columns[i]
+            run: NDArray[Any] = weights[i][None]
+            spectra_list.append(binned_spectra(column, run, edges=edges)[0])
+            covariances.append(evaluation_covariance(column, run, edges=edges)[0])
+        spectra: NDArray[np.double] = np.array(object=spectra_list)
+        predicted: NDArray[np.double] = np.mean(a=covariances, axis=0)
+
+        # Each entry against its own sampling error. A relative tolerance is
+        # the wrong test for an entry near zero, whose empirical estimate
+        # carries an error comparable to the entry itself:
+        # se(c_kl) = sqrt((c_kk c_ll + c_kl^2) / n_sets) for normal sampling.
+        empirical: NDArray[np.double] = np.cov(m=spectra, rowvar=False)
+        diagonal: NDArray[np.double] = np.diag(v=predicted)
+        se: NDArray[np.double] = np.sqrt(
+            (np.outer(a=diagonal, b=diagonal) + predicted**2) / len(spectra)
+        )
+        assert np.all(a=np.abs(empirical - predicted) < 4.0 * se)
+
+    def test_the_bin_covariance_respects_the_normalization(self) -> None:
+        """Every spectrum sums to one, so every row sums to zero."""
+        columns, weights = self._repeat(n_sets=1, n_events=500)
+        edges: NDArray[np.double] = quantile_edges(columns[0], n_bins=4)
+
+        cov: NDArray[np.double] = evaluation_covariance(
+            columns[0], weights, edges=edges
+        )[0]
+
+        np.testing.assert_allclose(cov.sum(axis=1), 0.0, atol=1e-12)
+
+
 class TestEvaluationSet:
     def test_the_held_out_events_are_absent_from_the_training_pool(self) -> None:
         """Every replicate is read on events no replicate could have trained on."""
@@ -604,7 +768,8 @@ class TestRunCell:
                 {
                     "seed": seed,
                     "dim": dim,
-                    "z": splits.select().partition().mc.z.copy(),
+                    "z": splits.select(Split.ALL).partition().mc.z.copy(),
+                    "train_z": splits.train.as_arrays().partition().mc.z.copy(),
                     **kwargs,
                 }
             )
@@ -651,9 +816,59 @@ class TestRunCell:
         for index in range(spec.n_cells):
             _ = run_cell(index, tmp_path, spec, n_samples=600, n_eval=100)
 
-        # Cells 0 and 1 are dataset 0 at two seeds; cell 2 is dataset 1.
-        assert seen[0]["z"] == pytest.approx(expected=seen[1]["z"])
-        assert not np.allclose(a=seen[0]["z"], b=seen[2]["z"])
+        # Cells 0 and 1 are dataset 0 at two seeds; cell 2 is dataset 1. Each
+        # cell splits and orders its replicate differently, so the replicate
+        # is compared as a multiset of events, not row by row.
+        np.testing.assert_array_equal(
+            _sorted_rows(seen[0]["z"]), _sorted_rows(seen[1]["z"])
+        )
+        assert not np.array_equal(
+            _sorted_rows(seen[0]["z"]), _sorted_rows(seen[2]["z"])
+        )
+
+    def test_the_split_varies_from_cell_to_cell(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Independent of both axes, so split and order variance cannot land in
+        the dataset component, which is reported as the statistical uncertainty.
+        """
+        from deconvolve.uncertainty import run_cell
+
+        seen: list[dict[str, Any]] = []
+        self._stub(monkeypatch, seen)
+        spec = DesignSpec(n_datasets=2, n_seeds=2)
+        for index in range(spec.n_cells):
+            _ = run_cell(index, tmp_path, spec, n_samples=600, n_eval=100)
+
+        from deconvolve.uncertainty.design import _read_cell
+
+        split_seeds: list[int] = [
+            int(_read_cell(cell_path(tmp_path, i))[1]["split_seed"])
+            for i in range(spec.n_cells)
+        ]
+        assert len(set(split_seeds)) == spec.n_cells
+        assert {r.tobytes() for r in seen[0]["train_z"]} != {
+            r.tobytes() for r in seen[1]["train_z"]
+        }
+
+    def test_resampling_only_the_data_leaves_the_simulation_as_collected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from deconvolve.uncertainty import run_cell
+
+        seen: list[dict[str, Any]] = []
+        self._stub(monkeypatch, seen)
+        spec = DesignSpec(n_datasets=2, n_seeds=2)
+        _ = run_cell(
+            0, tmp_path, spec, n_samples=600, n_eval=100, resample=Resample.data
+        )
+
+        pool: Populations = reserve_evaluation_set(
+            _populations(n=600), n_eval=100, seed=spec.data_seed
+        ).pool
+        np.testing.assert_array_equal(
+            _sorted_rows(seen[0]["z"]), _sorted_rows(pool.mc.z)
+        )
 
     def test_the_init_seed_advances_with_the_seed_index_only(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -747,6 +962,9 @@ class TestCollect:
         # that does not say so is not reading the grid it was handed.
         assert summary["m"]["var_data"] > 0.5 * summary["m"]["var_total"]
         assert summary["m"]["sd_naive_quadrature"] > summary["m"]["sd_total"]
+        assert summary["m"]["var_evaluation"] > 0.0
+        with np.load(tmp_path / "variance.npz") as saved:
+            assert saved["m_cov_evaluation"].shape == saved["m_cov_data"].shape
 
     def test_the_recorded_json_carries_the_closure_floor(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

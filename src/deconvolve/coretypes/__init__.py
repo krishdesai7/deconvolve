@@ -33,7 +33,7 @@ from .constants import (
     display_order,
     figure_pages,
 )
-from .enums import DatasetName, LogLevel
+from .enums import DatasetName, LogLevel, Resample
 from .events import ZXY, DatasetSplits, Events, Populations, Split
 from .results import IBUResult, UnfoldingPopulations, VariableOutcome
 from .types import (
@@ -99,6 +99,7 @@ __all__: Final[Sequence[str]] = (
     "MetricRecord",
     "Nested",
     "Populations",
+    "Resample",
     "RunConfig",
     "Split",
     "StatelessOptimizer",

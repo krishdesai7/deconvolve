@@ -204,13 +204,13 @@ class DeconvolveDataset:
         cache_key: str = self._cache_key(parsed, n_samples)
         return self.cache_dir / f"gaussian_{cache_key}.npz"
 
-    def _build_dataset(self, data: ZXY) -> ZXY:
-        """Shuffle so that both classes are spread across every split."""
-        rng: np.random.Generator = np.random.default_rng(self.seed)
-        order: NDArray[np.intp] = rng.permutation(x=len(data))
-        return ZXY(Events(data.z[order], data.x[order]), data.y[order])
+    def _order(self, data: ZXY) -> NDArray[np.intp]:
+        """The shuffle that spreads both classes across every split."""
+        return np.random.default_rng(self.seed).permutation(x=len(data))
 
-    def _split_dataset(self, dataset: ZXY) -> DatasetSplits:
+    def _split_dataset(
+        self, dataset: ZXY, multiplicity: NDArray[np.intp] | None = None
+    ) -> DatasetSplits:
         n: int = len(dataset)
         n_test: int = int(n * self.test_fraction)
         n_non_test: int = n - n_test
@@ -224,11 +224,15 @@ class DeconvolveDataset:
             )
 
         def _slice(lo: int, hi: int) -> ArrayDataset:
+            rows: NDArray[np.intp] = np.arange(lo, hi)
+            if multiplicity is not None:
+                rows = np.repeat(a=rows, repeats=multiplicity[lo:hi])
+                if rows.size == 0:
+                    raise ValueError(
+                        "a split holds no events after applying the multiplicities"
+                    )
             return ArrayDataset(
-                data=ZXY(
-                    Events(dataset.z[lo:hi], dataset.x[lo:hi]),
-                    dataset.y[lo:hi],
-                ),
+                data=ZXY(Events(dataset.z[rows], dataset.x[rows]), dataset.y[rows]),
                 batch_size=self.batch_size,
                 seed=self.seed,
             )
@@ -305,8 +309,25 @@ class DeconvolveDataset:
 
         return self.splits_from_data(data)
 
-    def splits_from_data(self, data: ZXY) -> DatasetSplits:
-        """Shuffle one labelled sample and cut it into train/val/test."""
-        self.dataset: ZXY = self._build_dataset(data)
-        self.splits: DatasetSplits = self._split_dataset(self.dataset)
+    def splits_from_data(
+        self, data: ZXY, *, multiplicity: NDArray[np.intp] | None = None
+    ) -> DatasetSplits:
+        """Shuffle one labelled sample and cut it into train/val/test.
+
+        `multiplicity`, one non-negative count per row of `data`, repeats each
+        row that many times *after* the cut, so every copy of a row stays in the
+        split the row was assigned to. This is how a bootstrap replicate is
+        split: cutting an already-resampled sample would put copies of one
+        event into different splits.
+        """
+        if multiplicity is not None and multiplicity.shape != (len(data),):
+            raise ValueError(
+                f"multiplicity has shape {multiplicity.shape}; expected one count "
+                f"per event, ({len(data)},)"
+            )
+        order: NDArray[np.intp] = self._order(data)
+        self.dataset: ZXY = ZXY(Events(data.z[order], data.x[order]), data.y[order])
+        self.splits: DatasetSplits = self._split_dataset(
+            self.dataset, None if multiplicity is None else multiplicity[order]
+        )
         return self.splits

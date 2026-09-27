@@ -32,9 +32,15 @@ thing in every cell: `keras.utils.set_random_seed(s)` puts the identical
 initial weights on the network whichever dataset it is about to see. A seed
 main effect is therefore a real thing that can exist, and the design can see it.
 
-There is one run per cell, so `sigma_eps^2` is the interaction and the
-run-to-run noise together; nothing here can separate them, and with the loop
-deterministic given `(D, S)` there is little left to separate. See
+There is one run per cell, so `sigma_eps^2` is the interaction together with
+everything else that varies from cell to cell and with neither axis: the
+per-cell split, batch order and selection subsamples (`design.split_seed`) and
+any run-to-run hardware noise. Nothing here can separate them, and all of it
+is method variance.
+
+The evaluation set's own sampling variance is common to every cell, so it
+cancels from all three components; `evaluation_variance` and
+`evaluation_covariance` supply it separately. See
 `Seeding` in `CLAUDE.md` for the two axes and
 `XLA_FLAGS=--xla_gpu_deterministic_ops=true` for the residual GPU
 nondeterminism.
@@ -283,3 +289,72 @@ def weighted_means(
     values: NDArray[np.double] = np.asarray(a=column, dtype=np.double)
     stack: NDArray[np.double] = np.asarray(a=weights, dtype=np.double)
     return (stack @ values) / stack.sum(axis=-1)
+
+
+def evaluation_variance(
+    column: EventArray,
+    weights: NDArray[np.double] | EventArray,
+    /,
+) -> NDArray[np.double]:
+    """Each run's variance of its unfolded mean over repeated evaluation sets.
+
+    The unfolded result is the evaluation set, reweighted; a different draw of
+    those events would move it even with the weight function held fixed. That
+    fluctuation is common to every cell, so it cancels from every component of
+    `decompose` and has to be added to them separately. For a ratio estimator
+    `m = sum(w z) / sum(w)` the delta method gives
+    `sum(w^2 (z - m)^2) / sum(w)^2`, which grows as the weights concentrate.
+    """
+    values: NDArray[np.double] = np.asarray(a=column, dtype=np.double)
+    stack: NDArray[np.double] = np.asarray(a=weights, dtype=np.double)
+    flat: NDArray[np.double] = stack.reshape(-1, values.shape[0])
+    means: NDArray[np.double] = weighted_means(column, flat)
+    out: NDArray[np.double] = np.empty(shape=flat.shape[0])
+    for i in range(flat.shape[0]):
+        w: NDArray[np.double] = flat[i]
+        spread: NDArray[np.double] = w * (values - means[i])
+        total: np.double = w.sum()
+        variance: np.double = np.sum(a=np.square(spread)) / np.square(total)
+        out[i] = variance
+    return out.reshape(stack.shape[:-1])
+
+
+def evaluation_covariance(
+    column: EventArray,
+    weights: NDArray[np.double] | EventArray,
+    /,
+    *,
+    edges: NDArray[np.double],
+) -> NDArray[np.double]:
+    """Each run's `K x K` covariance of `binned_spectra` over evaluation sets.
+
+    The delta method applied to the normalized bin fractions
+    `f_k = N_k / T`, with `N_k` the weight in bin `k` and `T` the weight in
+    range: `(diag(h2) - f h2^T - h2 f^T + f f^T W2) / T^2`, where `h2` holds
+    each bin's sum of squared weights and `W2` their total. Every row sums to
+    zero, as the normalization requires. Binned with `np.histogram`, exactly
+    as `binned_spectra` is, so the two describe the same bins.
+    """
+    values: NDArray[np.double] = np.asarray(a=column, dtype=np.double)
+    stack: NDArray[np.double] = np.asarray(a=weights, dtype=np.double)
+    flat: NDArray[np.double] = stack.reshape(-1, values.shape[0])
+    n_bins: int = edges.size - 1
+    out: NDArray[np.double] = np.empty(shape=(flat.shape[0], n_bins, n_bins))
+    for i in range(flat.shape[0]):
+        w: NDArray[np.double] = flat[i]
+        w_sq: NDArray[np.double] = np.square(w)
+        h: NDArray[np.double] = np.histogram(a=values, bins=edges, weights=w)[0]
+        h2: NDArray[np.double] = np.histogram(a=values, bins=edges, weights=w_sq)[0]
+        total: np.double = h.sum()
+        if total <= 0:
+            raise ValueError("a run puts no weight inside the bin edges")
+        f: NDArray[np.double] = h / total
+        cov: NDArray[np.double] = (
+            np.diag(v=h2)
+            - np.outer(a=f, b=h2)
+            - np.outer(a=h2, b=f)
+            + np.outer(a=f, b=f) * h2.sum()
+        )
+        scale: np.double = np.square(total)
+        out[i] = cov / scale
+    return out.reshape(*stack.shape[:-1], n_bins, n_bins)
