@@ -17,16 +17,15 @@ import numpy as np
 import pytest
 from deconvolve.coretypes import (
     COMPILE_CACHE_DIR,
+    LOG2,
     TRUTH_SENTINEL,
     ZXY,
     Events,
     Split,
 )
 from deconvolve.data import DeconvolveDataset, DeviceSplits, train_indices
-from deconvolve.models import build_generator
-from deconvolve.train import (
+from deconvolve.training.engine import (
     EPS,
-    LOG2,
     TrainResult,
     TrainState,
     _make_steps,
@@ -39,6 +38,7 @@ from deconvolve.train import (
     weight_dispersion,
     weighted_bce,
 )
+from deconvolve.training.models import build_generator
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         TrainStep,
         Variables,
     )
-    from deconvolve.train import EpochParams
+    from deconvolve.training.engine import EpochParams
     from jax._src.basearray import Array
     from numpy.typing import NDArray
 
@@ -326,7 +326,7 @@ class TestTrainSteps:
     def _setup(
         dim: int = 2, n: int = 64, lambda_dispersion: float = 0.0
     ) -> tuple[tuple[TrainStep, TrainStep, EvalStep], TrainState, tuple[Array, ...]]:
-        from deconvolve.models import build_discriminator, build_generator
+        from deconvolve.training.models import build_discriminator, build_generator
 
         keras.utils.set_random_seed(0)
         g: DeconvolveModel = build_generator(dim=dim, hidden_units=8, n_layers=1)
@@ -875,7 +875,7 @@ class TestCompilationCache:
         )
 
     def test_the_threshold_drops_to_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """JAX's 1.0s default leaves Deconvolve's cache *empty*, not merely sparse.
+        """JAX's 1.0s default leaves RAN's cache *empty*, not merely sparse.
 
         A run compiles a few dozen executables totalling ~4.6s and not one of
         them clears a second on its own, so the stock threshold caches nothing
@@ -1032,11 +1032,11 @@ class TestTrainingNeverSeesTheTestSplit:
 class TestWeightDispersion:
     """How far the generator has travelled from `w = 1`, as one number.
 
-    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against Deconvolve's
-    73.3%: Deconvolve's weights are *more* dispersed than the truth's, so dispersion is
+    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against RAN's
+    73.3%: RAN's weights are *more* dispersed than the truth's, so dispersion is
     a knob with a target rather than a free parameter. For weights normalised to
     mean 1 the relation is `ESS/n = 1 / (1 + Var(w))`, which puts the oracle at
-    Var 0.249 and Deconvolve at 0.364.
+    Var 0.249 and RAN at 0.364.
 
     The variance is taken over the MC rows only. Nature's weights are pinned to
     1 by `normalize_weights` and carry no gradient, so including them would

@@ -58,17 +58,17 @@ import typer
 from deconvolve.coretypes import Split, artifacts_dir
 from deconvolve.data import DeconvolveDataset, load_jet_dataset
 from deconvolve.data.config import gaussian_config_from_run_config
-from deconvolve.evaluate import _improvement, _wd_per_dim
-from deconvolve.logging_config import configure_logging
-from deconvolve.mmd import (
+from deconvolve.evaluation.evaluate import _improvement, _wd_per_dim
+from deconvolve.instrumentation.logging_config import configure_logging
+from deconvolve.training.engine import MMD_SUBSAMPLE, _weights_per_epoch, load_params
+from deconvolve.training.mmd import (
     MMDCache,
     bandwidths,
     build_cache,
     subsample_indices,
     weighted_mmd,
 )
-from deconvolve.models import build_generator
-from deconvolve.train import MMD_SUBSAMPLE, _weights_per_epoch, load_params
+from deconvolve.training.models import build_generator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -85,7 +85,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-logger: Logger = logging.getLogger(name="ran.averaging")
+logger: Logger = logging.getLogger(name="deconvolve.averaging")
 
 # The MMD^2 estimator's resolution at m = 16384, from `benchmarks/`. Two epochs
 # closer than this in detector MMD are not distinguishable by the criterion,

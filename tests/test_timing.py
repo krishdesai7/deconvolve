@@ -16,7 +16,7 @@ from io import StringIO
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from deconvolve import timing
+from deconvolve.instrumentation import timing
 from rich.console import Console
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from deconvolve.coretypes import DatasetSplits
-    from deconvolve.train import TrainResult
+    from deconvolve.training.engine import TrainResult
 
 
 def _rendered() -> str:
@@ -442,7 +442,7 @@ class TestTrainIntegration:
 
     @staticmethod
     def _train(splits: DatasetSplits) -> TrainResult:
-        from deconvolve.train import train
+        from deconvolve.training.engine import train
 
         return train(splits, dim=1, n_epochs=3, hidden_units=8, n_layers=1, seed=42)
 

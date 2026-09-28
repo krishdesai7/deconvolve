@@ -1,3 +1,12 @@
+"""Load jet substructure data for RAN training.
+
+Checks `CACHE_DIR` (`.cache/`, or wherever `DECONVOLVE_CACHE_DIR` points) for
+per-variable `.npz` files. If missing, invokes `download_jet_data` to fetch
+from Zenodo. Loads, subsamples, z-score standardizes (using MC gen-level
+statistics only), and builds the train/val/test splits via
+`DeconvolveDataset`.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +24,7 @@ from ..coretypes import (
     Events,
     Populations,
 )
-from ..timing import note
+from ..instrumentation import note
 from .datasets import DeconvolveDataset
 from .download import download_jet_data
 
@@ -66,19 +75,39 @@ def load_jet_dataset(
     """Build jet splits with column `i` taken from `variables[i]`.
 
     `variables` is a `Sequence` and the order is load-bearing: it is the column
-    order of every array downstream, it is what `_save_run` records, and it is
-    what a later `deconvolve evaluate` or `deconvolve baseline ibu` must reproduce
-    exactly to label those columns --- or to feed a trained generator its own
-    features.
-    Passing a `set` or `frozenset` here is a bug, not a convenience.
+    order of every array downstream, `_save_run` records it, and a later
+    `deconvolve evaluate` or `deconvolve baseline ibu` must reproduce it exactly
+    to label those columns --- or to feed a trained generator its own features.
+    Passing a `set` or `frozenset` here is a bug, not a convenience: its
+    iteration order depends on per-process randomized string hashes and so
+    cannot survive into the second process. A set is refused outright, and
+    duplicate and unknown names are refused too.
+
+    Each selected substructure variable is z-score standardized using the MC
+    gen-level (`z_gen`) mean and std. The same parameters are applied to all
+    four arrays (`z_true`, `x_data`, `z_gen`, `x_sim`) to avoid information
+    leakage and preserve correlations.
+
+    Args:
+        n_samples: Number of events to use per class (data and MC).
+        batch_size: Batch size for the returned splits.
+        cache_dir: Directory containing per-variable `.npz` files.
+        variables: Which substructure variables to use, **in column order**.
+        seed: Dataset seed, controlling the shuffle, the train/val/test split
+            and the per-epoch batch order. Independent of the weight-init
+            seed passed to `train`.
+
+    Returns:
+        The splits, the feature dimensionality, and the standardization
+            parameters `{var_name: (mu, sigma)}`.
     """
     _reject_unordered(variables)
-    # The npz caches on disk are float64, which is what the Zenodo release ships
-    # and what the standardization statistics are computed in. Narrowing happens
-    # once here, on the way into the pipeline.
+    # The npz caches on disk are float64, as the Zenodo release ships them.
+    # Narrowing happens once here, on the way into the pipeline, so the
+    # standardization statistics below are float32 reductions (pairwise
+    # summation keeps them accurate).
     scalar: np.dtype[np.single] = np.dtype(EVENT_DTYPE)
 
-    # Check cache, download if needed
     missing: list[str] = [
         v for v in variables if not (cache_dir / f"{CACHE_FILENAMES[v]}.npz").exists()
     ]
@@ -91,26 +120,25 @@ def load_jet_dataset(
 
     n_features: int = len(variables)
 
-    # Check available samples
     with np.load(file=cache_dir / f"{CACHE_FILENAMES[variables[0]]}.npz") as f:
         n_avail: int = min(
-            len(cast("NDArray[Any]", f["z_true"])),
-            len(cast("NDArray[Any]", f["z_gen"])),
+            len(cast(typ="NDArray[Any]", val=f["z_true"])),
+            len(cast(typ="NDArray[Any]", val=f["z_gen"])),
         )
     if n_samples > n_avail:
         raise ValueError(f"Requested {n_samples} samples but only {n_avail} available")
 
-    # Initialize arrays
     z_true: EventArray = np.empty(shape=(n_samples, n_features), dtype=scalar)
     x_data: EventArray = np.empty(shape=(n_samples, n_features), dtype=scalar)
     z_gen: EventArray = np.empty(shape=(n_samples, n_features), dtype=scalar)
     x_sim: EventArray = np.empty(shape=(n_samples, n_features), dtype=scalar)
 
-    # Load, subsample, and standardize each variable
     std_params: dict[str, tuple[np.single, np.single]] = {}
     for i, var in enumerate(iterable=variables):
         with np.load(file=cache_dir / f"{CACHE_FILENAMES[var]}.npz") as f:
-            col: Mapping[str, NDArray[Any]] = cast("Mapping[str, NDArray[Any]]", f)
+            col: Mapping[str, NDArray[Any]] = cast(
+                typ="Mapping[str, NDArray[Any]]", val=f
+            )
             z_true[:, i] = col["z_true"][:n_samples]
             x_data[:, i] = col["x_data"][:n_samples]
             z_gen[:, i] = col["z_gen"][:n_samples]

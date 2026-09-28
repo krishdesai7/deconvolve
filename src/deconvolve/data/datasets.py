@@ -19,7 +19,7 @@ from ..coretypes import (
     GaussianConfig,
     Populations,
 )
-from ..timing import note
+from ..instrumentation import note
 from .config import parse_gaussian_config
 
 if TYPE_CHECKING:
@@ -52,32 +52,26 @@ def _savez_atomic(path: Path, /, **arrays: NDArray[Any]) -> None:
     """Write an `.npz` that a concurrent reader either misses or sees whole.
 
     `np.savez` streams into the destination it is handed, so a reader that
-    arrives mid-write gets a truncated zip rather than an error it could
-    recover from. Deconvolve's cache is shared by construction:
-    `DECONVOLVE_CACHE_DIR` is one directory on `$SCRATCH`,
-    `submit_uncertainty.sh` packs a grid of cells onto a node against it, and
-    `pytest -n16` does the same thing on a smaller scale -- two workers that
-    land on tests sharing a cache key are two writers on one path.
+    arrives mid-write gets a truncated zip. RAN's cache is shared by
+    construction (`submit_uncertainty.zsh` packs a grid of cells against one
+    `DECONVOLVE_CACHE_DIR`, and `pytest -n16` does the same on a smaller scale), so
+    two workers can race to write the same cache key.
 
-    Writing beside the target and renaming makes publishing a single atomic
-    `rename(2)`, which POSIX guarantees within a directory; the temp file is
-    created in that same directory for exactly that reason. Two writers racing
-    is then harmless -- each builds its own file, one rename wins, and both
+    Writing beside the target and renaming makes publishing one atomic
+    `rename(2)`, which POSIX guarantees within a directory. Two writers racing
+    is then harmless: each builds its own file, one rename wins, and both
     hold identical bytes because the key is a hash of what produced them.
 
     The temp name keeps a `.npz` suffix because `np.savez` appends one to any
     path lacking it, which would otherwise leave the real output beside a
-    stray. `unlink` runs from a `finally`: after a successful rename there is
-    nothing at the temp path and `missing_ok` absorbs it, and a failed write
-    leaves no partial file behind.
+    stray. `unlink` runs from a `finally` so a failed write leaves no partial
+    file behind; `missing_ok` absorbs the already-renamed case.
     """
     tmp: Path = path.with_name(name=f"{path.name}.{uuid.uuid4().hex}.tmp.npz")
     try:
-        # Both checkers read `**arrays` as a candidate for savez's
+        #  Checkers read `**arrays` as a candidate for savez's
         # `allow_pickle: bool` keyword; every value here is an array.
-        np.savez(file=tmp, **arrays)  # pyrefly: ignore[bad-argument-type]  # ty: ignore[invalid-argument-type]
-        # `Path.replace` is `os.replace`: one atomic `rename(2)`. The result
-        # is the destination path, which nothing here wants.
+        np.savez(file=tmp, **arrays)  # ty: ignore[invalid-argument-type]
         _ = tmp.replace(target=path)
     finally:
         tmp.unlink(missing_ok=True)
@@ -96,21 +90,26 @@ def _draw_gaussian(
 ) -> tuple[
     Float[Array, "n d"], Float[Array, "n d"], Float[Array, "n d"], Float[Array, "n d"]
 ]:
+    """Draw the four Gaussian populations: `(z_true, z_gen, x_data, x_sim)`.
+
+    Runs on the default device. Sharing a node is handled by the launchers,
+    which give each step exactly one visible GPU via `srun --gpus-per-task=1`,
+    so a sibling run cannot have the card swallowed out from under it.
+
+    The draw pins its matmul precision to `HIGHEST`. Two dots produce this
+    sample -- the `@` against the Cholesky smear, and one inside
+    `multivariate_normal(method="svd")` -- and XLA runs both at TF32 on an A100
+    by default, which would make the sample a function of the hardware as well
+    as of the config and the seed. The pin makes a `.npz` drawn on a login node
+    and one drawn on a GPU node the same sample. The cache key is otherwise a
+    pure function of the physics config, so `_RNG_VERSION` carries `jax-v2` to
+    keep a pre-pin file from being silently reused.
+
+    No `check_valid` equivalent is needed: `parse_gaussian_config` has already
+    asserted positive-definiteness with a Cholesky factorization.
+    """
     k_true, k_gen, k_data, k_sim = jax.random.split(jax.random.key(seed), num=4)
 
-    # Two dots draw this dataset, and on an A100 XLA runs both at TF32 -- a
-    # 10-bit mantissa -- unless told otherwise. Neither cancels, so the cost is
-    # an honest ~5e-4 relative rather than the unbounded error the same default
-    # caused in `deconvolve.mmd`; what it buys instead is that the sample is a
-    # function of the config and the seed alone, rather than of the hardware
-    # that happened to draw it. A cached .npz is keyed on the physics config,
-    # so without this a file drawn on a login node and one drawn on a GPU node
-    # are different samples sharing a key.
-    #
-    # The context manager rather than a `precision=` argument because only one
-    # of the two dots is visible here: `multivariate_normal(method="svd")` does
-    # its own internally and takes no precision parameter. This covers both --
-    # the lowered HLO carries `precision = [HIGHEST, HIGHEST]` on each.
     with jax.default_matmul_precision("highest"):
         z_true: Float[Array, "n d"] = jax.random.multivariate_normal(
             k_true, mu_true, cov_true, shape=(n_samples,), method="svd"
@@ -131,6 +130,22 @@ def _draw_gaussian(
 
 
 class ArrayDataset:
+    """An in-memory `ZXY` with deterministic minibatching.
+
+    One host-resident split of (z, x, y), plus how it should be batched.
+
+    This is a container, not an iterator. Batch order is drawn on device, per
+    epoch, by `deconvolve.data.device.train_indices` -- so `batch_size` and
+    `seed` are carried here as the split's own parameters and read by
+    `DeviceSplits.from_splits`, but nothing iterates this object.
+
+    Attributes:
+        data: The split's events and labels. `data.z` and `data.x` reach
+            through to the underlying `Events`.
+        batch_size: Events per batch.
+        seed: Seed for the reshuffling generator.
+    """
+
     def __init__(
         self,
         data: ZXY,
@@ -152,13 +167,22 @@ class ArrayDataset:
         return self.data.dtype
 
     def __len__(self) -> int:
+        """Number of batches per pass."""
         return (self.size + self.batch_size - 1) // self.batch_size
 
     def as_arrays(self) -> ZXY:
+        """The whole split as flat labelled arrays, in stored order."""
         return self.data
 
 
 class DeconvolveDataset:
+    """Builds the train/val/test splits RAN trains on.
+
+    Attributes:
+        dataset: The events in shuffled order, once built.
+        splits: The train/val/test splits, once built.
+    """
+
     def __init__(
         self,
         batch_size: int = 128,
@@ -217,13 +241,25 @@ class DeconvolveDataset:
         cache_key: str = self._cache_key(parsed, n_samples)
         return self.cache_dir / f"gaussian_{cache_key}.npz"
 
-    def _build_dataset(self, data: ZXY) -> ZXY:
-        """Shuffle so that both classes are spread across every split."""
-        rng: np.random.Generator = np.random.default_rng(self.seed)
-        order: NDArray[np.intp] = rng.permutation(x=len(data))
-        return ZXY(Events(data.z[order], data.x[order]), data.y[order])
+    def _order(self, data: ZXY) -> NDArray[np.intp]:
+        """The shuffle that spreads both classes across every split.
 
-    def _split_dataset(self, dataset: ZXY) -> DatasetSplits:
+        `interleave` stacks nature (y=1) on MC (y=0); the splits are contiguous
+        slices, so they would otherwise be single-class. This shuffle happens
+        once and is not repeated per epoch -- it defines the event ordering
+        the splits cut into.
+        """
+        return np.random.default_rng(self.seed).permutation(x=len(data))
+
+    def _split_dataset(
+        self, dataset: ZXY, multiplicity: NDArray[np.intp] | None = None
+    ) -> DatasetSplits:
+        """Cut the shuffled arrays into contiguous train/val/test splits.
+
+        Test is taken off the end, validation off the end of what remains, so
+        train occupies the front. Only the training split reshuffles between
+        epochs.
+        """
         n: int = len(dataset)
         n_test: int = int(n * self.test_fraction)
         n_non_test: int = n - n_test
@@ -237,17 +273,21 @@ class DeconvolveDataset:
             )
 
         def _slice(lo: int, hi: int) -> ArrayDataset:
+            rows: NDArray[np.intp] = np.arange(lo, hi)
+            if multiplicity is not None:
+                rows = np.repeat(a=rows, repeats=multiplicity[lo:hi])
+                if rows.size == 0:
+                    raise ValueError(
+                        "a split holds no events after applying the multiplicities"
+                    )
             return ArrayDataset(
-                data=ZXY(
-                    Events(dataset.z[lo:hi], dataset.x[lo:hi]),
-                    dataset.y[lo:hi],
-                ),
+                data=ZXY(Events(dataset.z[rows], dataset.x[rows]), dataset.y[rows]),
                 batch_size=self.batch_size,
                 seed=self.seed,
             )
 
         return DatasetSplits(
-            train=_slice(0, n_train),
+            train=_slice(lo=0, hi=n_train),
             val=_slice(lo=n_train, hi=n_non_test),
             test=_slice(lo=n_non_test, hi=n),
         )
@@ -259,6 +299,15 @@ class DeconvolveDataset:
         params: GaussianConfig | None = None,
         n_samples: int = 10**6,
     ) -> DatasetSplits:
+        """Generate (or load from cache) a Gaussian dataset and split it.
+
+        Exactly one of `config_path` or `params` must be provided.
+
+        Args:
+            config_path: A Gaussian YAML config file.
+            params: An already-parsed config, in place of `config_path`.
+            n_samples: Number of samples per class (data and MC).
+        """
         # Written as a nested check rather than a single XOR so that each branch
         # narrows the argument it goes on to use.
         if params is not None:
@@ -270,9 +319,9 @@ class DeconvolveDataset:
         else:
             parsed = parse_gaussian_config(config_path)
 
-        # The parameters go into `_draw_gaussian` at the float64 they were parsed
-        # in, and the sample narrows to `np.single` once on the way out because the draw
-        # upcasts again and costs precision in the Cholesky whenever `np.single`
+        # `_draw_gaussian` runs at the float64 the config was parsed in; the
+        # sample narrows to EVENT_DTYPE once, on the way out, so the Cholesky
+        # smear inside the draw never loses precision to an earlier cast.
         cache_path: Path = self._cache_path(parsed, n_samples)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -281,7 +330,7 @@ class DeconvolveDataset:
             logger.info("Loading dataset from cache: %s", cache_path)
             with np.load(file=cache_path) as cached:
                 arrays: Mapping[str, NDArray[Any]] = cast(
-                    "Mapping[str, NDArray[Any]]", cached
+                    typ="Mapping[str, NDArray[Any]]", val=cached
                 )
                 data: ZXY = ZXY(
                     Events(
@@ -311,16 +360,36 @@ class DeconvolveDataset:
                 truth=np.asarray(a=z_true, dtype=self.dtype),
             ).interleave()
 
-            # Uncompressed, for the reason spelled out in `deconvolve.data.download`:
-            # these are incompressible floats, so DEFLATE is a large read tax
-            # for a few percent of disk. Existing compressed caches still load.
+            # Uncompressed, these are incompressible floats, so DEFLATE is a large read
+            # tax for a few percent of disk.
             _savez_atomic(cache_path, z=data.z, x=data.x, y=data.y)
             logger.info("Generated and saved dataset to cache: %s", cache_path)
 
         return self.splits_from_data(data)
 
-    def splits_from_data(self, data: ZXY) -> DatasetSplits:
-        """Shuffle one labelled sample and cut it into train/val/test."""
-        self.dataset: ZXY = self._build_dataset(data)
-        self.splits: DatasetSplits = self._split_dataset(self.dataset)
+    def splits_from_data(
+        self, data: ZXY, *, multiplicity: NDArray[np.intp] | None = None
+    ) -> DatasetSplits:
+        """Shuffle one labelled sample and cut it into train/val/test.
+
+        `multiplicity`, one non-negative count per row of `data`, repeats each
+        row that many times *after* the cut, so every copy of a row stays in the
+        split the row was assigned to. This is how a bootstrap replicate is
+        split: cutting an already-resampled sample would put copies of one
+        event into different splits.
+
+        `ZXY` has already checked that the particle- and detector-level arrays
+        are row-aligned and that every label is zero or one, so this does no
+        validation of its own.
+        """
+        if multiplicity is not None and multiplicity.shape != (len(data),):
+            raise ValueError(
+                f"multiplicity has shape {multiplicity.shape}; expected one count "
+                f"per event, ({len(data)},)"
+            )
+        order: NDArray[np.intp] = self._order(data)
+        self.dataset: ZXY = ZXY(Events(data.z[order], data.x[order]), data.y[order])
+        self.splits: DatasetSplits = self._split_dataset(
+            self.dataset, None if multiplicity is None else multiplicity[order]
+        )
         return self.splits

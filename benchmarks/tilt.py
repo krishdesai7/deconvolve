@@ -1,6 +1,6 @@
 """Exponential-tilt reweighting: the most regularized generator there is.
 
-Deconvolve's generator is an arbitrary function `z -> w`, and `benchmarks/ceiling.py`
+'s generator is an arbitrary function `z -> w`, and `benchmarks/ceiling.py`
 diagnostic D shows what that costs: the detector-level objective does not
 identify the truth. The oracle particle-level likelihood ratio scores *worse*
 on detector-level MMD than a trained Deconvolve does, on held-out events. Many weight
@@ -74,8 +74,8 @@ import deconvolve  # ruff: ignore[unused-import]  -- pins JAX_ENABLE_X64
 import numpy as np
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES, Split
 from deconvolve.data import DeconvolveDataset, load_jet_dataset
-from deconvolve.evaluate import _improvement, _wd_per_dim
-from deconvolve.logging_config import configure_logging
+from deconvolve.evaluation.evaluate import _improvement, _wd_per_dim
+from deconvolve.instrumentation.logging_config import configure_logging
 from scipy.optimize import root
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ if TYPE_CHECKING:
     from scipy.optimize._root import OptimizeResult
 
 
-logger: logging.Logger = logging.getLogger(name="ran.tilt")
+logger: logging.Logger = logging.getLogger(name="deconvolve.tilt")
 
 # The solve runs in float64 regardless of EVENT_DTYPE. Second moments of
 # standardized data are O(1) but their *differences* are the residual, and

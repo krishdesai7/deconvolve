@@ -1,2 +1,0 @@
-srun: Step created for StepId=57435493.19
-SUMMARY dtype=float64 seed=210 mean_improvement=97.4117 min_improvement=94.4420 val_loss=0.6933763844 epochs=40

@@ -5,8 +5,8 @@ on is the assertion: the bad argument must be refused before any model is built.
 """
 
 import pytest
-from deconvolve import leakage
 from deconvolve.coretypes import POISON_SENTINEL, TRUTH_SENTINEL
+from deconvolve.workflows import leakage
 
 
 class ReachedTrainingError(Exception):

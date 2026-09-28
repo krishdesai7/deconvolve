@@ -285,7 +285,7 @@ def _worker_status(row: dict[str, object]) -> str:
 def verdict(row: dict[str, object]) -> tuple[str, str]:
     status = _worker_status(row)
     return {
-        "ok": ("[green]PASS[/green]", "worker ran on the GPU"),
+        "ok": ("[green]PASS[/green]", "worker deconvolve on the GPU"),
         "oom": ("[red]FAIL[/red]", "worker could not get memory"),
         "cpu_fallback": (
             "[yellow]SILENT[/yellow]",

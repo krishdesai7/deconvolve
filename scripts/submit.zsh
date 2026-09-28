@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR=/global/u1/k/kdesai/Deconvolve
+PROJECT_DIR=/global/u1/k/kdesai/deconvolve
 cd "${PROJECT_DIR}"
 
 echo "DECONVOLVE_CACHE_DIR = ${DECONVOLVE_CACHE_DIR:-<unset: using ./.cache>}"
@@ -74,12 +74,14 @@ RUN_DIR=$RUN_DIR[-1]
 
 echo "Run dir: ${RUN_DIR}"
 
-uv run deconvolve baseline ibu --run-dir "${RUN_DIR}"
+uv run deconvolve baseline ibu "${RUN_DIR}"
 uv run deconvolve train --load-run "${RUN_DIR}"
-uv run deconvolve evaluate --run-dir "${RUN_DIR}" --force
+uv run deconvolve evaluate "${RUN_DIR}" --force
 
-source "${PROJECT_DIR}/scripts/_lmod.zsh"
-module load texlive
+if (( ! $+commands[pdflatex] )); then
+  source "${PROJECT_DIR}/scripts/_lmod.zsh"
+  module load texlive
+fi
 uv run deconvolve report "${RUN_DIR}"
 
 echo "Artifacts in ${RUN_DIR}:"

@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("KERAS_BACKEND", "jax")  # pyrefly: ignore[unused-call-result]
+os.environ.setdefault(key="KERAS_BACKEND", value="jax")  # pyrefly: ignore[unused-call-result]
 
 import argparse
 import logging
@@ -61,7 +61,7 @@ import keras
 import numpy as np
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES, Split
 from deconvolve.data import load_jet_dataset
-from deconvolve.logging_config import configure_logging
+from deconvolve.instrumentation.logging_config import configure_logging
 from scipy.special import expit
 
 try:
@@ -81,7 +81,7 @@ if TYPE_CHECKING:
 
 LOG2: float = math.log(2.0)
 _P_CLIP: float = 1e-7
-logger = logging.getLogger("ran.response")
+logger: logging.Logger = logging.getLogger(name="deconvolve.response")
 
 
 @dataclass(frozen=True)

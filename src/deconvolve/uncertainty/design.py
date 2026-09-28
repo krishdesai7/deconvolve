@@ -12,13 +12,28 @@ report says they mean:
 
 **The bootstrap resamples events, not the split.** Varying `data_seed`
 reshuffles a fixed sample into different train/val/test splits and different
-batch orders; every run still sees the same 1M events. That is *method*
+batch orders; every run still sees the same events. That is *method*
 variance --- an artifact of the algorithm being order-dependent, removable by
 ensembling --- and it is not the statistical uncertainty a measurement is
 obliged to report. The nonparametric bootstrap, drawing `n` of `n` with
-replacement, is what estimates the latter: how much the answer would move if
-the experiment had collected a different sample of the same size. `data_seed`
-is therefore held **fixed** across the whole design.
+replacement, estimates the latter: how much the answer would move if
+the experiment had collected a different sample of the same size.
+
+**The split varies per cell, independently of both axes.** If it were a
+function of the replicate, as it is with `data_seed` fixed, its variance would
+be charged to the dataset component, which is the one reported as the
+statistical uncertainty. Drawn per cell, it lands in the residual alongside
+the interaction, with the rest of the method variance. `split_seed` derives it
+from `(data_seed, dataset, seed)`, and it also sets the batch order and the
+MMD selection subsamples, which are method variance of the same kind.
+
+**Events are split before they are resampled.** A replicate is a multiplicity
+per original event, drawn once per dataset index; each cell splits the
+*original* events and then repeats each within its split. Splitting an
+already-resampled sample instead puts copies of one event into different
+splits --- about half of every validation set would also be training data ---
+and the epoch selection that reads the validation set would no longer be the
+procedure whose variance is being measured.
 
 **MC and nature resample independently.** They are two separate samples in the
 physics --- one generated, one measured --- and coupling their resampling
@@ -48,6 +63,7 @@ from ..coretypes import (
     DatasetName,
     Events,
     Populations,
+    Resample,
     Split,
 )
 from ..data import DeconvolveDataset, load_jet_dataset, parse_gaussian_config
@@ -56,15 +72,17 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from logging import Logger
     from pathlib import Path
-    from typing import Any
+    from typing import Any, Final, LiteralString
 
     from numpy.typing import NDArray
 
     from ..coretypes import DatasetSplits, EventArray, GaussianConfig
+    from ..training import TrainResult
 
 logger: Logger = logging.getLogger(name=__name__)
 
 CELL_GLOB: str = "cell_*.npz"
+FROZEN_NAME: Final[LiteralString] = "design.json"
 
 
 class DesignSpec(NamedTuple):
@@ -117,7 +135,8 @@ def reserve_evaluation_set(
             f"got {n_eval}"
         )
     order: NDArray[np.intp] = np.random.default_rng(seed).permutation(x=n_mc)
-    held, kept = order[:n_eval], order[n_eval:]
+    held: NDArray[np.intp] = order[:n_eval]
+    kept: NDArray[np.intp] = order[n_eval:]
     return EvaluationSet(
         pool=Populations(
             mc=Events(z=pops.mc.z[kept], x=pops.mc.x[kept]),
@@ -128,23 +147,85 @@ def reserve_evaluation_set(
     )
 
 
-def bootstrap(pops: Populations, /, *, seed: int | Sequence[int]) -> Populations:
-    """One nonparametric bootstrap replicate: `n` of `n` with replacement.
+def bootstrap_multiplicities(
+    pops: Populations,
+    /,
+    *,
+    seed: int | Sequence[int],
+    resample: Resample = Resample.both,
+) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+    """How often each original event is drawn: `n` of `n` with replacement.
 
-    Both samples keep their original size, so a replicate is the same
-    measurement repeated rather than a smaller one, and the variance it
-    estimates is the variance at the size actually collected.
+    Returned as `(mc, nature)` counts rather than as resampled arrays, so a
+    cell can split the original events first and expand each split afterwards
+    (`replicate_splits`). Both samples keep their original size, so a replicate
+    is the same measurement repeated rather than a smaller one. Both sides are
+    always drawn, so the stream a side sees does not depend on `resample`; a
+    side that is not resampled is then replaced by ones.
     """
     rng: np.random.Generator = np.random.default_rng(seed)
     n_mc: int = len(pops.mc)
     n_nature: int = pops.data.shape[0]
-    i_mc: NDArray[np.intp] = rng.integers(low=0, high=n_mc, size=n_mc)
-    i_nature: NDArray[np.intp] = rng.integers(low=0, high=n_nature, size=n_nature)
-    return Populations(
-        mc=Events(z=pops.mc.z[i_mc], x=pops.mc.x[i_mc]),
-        data=pops.data[i_nature],
-        truth=pops.truth[i_nature],
+    mc: NDArray[np.intp] = np.bincount(
+        rng.integers(low=0, high=n_mc, size=n_mc), minlength=n_mc
     )
+    nature: NDArray[np.intp] = np.bincount(
+        rng.integers(low=0, high=n_nature, size=n_nature), minlength=n_nature
+    )
+    if resample is Resample.data:
+        mc = np.ones(shape=n_mc, dtype=np.intp)
+    elif resample is Resample.mc:
+        nature = np.ones(shape=n_nature, dtype=np.intp)
+    return mc, nature
+
+
+def bootstrap(
+    pops: Populations,
+    /,
+    *,
+    seed: int | Sequence[int],
+    resample: Resample = Resample.both,
+) -> Populations:
+    """One bootstrap replicate as arrays: each event repeated as often as drawn."""
+    mc, nature = bootstrap_multiplicities(pops, seed=seed, resample=resample)
+    return Populations(
+        mc=Events(
+            z=np.repeat(pops.mc.z, mc, axis=0), x=np.repeat(pops.mc.x, mc, axis=0)
+        ),
+        data=np.repeat(pops.data, nature, axis=0),
+        truth=np.repeat(pops.truth, nature, axis=0),
+    )
+
+
+def replicate_splits(
+    pool: Populations,
+    multiplicities: tuple[NDArray[np.intp], NDArray[np.intp]],
+    /,
+    *,
+    split_seed: int,
+    batch_size: int,
+) -> DatasetSplits:
+    """Split the original events, then repeat each within its own split.
+
+    Every copy of an event therefore lands in the same split, as in an
+    ordinary run, where train, validation and test share no events.
+    """
+    mc, nature = multiplicities
+    # `interleave` puts the nature rows first, then the MC rows.
+    return DeconvolveDataset(batch_size=batch_size, seed=split_seed).splits_from_data(
+        pool.interleave(), multiplicity=np.concatenate([nature, mc])
+    )
+
+
+def split_seed(data_seed: int, dataset_index: int, seed_index: int, /) -> int:
+    """The split, batch order and selection subsamples of one cell.
+
+    A separate stream from the replicate's `(data_seed, dataset_index)`, and
+    different in every cell, so their variance cannot be charged to either
+    axis of the design.
+    """
+    sequence = np.random.SeedSequence(entropy=(data_seed, dataset_index, seed_index))
+    return int(sequence.generate_state(n_words=1)[0])
 
 
 def base_populations(
@@ -209,16 +290,17 @@ def run_cell(
     lr_g: float = 3e-5,
     lr_d: float = 1e-4,
     lambda_dispersion: float = 0.015,
+    resample: Resample = Resample.both,
 ) -> Path:
     """Train one `(dataset, seed)` cell and record its weights on the common set."""
     # Deferred so that `deconvolve uncertainty collect`, which only reads npz and
     # reports, does not pay for importing keras and jax.
-    from ..evaluate import _get_weights
-    from ..train import train
+    from ..evaluation.evaluate import _get_weights
+    from ..training.engine import train
 
     b, s = spec.cell_of_index(index)
     params: GaussianConfig | None = (
-        parse_gaussian_config(config)
+        parse_gaussian_config(config_path=config)
         if dataset == DatasetName.gaussian and config is not None
         else None
     )
@@ -236,25 +318,33 @@ def run_cell(
         pops, n_eval=n_eval, seed=spec.data_seed
     )
     # Two ints rather than an arithmetic combination, so no two replicates can
-    # collide on one stream however the base seed is chosen.
-    replicate: Populations = bootstrap(evaluation.pool, seed=(spec.data_seed, b))
-
-    splits: DatasetSplits = DeconvolveDataset(
-        batch_size=batch_size, seed=spec.data_seed
-    ).splits_from_data(replicate.interleave())
-    result = train(
+    # collide on one stream however the base seed is chosen. Drawn from `b`
+    # alone, so every cell of a row trains on the same replicate.
+    multiplicities: tuple[NDArray[np.intp], NDArray[np.intp]] = (
+        bootstrap_multiplicities(
+            evaluation.pool, seed=(spec.data_seed, b), resample=resample
+        )
+    )
+    cell_split_seed: int = split_seed(spec.data_seed, b, s)
+    splits: DatasetSplits = replicate_splits(
+        evaluation.pool,
+        multiplicities,
+        split_seed=cell_split_seed,
+        batch_size=batch_size,
+    )
+    result: TrainResult = train(
         splits,
         dim,
         hidden_units,
         n_layers,
-        spec.init_seed + s,
+        seed=spec.init_seed + s,
         n_epochs=n_epochs,
         n_disc_steps=n_disc_steps,
         lr_g=lr_g,
         lr_d=lr_d,
         lambda_dispersion=lambda_dispersion,
     )
-    weights: EventArray = _get_weights(result.g, evaluation.z)
+    weights: EventArray = _get_weights(result.g, z_gen=evaluation.z)
 
     design_dir.mkdir(parents=True, exist_ok=True)
     out: Path = cell_path(design_dir, index)
@@ -268,7 +358,9 @@ def run_cell(
                     "dataset_index": b,
                     "seed_index": s,
                     "init_seed": result.seed,
+                    "split_seed": cell_split_seed,
                     "data_seed": spec.data_seed,
+                    "resample": resample.value,
                     "n_eval": n_eval,
                     "n_samples": n_samples,
                     "batch_size": batch_size,
@@ -276,6 +368,13 @@ def run_cell(
                     "dataset": dataset.value,
                     "variables": list(variables),
                     "gaussian_params": params.model_dump() if params else None,
+                    "hidden_units": hidden_units,
+                    "n_layers": n_layers,
+                    "n_epochs": n_epochs,
+                    "n_disc_steps": n_disc_steps,
+                    "lr_g": lr_g,
+                    "lr_d": lr_d,
+                    "lambda_dispersion": lambda_dispersion,
                     "mmd_test": result.mmd_test,
                 }
             )
@@ -297,9 +396,9 @@ class Design(NamedTuple):
 
     `meta` is cell zero's record with the per-cell fields dropped, because the
     rest of it --- dataset, variables, sample size, seeds --- is by
-    construction identical across the grid, and is what `collect` needs to
-    regenerate the common evaluation set without storing a copy of it in every
-    cell.
+    construction identical across the grid, and `collect` uses it to
+    regenerate the common evaluation set without storing a copy of it in
+    every cell.
     """
 
     weights: NDArray[np.double]
@@ -308,13 +407,48 @@ class Design(NamedTuple):
 
 
 _PER_CELL_KEYS: frozenset[str] = frozenset(
-    ("index", "dataset_index", "seed_index", "init_seed", "mmd_test")
+    ("index", "dataset_index", "seed_index", "init_seed", "split_seed", "mmd_test")
 )
+
+# The settings a sanctioned `--flag` override (`_resolve_cell_settings` in
+# `cli.py`) can legitimately change on one cell without touching the rest.
+# That override has to leave a trace: if a hand-rerun of one failed cell used
+# different settings than the rest of the array, the grid is not one
+# measurement, and `load_cells` must refuse it rather than average it in as
+# if it were noise.
+_SHARED_SETTINGS_KEYS: frozenset[str] = frozenset(
+    (
+        "n_epochs",
+        "n_layers",
+        "hidden_units",
+        "n_disc_steps",
+        "lr_g",
+        "lr_d",
+        "lambda_dispersion",
+        "resample",
+    )
+)
+
+
+def _check_settings_agree(metas: Sequence[Mapping[str, Any]], /) -> None:
+    """Refuse a grid whose cells disagree on a setting that must be shared."""
+    for key in sorted(_SHARED_SETTINGS_KEYS):
+        values: list[Any] = [meta.get(key) for meta in metas]
+        baseline: Any = values[0]
+        disagreeing: list[int] = [i for i, v in enumerate(values) if v != baseline]
+        if disagreeing:
+            raise ValueError(
+                f"cells disagree on `{key}`: cell 0 has {baseline!r}, but "
+                f"cell(s) {disagreeing} do not -- a design's cells must all "
+                f"train under the same settings"
+            )
 
 
 def _read_cell(path: Path, /) -> tuple[NDArray[np.double], dict[str, Any]]:
     with np.load(file=path) as cell:
-        arrays: Mapping[str, NDArray[Any]] = cast("Mapping[str, NDArray[Any]]", cell)
+        arrays: Mapping[str, NDArray[Any]] = cast(
+            typ="Mapping[str, NDArray[Any]]", val=cell
+        )
         return (
             np.asarray(a=arrays["weights"], dtype=np.double),
             json.loads(s=str(object=arrays["meta"].item())),
@@ -348,17 +482,76 @@ def load_cells(design_dir: Path, spec: DesignSpec, /) -> Design:
     grid: NDArray[np.double] = np.empty(
         shape=(spec.n_datasets, spec.n_seeds, first.size)
     )
-    for index in range(spec.n_cells):
-        weights, _ = _read_cell(cell_path(design_dir, index))
+    metas: list[dict[str, Any]] = [meta]
+    b0, s0 = spec.cell_of_index(0)
+    grid[b0, s0] = first
+    for index in range(1, spec.n_cells):
+        weights: NDArray[np.double]
+        cell_meta: dict[str, Any]
+        weights, cell_meta = _read_cell(cell_path(design_dir, index))
         if weights.size != first.size:
             raise ValueError(
                 f"cell {index} holds {weights.size} weights but cell 0 holds "
                 f"{first.size}; these cells are not from one design"
             )
+        metas.append(cell_meta)
         b, s = spec.cell_of_index(index)
         grid[b, s] = weights
+    _check_settings_agree(metas)
     return Design(
         weights=grid,
         spec=spec,
         meta={k: v for k, v in meta.items() if k not in _PER_CELL_KEYS},
     )
+
+
+def freeze_design(
+    design_dir: Path,
+    values: dict[str, Any],
+    origins: dict[str, str],
+    *,
+    force: bool = False,
+) -> Path:
+    """Write the settings every cell of this design will use.
+
+    Refuses to overwrite: a design whose cells were trained under different
+    settings is not a variance decomposition, and rewriting this file while an
+    array is in flight is exactly how that happens. The no-`force` path opens
+    the file with the `x` mode rather than checking `.exists()` first, so the
+    refusal is atomic and not a check the array could race past.
+    """
+    design_dir.mkdir(parents=True, exist_ok=True)
+    path: Path = design_dir / FROZEN_NAME
+    payload: str = json.dumps(obj={"config": values, "_origin": origins}, indent=2)
+    if not force:
+        try:
+            with path.open(mode="x", encoding="utf-8") as handle:
+                _ = handle.write(payload)
+        except FileExistsError as error:
+            raise FileExistsError(
+                f"{path} already exists; pass --force to overwrite it, but not "
+                f"while an array is running"
+            ) from error
+        return path
+
+    if any(design_dir.glob(CELL_GLOB)):
+        raise FileExistsError(
+            f"{design_dir} already has cell files matching {CELL_GLOB!r}; "
+            f"--force would let a design overwrite its own settings while its "
+            f"array is already running"
+        )
+    _ = path.write_text(data=payload)
+    return path
+
+
+def load_frozen(design_dir: Path) -> dict[str, Any]:
+    """The frozen settings for this design."""
+    path: Path = design_dir / FROZEN_NAME
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"{path} not found; run `deconvolve uncertainty freeze "
+            f"{design_dir}` once before submitting the array"
+        )
+    frozen: dict[str, Any] = json.loads(s=path.read_text())
+    config: dict[str, Any] = frozen["config"]
+    return config

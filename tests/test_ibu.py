@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pytest
-from deconvolve import evaluate
 from deconvolve.baselines import _shared as shared
 from deconvolve.baselines import ibu
 from deconvolve.coretypes import ZXY, DatasetSplits, Events, Populations, artifacts_dir
 from deconvolve.data import ArrayDataset, DeconvolveDataset
-from deconvolve.models import build_generator
+from deconvolve.evaluation import evaluate
+from deconvolve.training.models import build_generator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -421,7 +421,7 @@ def test_run_and_evaluate_returns_named_aligned_result(
     assert isinstance(result, ibu.IBUResult)
     assert result.variable_names == ("dim_0",)
     assert result.weights.shape == (1, 2)
-    # Cast at IBU's boundary: the splits above are the float64 Deconvolve trains on.
+    # Cast at IBU's boundary: the splits above are the float64 RAN trains on.
     assert result.weights.dtype == np.single
     assert len(result.outcomes) == 1
     assert result.outcomes[0].status == "skipped"
@@ -480,8 +480,9 @@ def _jets_like_splits(dim: int, n: int = 64, seed: int = 51) -> DatasetSplits:
     pops: Populations = Populations.create(
         mc=Events(z_gen, x_sim), data=x_data, truth=truth
     )
-    ds = DeconvolveDataset(batch_size=8, seed=seed)
-    return ds.splits_from_data(pops.interleave())
+    return DeconvolveDataset(batch_size=8, seed=seed).splits_from_data(
+        pops.interleave()
+    )
 
 
 def _skip_forcing_splits(dim: int = 2, n: int = 64, seed: int = 51) -> DatasetSplits:
@@ -505,8 +506,9 @@ def _skip_forcing_splits(dim: int = 2, n: int = 64, seed: int = 51) -> DatasetSp
     pops: Populations = Populations.create(
         mc=Events(z_gen, x_sim), data=x_data, truth=truth
     )
-    ds = DeconvolveDataset(batch_size=8, seed=seed)
-    return ds.splits_from_data(pops.interleave())
+    return DeconvolveDataset(batch_size=8, seed=seed).splits_from_data(
+        pops.interleave()
+    )
 
 
 def _run_with_ibu(

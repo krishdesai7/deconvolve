@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     from typer.main import Typer
 
-runner = CliRunner()
+runner: CliRunner = CliRunner()
 
 
 def _command_names(typer_app: Typer) -> set[str | None]:
@@ -29,9 +29,10 @@ def test_registered_command_trees_are_exact() -> None:
         "baseline",
         "uncertainty",
         "leakage-check",
+        "config",
     }
     assert _command_names(baseline_app) == {"ibu", "omnifold"}
-    assert _command_names(uncertainty_app) == {"run", "collect"}
+    assert _command_names(uncertainty_app) == {"run", "collect", "freeze"}
 
 
 @pytest.mark.parametrize(
@@ -44,6 +45,7 @@ def test_registered_command_trees_are_exact() -> None:
         ("baseline", "omnifold"),
         ("uncertainty", "run"),
         ("uncertainty", "collect"),
+        ("uncertainty", "freeze"),
         ("leakage-check",),
     ],
     ids="-".join,
@@ -58,7 +60,7 @@ def test_train_converts_typer_values_for_the_workflow(
 ) -> None:
     """`deconvolve.cli` imports `run` at module scope, so patch the name it calls.
 
-    Replacing `sys.modules["deconvolve.workflow"]` would only work if the command
+    Replacing `sys.modules["deconvolve.workflows.train"]` would only work if the command
     re-imported on every invocation, which it deliberately no longer does.
     """
     calls: list[dict[str, object]] = []
@@ -123,7 +125,7 @@ def test_train_converts_typer_values_for_the_workflow(
     # A tuple in canonical order, not a set: these names index columns, and
     # `--var w --var m` must describe the same run as `--var m --var w`.
     assert calls[0]["variables"] == ("m", "w")
-    # Paths stay Paths: `workflow.run` is typed `load_run: Path | None` and
+    # Paths stay Paths: `workflows.train.run` is typed `load_run: Path | None` and
     # opens them directly. Only typer's own wrappers get converted; the
     # DatasetName enum remains an enum, and repeated --var becomes a tuple.
     assert calls[0]["load_run"] == tmp_path
@@ -139,7 +141,7 @@ def test_train_converts_typer_values_for_the_workflow(
     assert calls[0]["lr_g"] == pytest.approx(3e-5)
     assert calls[0]["lr_d"] == pytest.approx(1e-4)
     # 0.015: +4.30 +- 0.88 points on the 12-observable aggregate against 0
-    # (p = 0.0017), and admissible on Deconvolve's own selection criterion. See
+    # (p = 0.0017), and admissible on RAN's own selection criterion. See
     # "The dispersion penalty" in benchmarks/README.md.
     assert calls[0]["lambda_dispersion"] == pytest.approx(0.015)
     assert calls[0]["plots"] is True

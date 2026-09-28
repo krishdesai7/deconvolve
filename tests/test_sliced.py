@@ -1,11 +1,12 @@
 """Tests for the sliced Wasserstein distance.
 
-Every metric in `deconvolve.evaluate` is computed per coordinate axis, so all of them
-are blind to joint structure by construction: two distributions with identical
-marginals and different correlations score identically. The sliced Wasserstein
-distance projects onto random directions instead of axes, which is exactly the
-gap. `test_sees_correlation_that_the_axis_metrics_miss` is the whole point of
-the module and the rest is there to make sure the number is right.
+Every metric in `deconvolve.evaluation.evaluate` is computed per coordinate
+axis, so all of them are blind to joint structure by construction: two
+distributions with identical marginals and different correlations score
+identically. The sliced Wasserstein distance projects onto random directions
+instead of axes, which is exactly the gap.
+`test_sees_correlation_that_the_axis_metrics_miss` is the whole point of the
+module and the rest is there to make sure the number is right.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from benchmarks.sliced import null_floors, sliced_wasserstein, w1_weighted
 
 
 class TestWeightedW1:
-    """Deconvolve emits weights, not resampled events, so W1 has to be the weighted one.
+    """RAN emits weights, not resampled events, so W1 has to be the weighted one.
 
     The textbook `mean(|sort(x) - sort(y)|)` is the equal-size, uniform-weight
     special case. Using it here would mean either discarding the weights --
@@ -100,7 +101,7 @@ class TestSlicedWasserstein:
         assert near < far
 
     def test_reweighting_reduces_the_distance(self) -> None:
-        """The use Deconvolve puts it to: does `w` move `comp` toward `ref`?"""
+        """The use RAN puts it to: does `w` move `comp` toward `ref`?"""
         rng = np.random.default_rng(3)
         ref = rng.normal(loc=0.4, size=(6_000, 2))
         comp = rng.normal(size=(6_000, 2))

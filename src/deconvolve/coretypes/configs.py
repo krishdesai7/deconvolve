@@ -1,3 +1,8 @@
+"""Validated views of a run's Gaussian parameter set and `config.json`.
+
+Together they configure a run.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -42,6 +47,14 @@ class GaussianConfig(NamedTuple):
 
 @dataclass(frozen=True)
 class RunConfig:
+    """A validated view of a run's `config.json`.
+
+    Attributes:
+        source: The raw `config.json`, kept because `_load_splits` reconstructs
+            the dataset from it and must see exactly what the run recorded.
+        variable_names: The names of the observables, one per dimension.
+    """
+
     source: dict[str, Any]
     dataset: DatasetName
     dim: int

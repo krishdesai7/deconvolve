@@ -1,3 +1,16 @@
+"""The part of a baseline that is not the unfolding method.
+
+Reading a run's config, rebuilding its populations, and scoring the resulting
+weights with the same metrics RAN is scored by.
+
+A baseline attempts the same task RAN does -- generate weights that reweight
+Generation, using only the relationship between Data and Simulation -- so it
+needs the same run config, the same event populations, and the same metric
+record. Keeping those here means a comparison is a comparison of unfolding
+methods and nothing else; both IBU and OmniFold are callers into this shared
+scoring path.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
@@ -5,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from ..coretypes import DatasetName, RunConfig, Split, UnfoldingPopulations
-from ..evaluate import (
+from ..evaluation.evaluate import (
     _improvement,
     _js_per_dim,
     _load_splits,
@@ -56,6 +69,7 @@ def _parse_variable_names(
 
 
 def parse_run_config(raw: object) -> RunConfig:
+    """Validate a run's `config.json`, already parsed from JSON, into a `RunConfig`."""
     if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
         raise ValueError("run config must be a JSON object")
 
@@ -82,6 +96,7 @@ def parse_run_config(raw: object) -> RunConfig:
 
 
 def _partitioned(data: ZXY, expected_dim: int, label: str, /) -> Populations:
+    """Check the shape assumptions a baseline relies on, then partition."""
     if data.z.ndim != 2 or data.x.ndim != 2 or data.z.shape != data.x.shape:
         raise ValueError(
             f"{label}: z and x must be identically shaped two-dimensional arrays"
@@ -101,6 +116,27 @@ def _partitioned(data: ZXY, expected_dim: int, label: str, /) -> Populations:
 def prepare_populations(
     splits: DatasetSplits, expected_dim: int
 ) -> UnfoldingPopulations:
+    """Partition a dataset into the populations a baseline fits and is scored on.
+
+    Returns an `UnfoldingPopulations`, which unpacks as `(fit, test)`. Both are
+    `Populations`, and they are disjoint. `fit` is train+val and supplies the
+    response (`fit.mc.z` and `fit.mc.x`, paired per event) and the measurement
+    (`fit.data`). `test` is the held-out split alone, where the metrics are
+    computed: detector level scores `test.data` against `test.mc.x`, particle
+    level scores `test.truth` against `test.mc.z`. `test.truth` is the only
+    place a baseline touches the answer key, and it appears only in scoring.
+
+    By construction, `fit` is `Split.TRAIN | Split.VAL`, not `Split.ALL`. A
+    baseline fitted on every event and then scored on the test split would be
+    scored on data it had already used and would be handed information RAN is
+    denied: `train` does read the test split, to compute a test-level MMD
+    diagnostic, but nothing weight-bearing depends on that read, so the test
+    split still cannot influence the returned model or its selection
+    (`tests/test_train.py::TestTrainingNeverSeesTheTestSplit`). The comparison
+    is only a comparison if both sides see the same events.
+
+    Arrays arrive at the pipeline's pinned `EVENT_DTYPE` and are not cast here.
+    """
     return UnfoldingPopulations(
         fit=_partitioned(
             splits.select(Split.TRAIN | Split.VAL), expected_dim, "train and val splits"
@@ -110,6 +146,11 @@ def prepare_populations(
 
 
 def load_populations(config: RunConfig) -> UnfoldingPopulations:
+    """Rebuild the run's dataset and split it into the baseline populations.
+
+    The populations come at the pipeline's pinned `EVENT_DTYPE`. Baselines
+    that need another precision call `astype` at their own boundary.
+    """
     return prepare_populations(
         _load_splits(config=config.source), expected_dim=config.dim
     )
@@ -120,6 +161,7 @@ def evaluate_dimension(
     comparison: EventArray,
     weights: EventArray,
 ) -> MetricRecord:
+    """Score one dimension before and after reweighting `comparison`."""
     wasserstein_before: float = _wd_per_dim(ref=reference, comp=comparison)[0]
     wasserstein_after: float = _wd_per_dim(
         ref=reference, comp=comparison, weights=weights

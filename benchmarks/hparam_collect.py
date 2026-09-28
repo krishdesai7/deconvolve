@@ -62,7 +62,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from deconvolve.coretypes import artifacts_dir
-from deconvolve.logging_config import configure_logging
+from deconvolve.instrumentation.logging_config import configure_logging
 from rich.console import Console
 from rich.table import Table
 from scipy import stats
@@ -72,7 +72,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-logger = logging.getLogger("ran.hparam")
+logger: logging.Logger = logging.getLogger("deconvolve.hparam")
 
 #: The two independent randomness axes of CLAUDE.md's Seeding section:
 #: `seed` sets initialization, `data_seed` sets shuffle, split and batch order.
@@ -377,7 +377,7 @@ def paired_delta(baseline: Mapping[int, float], arm: Mapping[int, float]) -> Pai
     Pairing is free, and on the first `lr_g` sweep it bought 11.5% and 1.3% of
     standard error (implied r = +0.22 and +0.04). It is kept because it cannot
     hurt, not because it carries the comparison -- plan replicates as though it
-    were absent. Seeds only one arm ran are dropped rather than compared across
+    were absent. Seeds only one arm deconvolve are dropped rather than compared across
     pairs, which is what makes a lost run cost one pair instead of the
     comparison.
     """
@@ -434,7 +434,7 @@ def _arms_table(
     # The spread is the reason the whole tool exists, so it is a column and not
     # a footnote: a difference smaller than this is not a result.
     arms.add_column(header="SD", justify="right")
-    # The oracle sits at 80.1% of the MMD subsample and Deconvolve at 73.3%, so ESS is
+    # The oracle sits at 80.1% of the MMD subsample and deconvolve at 73.3%, so ESS is
     # how a dispersion coefficient is calibrated rather than guessed.
     arms.add_column(header="ESS", justify="right")
     # Admissibility before performance: an arm the criterion can separate from

@@ -1,7 +1,8 @@
 """Where a run's wall clock actually goes, and how much of it jnp could claim.
 
 This existed to answer one question: is it worth porting the scipy metrics in
-`deconvolve.evaluate` to jnp now that nothing forces the host/device split any more?
+`deconvolve.evaluation.evaluate` to jnp now that nothing forces the host/device
+split any more?
 The answer was yes and the port has happened, so what this measures now is the
 residue -- the npz write, and the per-dimension divergence reductions that stay
 on the host in float64 because they are free there. The number to read is still
@@ -16,9 +17,10 @@ Three things this is careful about, each of which an earlier version got wrong:
   call pays a full XLA compile. Timing one call and calling it "a run" charges
   compile to the training term and flatters it. Two calls at different epoch
   counts separate the two by subtraction.
-* The metrics are timed by calling `deconvolve.evaluate`'s own helpers, on the split
-  `evaluate` actually scores (test, ~20% of the sample) and over the same 12
-  passes it makes: three metrics, two levels, before and after. Re-implementing
+* The metrics are timed by calling `deconvolve.evaluation.evaluate`'s own
+  helpers, on the split `evaluate` actually scores (test, ~20% of the sample)
+  and over the same 12 passes it makes: three metrics, two levels, before and
+  after. Re-implementing
   that inline is how the earlier version came to measure four passes over five
   times too many rows. Note that `evaluate_run` itself no longer makes those 12
   passes --- it goes through `_metrics_per_dim`, which shares one histogram
@@ -43,8 +45,8 @@ from deconvolve.data.device import TrainSplit
 
 # Private on purpose: the point is to time what `evaluate` runs, not a
 # re-implementation of it that can drift.
-from deconvolve.evaluate import _js_per_dim, _triangular_per_dim, _wd_per_dim
-from deconvolve.train import train
+from deconvolve.evaluation.evaluate import _js_per_dim, _triangular_per_dim, _wd_per_dim
+from deconvolve.training.engine import train
 
 if TYPE_CHECKING:
     from collections.abc import Generator

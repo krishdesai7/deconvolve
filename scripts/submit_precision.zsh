@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-PROJECT_DIR=/global/u1/k/kdesai/Deconvolve
+PROJECT_DIR=/global/u1/k/kdesai/deconvolve
 SEED_START=200
 SEED_END=271
 

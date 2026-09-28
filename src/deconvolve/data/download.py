@@ -1,3 +1,48 @@
+r"""One-time download of jet substructure data from Zenodo (record 3548091).
+
+Downloads Pythia26 and Herwig Z+jets Delphes datasets (17 `.npz` files each),
+extracts the substructure variables, saves per-variable `.npz` files to
+`CACHE_DIR` (`.cache/`, or wherever `DECONVOLVE_CACHE_DIR` points), and deletes
+the raw downloads.
+
+## Degenerate jets
+
+Two of the observables are undefined for a small number of jets. For
+$\beta = 1$ the jet width is $\tau_1$, so $\tau_{21} = \frac{\tau_2}{\tau_1}$;
+a jet of one constituent has neither, both vanish and the ratio is
+$\frac00$. This is the case for around 100-300 jets per array. A jet that soft
+drop grooms down to a single prong has $m_{\text{sd}} = 0$, so
+$\ln \rho = \ln \left( \frac{m_{\text{sd}}^2}{p_T^2} \right) = -\infty$. This is
+the case for a few hundred more jets per array.
+
+`_get_var` computes each observable only where it is defined and fills the
+rest with a stated value: `_ONE_PRONG_TAU21` and `LOG_RHO_FLOOR`.
+
+The usual alternative is to nudge the denominator or the log argument by an
+epsilon, and it is worse in three ways.
+
+1. It hides the convention inside a number that reads like a rounding
+   allowance.
+2. It depends on the dtype the raw arrays happen to arrive in. For example
+   $10^{-50}$ (used in OmniFold) is below the smallest `float32` denormal, so
+   if arrays were stored as `float32`, it would round away and hand back `NaN`
+   for exactly the jets it was meant to protect.
+3. An epsilon scaled to the data, such as $10^{-12} \times \text{mean}(p_T^2)$
+   (used in OmniFold), is a *different* epsilon for each of the four arrays,
+   which puts the floor of $\ln\rho$ in a different place for nature than for
+   MC. Several hundred jets per array sit on that floor and thousands more are
+   compressed against it, so the discriminator gets handed a spike whose
+   position differs between the classes for reasons that have nothing to do
+   with physics. The four arrays are two samples that get compared to each
+   other; an observable that means something slightly different in each is
+   not a comparison.
+
+The one-prong $\tau_{21}$ is assigned zero, matching OmniFold's published
+convention, though it is a convention rather than a measurement -- and not
+obviously the right limit, since zero is what a cleanly two-pronged jet
+approaches, which a one-constituent jet is not.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -195,6 +240,15 @@ def _constituent_var(
 def _get_var(
     data: dict[str, NDArray[np.double]], var: str, ptype: str, /
 ) -> NDArray[np.double]:
+    r"""Extract a substructure variable from raw arrays.
+
+    Two of them are undefined for a jet the detector or the groomer has left
+    with nothing to measure: $\tau_{21}$ is $\frac00$ when the jet has one
+    constituent, and $\ln\rho = -\infty$ when soft drop leaves no groomed mass.
+    Both are handled by computing the observable only where it exists and
+    filling the rest with a declared value, `_ONE_PRONG_TAU21` and
+    `LOG_RHO_FLOOR`.
+    """
     if var in _CONSTITUENT_VARS:
         return _constituent_var(data, var, ptype)
     return _stored_var(data, var, ptype)
@@ -239,9 +293,11 @@ def _fetch_generator(
     """One generator's observables, reduced shard by shard.
 
     Returns `{"<ptype>_<var>": values}` over every event, never the raw arrays.
+    Appends each shard path to `all_raw_paths` so the caller can delete the raw
+    downloads once the per-variable caches have been written.
 
-    Reducing inside the loop rather than concatenating first is what makes
-    `particles` affordable and correct. Affordable: the constituent arrays are
+    Reducing inside the loop rather than concatenating first makes `particles`
+    affordable and correct. Affordable: the constituent arrays are
     the bulk of the release, and holding both generators' at float64 would be
     ~12 GB against ~100 MB of derived observables. Correct: the constituent
     axis is padded to the longest jet *in that array*, which differs between
@@ -291,15 +347,11 @@ def download_jet_data(cache_dir: Path = CACHE_DIR) -> None:
         out_path: Path = cache_dir / f"{CACHE_FILENAMES[var]}.npz"
         # `savez`, not `savez_compressed`. These observables are float64 and
         # very nearly incompressible: measured on representative data, DEFLATE
-        # lands at ~0.94 of raw for every continuous variable (mass, w, tau21,
-        # zg, sdm) while costing ~20x on read. `mult` is the sole exception at
-        # ~0.18, because it is integer-valued -- one variable in six does not
-        # pay for the tax on the other five, and the read cost is paid on every
-        # run while the write happens once.
-        #
-        # This is a write-side change only. `np.load` reads stored and deflated
-        # members identically, so caches written before this keep working and
-        # nothing needs invalidating.
+        # lands at ~0.94 of raw for a continuous variable while costing ~20x
+        # on read. Integer-valued variables (e.g. `mult`) compress to ~0.18,
+        # but the read cost is paid on every run while the write happens once,
+        # so uncompressed wins on balance. `np.load` reads either format
+        # identically, so this is a write-side choice only.
         np.savez(
             file=out_path,
             z_true=nature[f"gen_{var}"],

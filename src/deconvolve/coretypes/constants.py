@@ -1,3 +1,9 @@
+"""Fixed values shared across the package.
+
+The Zenodo jet dataset, its cache layout, plot metadata, the default purity
+threshold, and the stand-in for an absent particle level.
+"""
+
 from __future__ import annotations
 
 import math
@@ -15,29 +21,38 @@ if TYPE_CHECKING:
 # The one floating type the pipeline carries, end to end.
 #
 # The jet inputs justify it: `mass` and `mult` are bit-exact through a float32
-# round trip, and the other four observables lose exactly half a ULP, so there
-# is no structure below float32 to preserve. An ensemble of 20 paired seeds put
-# float32 and float64 within +/-0.5 percentage points of unfolding improvement
-# (TOST p=0.015); see `benchmarks/precision.py`. Everything downstream --- the
-# containers, the models, `JAX_ENABLE_X64` --- follows from this line.
+# round trip, and the other observables lose at most half a ULP, so there is
+# no structure below float32 to preserve. 320 paired seeds put float32 and
+# float64 within 3.5 sigma of each other on unfolding improvement -- see
+# `benchmarks/precision.py`. Everything
+# downstream -- the containers, the models, `JAX_ENABLE_X64` -- follows from
+# this line.
 EVENT_DTYPE: Final[type[np.single]] = np.single
 
-# Everything Deconvolve can regenerate lives under one root: the dataset `.npz` caches
-# and the XLA compilation cache. `DECONVOLVE_CACHE_DIR` relocates the whole tree, which
-# is what a cluster needs --- on Perlmutter `$HOME` is small, quota'd and shared
-# across nodes, `$SCRATCH` is none of those, and hardcoding either would be
-# wrong for everyone not on that machine.
-#
-# It is deliberately its own variable rather than a read of `XDG_CACHE_HOME`.
-# That one is already set (or defaults to `~/.cache`) on most Linux systems, so
-# deriving from it would silently move every existing checkout's cache the first
-# time this version ran, orphaning the ~2GB of Zenodo jet data already on disk.
-# A project-local `.cache/` stays the default because `.gitignore` covers it.
-#
-# Read once, at import: the module-level constant is what the `cache_dir=`
-# defaults below bind to, and those bind at import either way.
 CACHE_ENV_VAR: Final[LiteralString] = "DECONVOLVE_CACHE_DIR"
-CACHE_DIR: Final[Path] = Path(os.environ.get(CACHE_ENV_VAR) or ".cache").expanduser()
+"""The environment variable that relocates `CACHE_DIR`."""
+CACHE_DIR: Final[Path] = Path(
+    os.environ.get(key=CACHE_ENV_VAR) or ".cache"
+).expanduser()
+"""The one root for everything RAN can regenerate.
+
+Generated Gaussian datasets, the per-variable jet caches pulled from Zenodo,
+and the XLA compilation cache under `jax/`. It is `.cache` unless
+`DECONVOLVE_CACHE_DIR` (the value of `CACHE_ENV_VAR`) says otherwise,
+relocating the tree to e.g. `$SCRATCH` on a cluster where `$HOME` is quota'd
+and shared, as on Perlmutter.
+
+It is deliberately not derived from `XDG_CACHE_HOME`. That variable is already
+set, or defaults to `~/.cache`, on most Linux systems -- deriving from it would
+silently move every existing checkout's cache and orphan the jet data already
+on disk.
+
+`~` is expanded, and an empty value falls back to the default rather than
+being taken as the current directory: a SLURM `--export` forwarding an unset
+variable delivers `""`, not absence. The value is read once, at import,
+because the `cache_dir=` defaults throughout `deconvolve.data` bind to
+`CACHE_DIR` at import either way.
+"""
 
 # XLA keys its persistent cache on lowered HLO plus the jaxlib and backend
 # versions, so a stale entry is a miss rather than a wrong answer -- upgrading
@@ -50,6 +65,14 @@ CACHE_DIR: Final[Path] = Path(os.environ.get(CACHE_ENV_VAR) or ".cache").expandu
 COMPILE_CACHE_DIR: Final[Path] = CACHE_DIR / "jax"
 
 RUN_DIR: Final[Path] = Path("runs")
+
+# Every distance metric is *displayed* multiplied by this -- in the report, the
+# terminal table and the leakage-check log alike -- and *stored* unscaled.
+# `metrics.json` is a machine interface, so it holds the divergences as
+# defined; raw, a real twelve-observable run spans 6.2e-3..3.0e-1
+# (Wasserstein) and 8.5e-5..1.3e-2 (JS), which is what a human reader needs
+# scaled.
+METRIC_DISPLAY_SCALE: Final[float] = 1e3
 
 # A run directory is read by people. `config.json` and `report.pdf` stay at the
 # root because they are what a person opens; everything else -- checkpoints,
@@ -68,16 +91,10 @@ def artifacts_dir(run_dir: Path, /) -> Path:
 ZENODO_RECORD: Final[int] = 3548091
 GENERATORS: Final[tuple[LiteralString, LiteralString]] = ("Pythia26", "Herwig")
 N_FILES: Final[int] = 17
-# A tuple, emphatically not a `frozenset`. These names select *columns*, and
-# `load_jet_dataset` fills column `i` from the `i`-th name --- so the container
-# holding them is an ordering, and a set has none. It used to be a frozenset,
-# whose iteration order depends on the per-process randomized hashes of the
-# strings inside it: `deconvolve train` built its columns in one order and recorded
-# that order in `config.json`, then `deconvolve baseline ibu` and `deconvolve evaluate`
-# rebuilt the same dataset in a *different* order in their own processes and
-# labelled it with the recorded one. Same six observables, six wrong names ---
-# and worse, a generator trained on one column order evaluated against another.
-# The order here matches `JET_OBS` below.
+# A tuple, emphatically not a `frozenset`: these names select *columns*, and
+# `load_jet_dataset` fills column `i` from the `i`-th name, so the container
+# holding them is an ordering and a set has none. The order here matches
+# `JET_OBS` below.
 SUBSTRUCTURE_VARIABLES: Final[tuple[LiteralString, ...]] = (
     "m",
     "M",
@@ -120,25 +137,32 @@ class JetVarInfo(NamedTuple):
     symbol: str
 
 
-# The value `_get_var` writes for a jet groomed to nothing, where ln(rho^2) is
-# undefined. It is **not** a bound on the observable: real jets reach -37.9, so
-# this sentinel sits inside the distribution rather than below it, and ~0.75% of
-# events fall past it. `SDM_XLIM` is a separate number for that reason -- an
-# axis limit chosen for where the bulk lives, not derived from the sentinel.
-#
-# It is left where it is, having been measured rather than assumed. The
-# degenerate jets are a spike superimposed on a smooth tail, and the fraction
-# is generator-dependent (detector level: Herwig 0.034%, Pythia 0.057%), which
-# is exactly the shape of thing `benchmarks/response.py` is built to detect.
-# But the most information an "is it at the floor?" bit can carry at those
-# rates is 1.5e-5 nats, against a measured I(S; X | Z) of 3.6e-3 -- 0.42% of
-# the effect. Moving the sentinel would shift the standardization statistics
-# for a correction two orders of magnitude below what it would fix.
-#
-# The spike is never ambiguous, either: reaching exactly -14.0 from a
-# continuous log is measure-zero, so an event at the sentinel is a degenerate
-# jet and nothing else.
 LOG_RHO_FLOOR: Final[float] = -14.0
+r"""The value `_get_var` writes for a jet groomed to nothing.
+
+Soft drop grooms some jets down to a single prong, leaving $m_{sd} = 0$ and
+$\ln(\rho) = \ln\left(\frac{m_{sd}^2}{p_T^2}\right) = -\infty$. Those jets
+take this value instead. Unlike $-\infty$ (or the $10^{-100}$ the upstream
+OmniFold observable adds inside the log, which floors at $-230$) it does not
+swamp the mean and variance that the features are standardized by.
+
+It is **not** a bound on the observable: real jets reach -37.9, so this
+sentinel sits inside the distribution rather than below it, and ~0.75% of
+events fall past it. `SDM_XLIM` is a separate number for that reason -- an
+axis limit chosen for where the bulk lives, not derived from the sentinel.
+
+The degenerate jets are a spike superimposed on a smooth tail, and the
+fraction is generator-dependent (detector level: Herwig 0.034%, Pythia
+0.057%) -- exactly the shape of thing `benchmarks/response.py` is built to
+detect. But the most information an "is it at the floor?" bit can carry at
+those rates is 1.5e-5 nats, against a measured $I(S; X | Z)$ of 3.6e-3 --
+0.42% of the effect. Moving the sentinel would shift the standardization
+statistics for a correction two orders of magnitude below what it would fix.
+
+The spike is never ambiguous, either: reaching exactly -14.0 from a
+continuous log is measure-zero, so an event at the sentinel is a degenerate
+jet and nothing else.
+"""
 
 # Covers ~99.25% of events. The remainder is a genuine tail, not an artifact.
 SDM_XLIM: Final[tuple[float, float]] = (-14.0, -2.0)
@@ -176,10 +200,9 @@ JET_OBS: Final[dict[str, JetVarInfo]] = {
 }
 
 # How the observables are *presented*. This is not `SUBSTRUCTURE_VARIABLES`,
-# and must never become it: that tuple is the column order, the cache key and
-# what `config.json` records, and the Jet Column Order section of `CLAUDE.md`
-# documents what happened the last time it was allowed to float. The column
-# order carries no physics; this one does, and is applied at render time only.
+# and must never become it: that tuple is the column order and the cache key.
+# The column order carries no physics; this
+# one does, and is applied at render time only.
 #
 # m -> ln rho -> lambda^1_0.5 -> w -> lambda^1_2 -> z_g -> tau_21
 #   -> M -> n_ch -> f_ch -> p_T^D -> q
@@ -216,45 +239,27 @@ JET_VARIABLE_GROUPS: Final[tuple[tuple[str, tuple[LiteralString, ...]], ...]] = 
 
 # The level figures' page layout.
 #
-# The panel ASPECT is what makes these readable, and it was the thing wrong
-# with them: a hist-over-ratio cell wants to be WIDER than tall, roughly 5:4,
-# the shape a hand-written notebook reaches for (a 30x16in figure of 3x2
-# cells is 10x8 per cell). A 4x6 cell is the same panel turned on its end,
-# and no amount of paginating fixes it.
+# A panel's width on the rendered page is `linewidth / PANEL_COLUMNS`
+# regardless of the figure's own inch size, because `\includegraphics` scales
+# the whole figure by exactly as much as widening it grew the figure -- so
+# the column count alone sets panel width. The figure's *absolute* inches,
+# unaffected by that scaling, instead set the rendered text size:
+# `font.size * linewidth_pt / (72 * figure_width_in)`. So `PANEL_COLUMNS`
+# sizes the panels and `PANEL_WIDTH_INCHES` sizes their labels, independently.
 #
-# Two facts constrain the rest. A panel's width on the page is
-# `linewidth / columns` whatever the figure measures in inches -- widening a
-# cell shrinks the `\includegraphics` scale by exactly as much -- so the
-# column count alone sets it. And every font scales with that same factor,
-# so the cell's absolute inches set the rendered text size and nothing else:
-# at 3 columns in a landscape block, a 4in cell renders 18pt labels at 13pt,
-# a 6in cell at 8.7pt. The latter is a normal figure text size in print.
+# A hist-over-ratio cell reads best WIDER than tall, roughly 5:4. At 3
+# columns against a 749.4pt landscape text block, `PANEL_WIDTH_INCHES = 7.0`
+# renders the 18pt base font at 8.9pt, a normal figure text size in print;
+# paired with `_LevelStyle.height_per_dim = 6.6`, a page of six spans 83% of
+# the block's height. `PANELS_PER_PAGE = 6` (3x2) is the largest grid that
+# keeps panels 5:4-ish without either shrinking them (2x2, more pages) or
+# splitting twelve observables awkwardly (3x3, a 9+3 page pair).
 #
-# Hence 6.0 x 4.8in cells, three across and two down -- six to a page, the
-# arrangement a hand-written notebook reaches for -- giving 2.9 x 2.3in
-# panels with 8.7pt text. Six 5:4 cells in a 3x2 grid make a figure of
-# aspect 1.875 against a landscape block's 1.222, so a third of the page
-# height goes unused. That is inherent to the arrangement, not a defect:
-# filling it means either 2x2 (bigger panels, more pages) or 3x3 (an
-# awkward 9 + 3 split for twelve observables).
-#
-# `report.py` needs the same numbers to know how many
-# `\includegraphics` pages to emit, and must stay free of matplotlib, so
-# they live here rather than in `plotting`.
+# `report.py` needs these same numbers to know how many `\includegraphics`
+# pages to emit, and must stay free of matplotlib, so they live here rather
+# than in `plotting`.
 PANEL_COLUMNS: Final[int] = 3
 PANELS_PER_PAGE: Final[int] = 6
-# Width in inches; the height comes from `_LevelStyle.height_per_dim`, which
-# is 6.6 for both levels -- a 7:6.6 cell, chosen so a page of six spans 83%
-# of the landscape block's height instead of the 65% a 5:4 cell left.
-#
-# Two independent knobs hide in one number. A panel's width on the page is
-# `linewidth / PANEL_COLUMNS` whatever the figure's inch size, because
-# `\includegraphics[width=\linewidth]` scales the figure by exactly as much
-# as widening it grew the figure. What the inches DO set is the rendered text
-# size: `font.size * linewidth_pt / (72 * figure_width_in)`. So the column
-# count sizes the panels and this constant sizes their labels, downwards.
-# At 7.0 in x 3 columns against the 749.4pt landscape block, the 18pt base
-# renders at 8.9pt.
 PANEL_WIDTH_INCHES: Final[float] = 7.0
 
 
@@ -279,6 +284,24 @@ def display_order(variables: Sequence[str], /) -> tuple[int, ...]:
 
 DEFAULT_PURITY_THRESHOLD: Final[np.double] = np.sqrt(0.5)
 TRUTH_SENTINEL: Final[np.double] = np.double(np.iinfo(int_type=np.short).min)
+"""Stands in for a particle-level value that does not exist.
+
+That happens in one place: a real measurement, which has data but no answer
+key.
+
+It has to be finite. `normalize_weights` annihilates the nature rows of the
+generator's output by multiplying by $(1 - y) = 0$, and under IEEE 754 that
+annihilates any finite number but not a NaN. `0 * np.nan` is `np.nan`, which
+then spreads through the class-normalizing sum to every weight in the batch,
+and through `jax.grad` to every gradient. Sanitizing the masked output would
+not help either, since the `np.nan` is already in `z` when `g` forward-passes
+it. The fix has to sit at the input, and be an ordinary number.
+
+$-2^{15}$ is that number: absurd on sight for any standardized observable,
+exact in every IEEE binary format down to float16, and far enough inside
+float16's range (65504) that it survives a narrowing cast instead of becoming
+`±inf`, which would put `0 * inf = nan` right back.
+"""
 
 # What `deconvolve leakage-check --poison` overwrites z_true with. Any far-off-manifold
 # value does the job, so this is only a default -- but it must not be
@@ -287,3 +310,5 @@ TRUTH_SENTINEL: Final[np.double] = np.double(np.iinfo(int_type=np.short).min)
 # would report the poisoned arm as having none and `require_truth()` would
 # refuse the particle-level comparison the check exists to make.
 POISON_SENTINEL: Final[np.double] = np.double(-999.0)
+
+LOG2: Final[float] = np.log(2.0)

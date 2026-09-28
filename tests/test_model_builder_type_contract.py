@@ -9,8 +9,8 @@ def test_builder_contract_hides_unsupported_model_members(tmp_path: Path) -> Non
     probe = tmp_path / "builder_contract.py"
     _ = probe.write_text(
         "from pathlib import Path\n\n"
-        "from deconvolve.models import build_generator\n"
-        "from deconvolve.workflow import _load_artifacts\n\n"
+        "from deconvolve.training.models import build_generator\n"
+        "from deconvolve.workflows.train import _load_artifacts\n\n"
         "build_generator().unsupported_builder_model_member\n"
         "_load_artifacts(Path('run'))[0].unsupported_loaded_model_member\n"
     )
@@ -39,7 +39,9 @@ def test_builder_contract_rejects_invalid_keras_construction(tmp_path: Path) -> 
     """Pyrefly checks the narrow Keras construction surface."""
     probe = tmp_path / "keras_construction_contract.py"
     _ = probe.write_text(
-        "from deconvolve.models import _keras_dense, _keras_input, _keras_model\n\n"
+        "from deconvolve.training.models import (\n"
+        "    _keras_dense, _keras_input, _keras_model,\n"
+        ")\n\n"
         "inputs = _keras_input(shape=(1,), dtype='float64')\n"
         "_keras_input(shape=(1,), dtype='float64', unexpected=True)\n"
         "_keras_dense('64', activation='relu', dtype='float64')\n"

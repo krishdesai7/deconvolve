@@ -2,8 +2,8 @@
 
 `load_jet_dataset` fills column `i` from the `i`-th requested variable, so the
 container carrying those names is an ordering. It used to be a `frozenset`,
-whose iteration order depends on per-process randomized string hashes: `ran
-train` built columns in one order and recorded it in `config.json`, then `ran
+whose iteration order depends on per-process randomized string hashes: `deconvolve
+train` built columns in one order and recorded it in `config.json`, then `deconvolve
 baseline ibu` and `deconvolve evaluate` rebuilt the same dataset in a different order
 in their own processes and labelled it with the recorded one. Every jet metric
 came back under the wrong variable name, and a generator trained on one column

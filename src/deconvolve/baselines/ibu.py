@@ -1,3 +1,16 @@
+"""IBU (Iterative Bayesian Unfolding) baseline to compare with RAN.
+
+It is a simple unfolding method that uses a Bayesian approach to unfold the
+data. IBU performs 1D per-variable unfolding with purity-based automatic
+binning. It builds the response matrix from MC, unfolds data, and converts the
+result to per-event weights for evaluation with the same metrics as RAN.
+
+```shell
+deconvolve baseline ibu runs/2026-...
+deconvolve baseline ibu runs  # all runs
+```
+"""
+
 from __future__ import annotations
 
 import json
@@ -14,8 +27,8 @@ from ..coretypes import (
     VariableOutcome,
     artifacts_dir,
 )
-from ..evaluate import apply_to_runs, render_metrics
-from ..train import EPS
+from ..evaluation import apply_to_runs, render_metrics
+from ..training import EPS
 from ._shared import (
     evaluate_dimension,
     load_populations,
@@ -36,6 +49,23 @@ logger: Logger = logging.getLogger(name=__name__)
 
 @dataclass(frozen=True, eq=False, slots=True)
 class _BinnedReweighting:
+    """A per-bin correction, learned from one population and applied to another.
+
+    IBU produces one multiplicative factor per bin of the particle-level axis.
+    Which events it is then applied to is a separate choice: here the
+    unfolding is fit on train+val and applied to the held-out test split, so
+    the sample it scores is genuinely not the sample it learned from.
+
+    That is deliberately not what the unfolding literature usually does.
+    Fitting the response and iterating the prior on every event, then quoting
+    metrics on a subset of those same events, is conventional for both IBU and
+    OmniFold -- and it scores an estimator on data it has already seen. It also
+    hands the baseline information RAN is denied: `deconvolve.training.engine`
+    reads the test split only to compute a diagnostic that cannot influence the
+    returned model, and never to fit or select. A comparison is only a
+    comparison if both sides see the same events.
+    """
+
     edges: EventArray
     bin_weights: EventArray
 
@@ -58,17 +88,29 @@ class VariableUnfolding:
 
 
 def _assign_bins(values: EventArray, edges: EventArray, /) -> NDArray[np.intp]:
+    """Assign every value to a saturated bin.
+
+    Underflow enters the first bin; overflow and values equal to the upper
+    edge enter the last bin, so every finite input value receives an
+    assignment.
+    """
     if values.ndim != 1 or not np.all(a=np.isfinite(values)):
         raise ValueError("bin values must be a finite one-dimensional array")
     if edges.ndim != 1 or edges.size < 2 or not np.all(a=np.diff(a=edges) > 0):
         raise ValueError("bin edges must be a strictly increasing 1D array")
     n_bins: int = edges.size - 1
     return (
-        np.clip(np.digitize(x=values, bins=edges), a_min=1, a_max=n_bins) - 1
+        np.clip(a=np.digitize(x=values, bins=edges), a_min=1, a_max=n_bins) - 1
     ).astype(dtype=np.intp, copy=False)
 
 
 def _bin_counts(indices: NDArray[np.intp], n_bins: int, /) -> NDArray[np.intp]:
+    """Count saturated assignments while preserving every assigned event.
+
+    Assignments from `_assign_bins` place underflow in the first bin and both
+    overflow and the upper edge in the last bin; their counts therefore retain
+    one entry for every assigned event.
+    """
     if n_bins < 1 or indices.ndim != 1:
         raise ValueError("bin indices must be one-dimensional with n_bins >= 1")
     if np.any(a=(indices < 0) | (indices >= n_bins)):
@@ -90,9 +132,7 @@ def _unfolded_to_bin_weights(unfolded: EventArray, prior: EventArray) -> EventAr
         raise ValueError("unfolded and prior must be finite")
     if np.any(a=unfolded < 0) or np.any(a=prior < 0):
         raise ValueError("unfolded and prior must be nonnegative")
-    zero_prior_mass: NDArray[np.bool_] = cast(
-        "NDArray[np.bool_]", (prior == 0) & (unfolded > EPS)
-    )
+    zero_prior_mass: NDArray[np.bool] = (prior == 0) & (unfolded > EPS)
     if np.any(a=zero_prior_mass):
         raise ValueError("unfolded mass in a zero-prior bin")
 
@@ -132,6 +172,12 @@ def _next_pure_edge(
     purity_threshold: float,
     n_candidates: int = 100,
 ) -> np.single | None:
+    """Find the first candidate edge whose bin exceeds the purity threshold.
+
+    Returns:
+        The edge, or `None` if no candidate between `lo` and `gen_max` gives
+        a bin pure enough.
+    """
     if n_candidates <= 0:
         raise ValueError("n_candidates must be positive")
 
@@ -173,9 +219,7 @@ def _next_pure_edge(
         where=n_truth != 0,
     )
 
-    resolved: NDArray[np.bool_] = cast(
-        "NDArray[np.bool_]", (n_truth != 0) & (purity > purity_threshold)
-    )
+    resolved: NDArray[np.bool] = (n_truth != 0) & (purity > purity_threshold)
     qualifying: NDArray[np.intp] = np.flatnonzero(a=resolved)
     if qualifying.size == 0:
         return None
@@ -199,7 +243,6 @@ def _purity_bins(
     if max_bins <= 0:
         raise ValueError("max_bins must be positive")
 
-    # One-time preprocessing.
     gen_sorted: EventArray = np.sort(a=gen)
 
     lower: EventArray = np.minimum(gen, sim)
@@ -256,14 +299,25 @@ def _ibu(
     n_iterations: int,
     strict: bool = False,
 ) -> EventArray:
+    """Iterative Bayesian Unfolding.
 
+    Args:
+        prior: Initial truth estimate (MC gen histogram), shape `(n_bins,)`.
+        data_hist: Observed reco-level measured histogram, shape `(n_bins,)`.
+        response: `R[t, r] = P(sim=r | gen=t)`, shape `(n_bins, n_bins)`.
+        n_iterations: Number of unfolding iterations.
+        strict: If True, raise an error if the observed data has zero support
+            under the response and prior. If False, return zero weights for
+            such events.
+
+    Returns:
+        Unfolded truth histogram, shape `(n_bins,)`.
+    """
     posterior: EventArray = prior.copy()
 
     for _ in range(n_iterations):
         marginal: EventArray = response.T @ posterior
-        unsupported: NDArray[np.bool_] = cast(
-            "NDArray[np.bool_]", (marginal == 0) & (data_hist != 0)
-        )
+        unsupported: NDArray[np.bool] = (marginal == 0) & (data_hist != 0)
         if strict and np.any(a=unsupported):
             raise ValueError(
                 "Observed data has zero support under the response and prior"
@@ -288,6 +342,31 @@ def unfold_variable(
     n_iterations: int,
     purity_threshold: float,
 ) -> VariableUnfolding:
+    """Fit one variable's reweighting.
+
+    Takes one column each of a `Populations`' `mc.z`, `mc.x` and `data`; those
+    three are what a real measurement has, and `truth` is deliberately not
+    among them. Where purity binning yields fewer than two bins there is
+    nothing to fit, so the reweighting is `None` and `weights_for` returns
+    ones.
+
+    Args:
+        variable_name: The variable being unfolded, for logging and the
+            outcome record.
+        mc_gen: One column of `mc.z`, the generated particle level.
+        mc_sim: One column of `mc.x`, row-aligned with `mc_gen`; together they
+            give the response.
+        observed: The same column of `data`, the measurement. No part of
+            `truth` belongs here.
+        n_iterations: Number of unfolding iterations.
+        purity_threshold: The purity threshold for automatic binning.
+
+    Returns:
+        A `VariableUnfolding`, which pairs the reweighting with a
+        `VariableOutcome` recording whether the fit happened. Its
+        `weights_for(gen)` gives per-event weights for whichever sample is
+        being scored.
+    """
     dtype: np.dtype[np.single] = mc_gen.dtype
     bins: EventArray = _purity_bins(mc_gen, mc_sim, purity_threshold)
     n_bins: int = bins.size - 1
@@ -384,10 +463,8 @@ def _run_and_evaluate(
             weights=test_weights,
         )
 
-    # Every detector entry, then every particle entry -- the order
-    # `evaluate.evaluate_run` writes. Two files in the same nominal format with
-    # different key orders is the shape of bug that surfaces the first time
-    # someone zips them positionally.
+    # Every detector entry, then every particle entry, matching the key order
+    # `evaluation.evaluate.evaluate_run` writes to metrics.json.
     metrics: dict[str, MetricRecord] = detector | particle
 
     return IBUResult(
@@ -406,10 +483,13 @@ def evaluate_single(
 ) -> dict[str, MetricRecord]:
     """Run IBU on a single run's dataset and save comparison metrics.
 
+    It fits on train+val, then scores the held-out test split with the result,
+    so the sample scored is genuinely not the sample fitted.
+
     The cache hit requires both `metrics_ibu.json` and `ibu_outcomes.json` to
     exist -- a directory holding only the former is an incomplete result (an
-    older run, or one interrupted between the two writes), and Task 12 needs
-    the outcomes file to mark variables IBU refused to unfold. Missing either
+    older run, or one interrupted between the two writes), and the outcomes
+    file is needed to mark variables IBU refused to unfold. Missing either
     file is treated as a cache miss and recomputes both.
     """
     out_path: Path = artifacts_dir(run_dir) / "metrics_ibu.json"
@@ -417,7 +497,9 @@ def evaluate_single(
 
     if out_path.exists() and outcomes_path.exists() and not force:
         logger.info("%s: metrics_ibu.json exists, skipping (use --force)", run_dir.name)
-        return cast("dict[str, MetricRecord]", json.loads(s=out_path.read_text()))
+        return cast(
+            typ="dict[str, MetricRecord]", val=json.loads(s=out_path.read_text())
+        )
 
     raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
     config: RunConfig = parse_run_config(raw_config)
@@ -450,9 +532,7 @@ def evaluate_single(
 
     weights_path: Path = artifacts_dir(run_dir) / "ibu_weights.npz"
     np.savez(
-        weights_path,
-        # savez is `savez(file, *args, allow_pickle:bool=True, **kwds)`. The keys are
-        # built by f-string, so their type is plain `str`.
+        file=weights_path,
         **{
             f"weights_{i}": weights for i, weights in enumerate(iterable=result.weights)
         },  # ty: ignore[invalid-argument-type]
@@ -473,6 +553,14 @@ def evaluate_runs(
     n_iterations: int = 10,
     purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD,
 ) -> None:
+    """Run the IBU baseline on completed RAN runs.
+
+    Args:
+        run_dir: A single run, or a directory of runs.
+        force: Recompute even if `metrics_ibu.json` exists.
+        n_iterations: Number of IBU iterations.
+        purity_threshold: Purity threshold for automatic binning.
+    """
     apply_to_runs(
         run_dir,
         evaluate_one=lambda run_dir: evaluate_single(

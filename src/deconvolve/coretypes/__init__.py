@@ -1,51 +1,126 @@
-from .configs import REQUIRED_KEYS as REQUIRED_KEYS
-from .configs import GaussianConfig as GaussianConfig
-from .configs import RunConfig as RunConfig
-from .constants import ARTIFACTS_DIR as ARTIFACTS_DIR
-from .constants import CACHE_DIR as CACHE_DIR
-from .constants import CACHE_ENV_VAR as CACHE_ENV_VAR
-from .constants import CACHE_FILENAMES as CACHE_FILENAMES
-from .constants import COMPILE_CACHE_DIR as COMPILE_CACHE_DIR
-from .constants import DEFAULT_PURITY_THRESHOLD as DEFAULT_PURITY_THRESHOLD
-from .constants import EVENT_DTYPE as EVENT_DTYPE
-from .constants import GENERATORS as GENERATORS
-from .constants import JET_DISPLAY_ORDER as JET_DISPLAY_ORDER
-from .constants import JET_OBS as JET_OBS
-from .constants import JET_VARIABLE_GROUPS as JET_VARIABLE_GROUPS
-from .constants import LOG_RHO_FLOOR as LOG_RHO_FLOOR
-from .constants import N_FILES as N_FILES
-from .constants import PANEL_COLUMNS as PANEL_COLUMNS
-from .constants import PANEL_WIDTH_INCHES as PANEL_WIDTH_INCHES
-from .constants import PANELS_PER_PAGE as PANELS_PER_PAGE
-from .constants import POISON_SENTINEL as POISON_SENTINEL
-from .constants import RUN_DIR as RUN_DIR
-from .constants import SUBSTRUCTURE_VARIABLES as SUBSTRUCTURE_VARIABLES
-from .constants import TRUTH_SENTINEL as TRUTH_SENTINEL
-from .constants import ZENODO_RECORD as ZENODO_RECORD
-from .constants import JetVarInfo as JetVarInfo
-from .constants import artifacts_dir as artifacts_dir
-from .constants import display_order as display_order
-from .constants import figure_pages as figure_pages
-from .enums import DatasetName as DatasetName
-from .enums import LogLevel as LogLevel
-from .events import ZXY as ZXY
-from .events import DatasetSplits as DatasetSplits
-from .events import Events as Events
-from .events import Populations as Populations
-from .events import Split as Split
-from .results import IBUResult as IBUResult
-from .results import UnfoldingPopulations as UnfoldingPopulations
-from .results import VariableOutcome as VariableOutcome
-from .types import DeconvolveModel as DeconvolveModel
-from .types import DiscGradFn as DiscGradFn
-from .types import EvalStep as EvalStep
-from .types import EventArray as EventArray
-from .types import GenGradFn as GenGradFn
-from .types import GradsAndAux as GradsAndAux
-from .types import KerasVariable as KerasVariable
-from .types import MetricRecord as MetricRecord
-from .types import Nested as Nested
-from .types import StatelessOptimizer as StatelessOptimizer
-from .types import TrainStep as TrainStep
-from .types import Variables as Variables
-from .types import VarInfo as VarInfo
+"""Records, constants and aliases shared across the package.
+
+Types owned by exactly one module stay with that module. E.g., `TrainResult`
+and `TrainState` are in `deconvolve.training.engine`.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from . import configs, constants, enums, events, results, types
+from .configs import REQUIRED_KEYS, GaussianConfig, RunConfig
+from .constants import (
+    ARTIFACTS_DIR,
+    CACHE_DIR,
+    CACHE_ENV_VAR,
+    CACHE_FILENAMES,
+    COMPILE_CACHE_DIR,
+    DEFAULT_PURITY_THRESHOLD,
+    EVENT_DTYPE,
+    GENERATORS,
+    JET_DISPLAY_ORDER,
+    JET_OBS,
+    JET_VARIABLE_GROUPS,
+    LOG2,
+    LOG_RHO_FLOOR,
+    METRIC_DISPLAY_SCALE,
+    N_FILES,
+    PANEL_COLUMNS,
+    PANEL_WIDTH_INCHES,
+    PANELS_PER_PAGE,
+    POISON_SENTINEL,
+    RUN_DIR,
+    SUBSTRUCTURE_VARIABLES,
+    TRUTH_SENTINEL,
+    ZENODO_RECORD,
+    JetVarInfo,
+    artifacts_dir,
+    display_order,
+    figure_pages,
+)
+from .enums import DatasetName, LogLevel, Resample
+from .events import ZXY, DatasetSplits, Events, Populations, Split
+from .results import IBUResult, UnfoldingPopulations, VariableOutcome
+from .types import (
+    DeconvolveModel,
+    DiscGradFn,
+    EvalStep,
+    EventArray,
+    GenGradFn,
+    GradsAndAux,
+    KerasVariable,
+    MetricRecord,
+    Nested,
+    StatelessOptimizer,
+    TrainStep,
+    Variables,
+    VarInfo,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Final
+
+__all__: Final[Sequence[str]] = (
+    "ARTIFACTS_DIR",
+    "CACHE_DIR",
+    "CACHE_ENV_VAR",
+    "CACHE_FILENAMES",
+    "COMPILE_CACHE_DIR",
+    "DEFAULT_PURITY_THRESHOLD",
+    "EVENT_DTYPE",
+    "GENERATORS",
+    "JET_DISPLAY_ORDER",
+    "JET_OBS",
+    "JET_VARIABLE_GROUPS",
+    "LOG2",
+    "LOG_RHO_FLOOR",
+    "METRIC_DISPLAY_SCALE",
+    "N_FILES",
+    "PANELS_PER_PAGE",
+    "PANEL_COLUMNS",
+    "PANEL_WIDTH_INCHES",
+    "POISON_SENTINEL",
+    "REQUIRED_KEYS",
+    "RUN_DIR",
+    "SUBSTRUCTURE_VARIABLES",
+    "TRUTH_SENTINEL",
+    "ZENODO_RECORD",
+    "ZXY",
+    "DatasetName",
+    "DatasetSplits",
+    "DeconvolveModel",
+    "DiscGradFn",
+    "EvalStep",
+    "EventArray",
+    "Events",
+    "GaussianConfig",
+    "GenGradFn",
+    "GradsAndAux",
+    "IBUResult",
+    "JetVarInfo",
+    "KerasVariable",
+    "LogLevel",
+    "MetricRecord",
+    "Nested",
+    "Populations",
+    "Resample",
+    "RunConfig",
+    "Split",
+    "StatelessOptimizer",
+    "TrainStep",
+    "UnfoldingPopulations",
+    "VarInfo",
+    "VariableOutcome",
+    "Variables",
+    "artifacts_dir",
+    "configs",
+    "constants",
+    "display_order",
+    "enums",
+    "events",
+    "figure_pages",
+    "results",
+    "types",
+)

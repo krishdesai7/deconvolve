@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from deconvolve.evaluate import (
+from deconvolve.evaluation.evaluate import (
     _bin_edges,
     _js_from_histograms,
     _js_per_dim,
@@ -223,7 +223,7 @@ class TestDivergencesPerDim:
 
         result = _triangular_per_dim(ref, comp, n_bins=2)
 
-        np.testing.assert_allclose(result, [2000.0, 0.0], atol=1e-12)
+        np.testing.assert_allclose(result, [2.0, 0.0], atol=1e-15)
 
     def test_js_of_an_empty_histogram_is_not_a_number(self) -> None:
         """A histogram with no mass has no distribution to be a divergence from.
@@ -294,12 +294,12 @@ class TestFloat32Histograms:
         return p, q
 
     def test_the_divergences_land_within_a_printed_digit_of_float64(self) -> None:
-        """JS is written at six decimals, the triangular discriminator at four.
+        """JS is displayed at six decimals, the triangular discriminator at four.
 
         The two bounds are stated differently because the metrics are: JS is a
         probability-scale number bounded by log 2, so an absolute bound says
-        what reaches its printed digit, while the triangular discriminator
-        carries a x1e3 factor and runs to ~100, where the same statement has to
+        what reaches its printed digit, while the triangular discriminator is
+        displayed x1e3 and runs to ~100 there, where the same statement has to
         be relative. Both come to the same place -- a few times 1e-7 of the
         value, two digits below anything printed.
 
@@ -334,7 +334,7 @@ class TestFloat32Histograms:
             _triangular_from_histograms(p, q),
             _triangular_from_histograms(exact_p, exact_q),
             rtol=1e-6,
-            atol=1e-9,
+            atol=1e-12,
         )
 
     def test_beats_the_float32_numpy_path_it_replaced(self) -> None:

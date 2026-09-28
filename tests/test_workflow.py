@@ -21,12 +21,12 @@ from typing import TYPE_CHECKING, override
 
 import numpy as np
 import pytest
-from deconvolve import workflow
 from deconvolve.coretypes import ZXY, DatasetName, Events, Populations
 from deconvolve.coretypes.events import DatasetSplits
 from deconvolve.data import DeconvolveDataset, parse_gaussian_config
-from deconvolve.train import TrainResult, train
-from deconvolve.workflow import _compact_variables
+from deconvolve.training.engine import TrainResult, train
+from deconvolve.workflows import train as workflow
+from deconvolve.workflows.train import _compact_variables
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from typing import Any, Final
 
     from deconvolve.coretypes import DatasetSplits, GaussianConfig
+    from deconvolve.evaluation.plotting import BaselineOverlay
     from numpy.typing import NDArray
 
 CONFIG_2D: Final[str] = """
@@ -117,6 +118,14 @@ def _reload(run_dir: Path) -> None:
         n_layers=1,
         seed=None,
         data_seed=0,
+        n_epochs=100,
+        n_disc_steps=5,
+        lr_g=3e-5,
+        lr_d=1e-4,
+        lambda_dispersion=0.015,
+        log_every=1,
+        plots=True,
+        run_dir=None,
     )
 
 
@@ -271,7 +280,13 @@ def test_particle_curve_is_recorded_when_truth_exists(
         seed=3,
         data_seed=42,
         n_epochs=4,
+        n_disc_steps=2,
+        lr_g=1e-4,
+        lr_d=1e-3,
+        lambda_dispersion=0.01,
+        log_every=1,
         plots=False,
+        run_dir=None,
     )
 
     run_dir: Path = next((tmp_path / "runs").iterdir())
@@ -314,7 +329,13 @@ def test_a_completed_run_keeps_only_two_files_at_its_root(
         seed=1,
         data_seed=0,
         n_epochs=1,
+        n_disc_steps=2,
+        lr_g=1e-4,
+        lr_d=1e-3,
+        lambda_dispersion=0.01,
+        log_every=1,
         plots=False,
+        run_dir=None,
     )
 
     run_dir: Path = next((tmp_path / "runs").iterdir())
@@ -446,7 +467,13 @@ def test_run_omits_val_mmd_particle_without_truth(
         seed=6,
         data_seed=51,
         n_epochs=2,
+        n_disc_steps=2,
+        lr_g=1e-4,
+        lr_d=1e-3,
+        lambda_dispersion=0.01,
+        log_every=1,
         plots=False,
+        run_dir=None,
     )
 
     run_dir: Path = next((tmp_path / "runs").iterdir())
@@ -630,7 +657,7 @@ def test_reload_defaults_best_epoch_for_a_legacy_config(
 ) -> None:
     """A config.json written before this branch has no `best_epoch` key."""
     _ = (tmp_path / "cfg.yaml").write_text(data=CONFIG_2D)
-    params: GaussianConfig = parse_gaussian_config(tmp_path / "cfg.yaml")
+    params: GaussianConfig = parse_gaussian_config(config_path=tmp_path / "cfg.yaml")
     run_dir: Path = _write_run(tmp_path, gaussian_params=params.model_dump())
 
     seen: dict[str, int] = _stub_best_epoch_reload(tmp_path, monkeypatch, run_dir)
@@ -707,6 +734,13 @@ def test_run_rejects_an_output_directory_on_the_reload_path(tmp_path: Path) -> N
             n_layers=1,
             seed=None,
             data_seed=0,
+            n_epochs=100,
+            n_disc_steps=5,
+            lr_g=3e-5,
+            lr_d=1e-4,
+            lambda_dispersion=0.015,
+            log_every=1,
+            plots=True,
             run_dir=tmp_path / "elsewhere",
         )
 
@@ -722,7 +756,7 @@ def test_timing_writes_a_phase_breakdown_into_the_run_dir(
     what says the phases survive a real call rather than only the unit tests in
     `tests/test_timing.py`.
     """
-    from deconvolve import timing
+    from deconvolve.instrumentation import timing
 
     monkeypatch.chdir(tmp_path)
     _ = (tmp_path / "cfg.yaml").write_text(data=CONFIG_2D)
@@ -775,41 +809,45 @@ class TestBaselineDiscovery:
 
     @staticmethod
     def _artifacts(tmp_path: Path) -> Path:
-        artifacts = tmp_path / "artifacts"
+        artifacts: Path = tmp_path / "artifacts"
         artifacts.mkdir(parents=True, exist_ok=True)
         return artifacts
 
     def test_no_weights_means_no_overlays(self, tmp_path: Path) -> None:
-        assert workflow._load_baseline_weights(tmp_path, dim=2) == []
+        assert workflow._load_baseline_weights(run_dir=tmp_path, dim=2) == []
 
     def test_omnifold_weights_alone_are_picked_up(self, tmp_path: Path) -> None:
         """OmniFold without IBU must work; the two are independent."""
         np.savez(
-            self._artifacts(tmp_path) / "omnifold_weights.npz",
+            file=self._artifacts(tmp_path) / "omnifold_weights.npz",
             weights=np.asarray([1.0, 2.0, 3.0], dtype=np.single),
         )
 
-        overlays = workflow._load_baseline_weights(tmp_path, dim=2)
+        overlays: list[BaselineOverlay] = workflow._load_baseline_weights(
+            run_dir=tmp_path, dim=2
+        )
 
         assert [o.label for o in overlays] == ["OmniFold"]
         # One vector, repeated: OmniFold reweights events, not observables.
         assert len(overlays[0].weights) == 2
-        assert np.array_equal(overlays[0].weights[0], overlays[0].weights[1])
+        assert np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])
 
     def test_both_baselines_are_picked_up_in_draw_order(self, tmp_path: Path) -> None:
-        artifacts = self._artifacts(tmp_path)
+        artifacts: Path = self._artifacts(tmp_path)
         np.savez(
-            artifacts / "ibu_weights.npz",
-            weights_0=np.asarray([1.0, 1.0], dtype=np.single),
-            weights_1=np.asarray([2.0, 2.0], dtype=np.single),
+            file=artifacts / "ibu_weights.npz",
+            weights_0=np.asarray(a=[1.0, 1.0], dtype=np.single),
+            weights_1=np.asarray(a=[2.0, 2.0], dtype=np.single),
         )
         np.savez(
-            artifacts / "omnifold_weights.npz",
-            weights=np.asarray([3.0, 3.0], dtype=np.single),
+            file=artifacts / "omnifold_weights.npz",
+            weights=np.asarray(a=[3.0, 3.0], dtype=np.single),
         )
 
-        overlays = workflow._load_baseline_weights(tmp_path, dim=2)
+        overlays: list[BaselineOverlay] = workflow._load_baseline_weights(
+            run_dir=tmp_path, dim=2
+        )
 
         assert [o.label for o in overlays] == ["IBU", "OmniFold"]
         # IBU's per-observable vectors must stay distinct, not be collapsed.
-        assert not np.array_equal(overlays[0].weights[0], overlays[0].weights[1])
+        assert not np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])

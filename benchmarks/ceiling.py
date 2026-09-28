@@ -14,17 +14,22 @@ import numpy as np
 import typer
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES, Split, artifacts_dir
 from deconvolve.data import load_jet_dataset
-from deconvolve.evaluate import _improvement, _wd_per_dim
-from deconvolve.logging_config import configure_logging
-from deconvolve.mmd import bandwidths, build_cache, subsample_indices, weighted_mmd
-from deconvolve.models import build_discriminator, build_generator
-from deconvolve.train import (
+from deconvolve.evaluation.evaluate import _improvement, _wd_per_dim
+from deconvolve.instrumentation.logging_config import configure_logging
+from deconvolve.training.engine import (
     MMD_SUBSAMPLE,
     PARAMS_FILE,
     load_params,
     normalize_weights,
     weighted_bce,
 )
+from deconvolve.training.mmd import (
+    bandwidths,
+    build_cache,
+    subsample_indices,
+    weighted_mmd,
+)
+from deconvolve.training.models import build_discriminator, build_generator
 from jax import Array
 
 if TYPE_CHECKING:
@@ -37,7 +42,7 @@ if TYPE_CHECKING:
         EventArray,
         Populations,
     )
-    from deconvolve.mmd import MMDCache
+    from deconvolve.training.mmd import MMDCache
     from numpy.typing import NDArray
 
 LOG2: Final[np.double] = np.log(2.0)
@@ -45,7 +50,7 @@ LOG2: Final[np.double] = np.log(2.0)
 # Resolution limit of a float32 sigmoid.
 _P_CLIP: Final[float] = 1e-7
 
-logger: Logger = logging.getLogger(name="ran.ceiling")
+logger: Logger = logging.getLogger(name="deconvolve.ceiling")
 
 
 class Fit(NamedTuple):
@@ -87,7 +92,7 @@ def _fit_classifier(
     """Converge a plain binary classifier and report its held-out BCE floor.
 
     `build_discriminator` is reused rather than reimplemented so that the number
-    this returns is comparable to Deconvolve's `val_d` -- same depth, same width, same
+    this returns is comparable to deconvolve's `val_d` -- same depth, same width, same
     activations, same sigmoid output, and therefore the same Keras epsilon
     clipping in the loss. Only the training regime differs, which is the point:
     no adversary, no per-event weights, and a fixed target.
@@ -96,8 +101,9 @@ def _fit_classifier(
     x_val, y_val = _labelled(val_pos, val_neg)
     # Keras reduces a weighted loss with `sum_over_batch_size` -- it divides by
     # the row count, not by the weight sum -- which is exactly what
-    # `deconvolve.train.weighted_bce` does. The two are the same quantity, so a
-    # sample-weighted fit here early-stops on the same number C then scores.
+    # `deconvolve.training.engine.weighted_bce` does. The two are the same
+    # quantity, so a sample-weighted fit here early-stops on the same number C
+    # then scores.
     fit_w: dict[str, NDArray[np.single]] | None = (
         None if train_w is None else {"sample_weight": train_w}
     )
@@ -224,7 +230,7 @@ def diagnostic_a(
 ) -> Fit:
     """How much detector-level signal is there for `d` to find?
 
-    Deliberately fitted on train and scored on val, the same two splits Deconvolve's
+    Deliberately fitted on train and scored on val, the same two splits deconvolve's
     `val_d` is built from, so the two numbers are directly comparable.
     """
     logger.info(msg="")
@@ -317,7 +323,7 @@ def _run_weights(
     """`(x, y, w)` for one split, weighted by a saved run's generator.
 
     Rows are `[x_data ; x_sim]`, so `y` is 1 on nature and 0 on MC and the
-    weights come back through `deconvolve.train.normalize_weights` -- the same
+    weights come back through `deconvolve.training.engine.normalize_weights` -- the same
     normalization the training loop applies, rather than a re-derivation of it.
     """
     g: keras.Model = cast(typ=keras.Model, val=_generator_at(run_dir, config, epoch))
@@ -378,7 +384,7 @@ def diagnostic_c(
     epoch: int | None = None,
     **kwargs: dict[str, Any],
 ) -> None:
-    """Did `g` really match detector level, or was Deconvolve's `d` just too weak?"""
+    """Did `g` really match detector level, or was deconvolve's `d` just too weak?"""
     logger.info(msg="")
     logger.info(msg="C. A fresh discriminator against a finished run's weights")
     logger.info(
@@ -424,26 +430,26 @@ def diagnostic_c(
         dtype=np.double,
     )
     best_epoch: int = int(config["best_epoch"]) if epoch is None else epoch
-    ran_val_d: float = float(curve[best_epoch])
+    deconvolve_val_d: float = float(curve[best_epoch])
     logger.info(
         "  fresh d, scored as val_d   %.6f  (log2 - BCE = %+.6f)", bce, LOG2 - bce
     )
     logger.info(
-        "  Deconvolve's own d at epoch %-3d   %.6f  (log2 - BCE = %+.6f)",
+        "  deconvolve's own d at epoch %-3d   %.6f  (log2 - BCE = %+.6f)",
         best_epoch,
-        ran_val_d,
-        LOG2 - ran_val_d,
+        deconvolve_val_d,
+        LOG2 - deconvolve_val_d,
     )
     logger.info(
         "  unweighted floor from A    %.6f  (log2 - BCE = %+.6f)", floor, LOG2 - floor
     )
     present: float = LOG2 - floor
     found = float(LOG2 - bce)
-    missed: float = found - (LOG2 - ran_val_d)
+    missed: float = found - (LOG2 - deconvolve_val_d)
     logger.info(
         "  Of the %.6f nats of detector-level mismatch present before "
         "reweighting, g removed %.1f%%, leaving %.6f that a converged d can "
-        "still find. Deconvolve's own d found %.6f less than that.",
+        "still find. deconvolve's own d found %.6f less than that.",
         present,
         100.0 * (1.0 - found / present),
         found,
@@ -493,7 +499,7 @@ def diagnostic_d(
     seed: int,
     /,
 ) -> None:
-    """Does the selection criterion prefer the oracle, or prefer Deconvolve?
+    """Does the selection criterion prefer the oracle, or prefer deconvolve?
 
     A and C establish that detector level is nearly saturated after
     reweighting. That leaves one question the resolution of the estimator
@@ -527,7 +533,7 @@ def diagnostic_d(
         config: dict[str, Any] = json.loads(s=(run_dir / "config.json").read_text())
         _, y, w = _run_weights(run_dir, test_pop, config=config)
         rows.append(
-            (f"Deconvolve {run_dir.name}", np.asarray(a=w[y == 0], dtype=np.single))
+            (f"deconvolve {run_dir.name}", np.asarray(a=w[y == 0], dtype=np.single))
         )
 
     logger.info(
@@ -648,8 +654,8 @@ def main(
         LOG2 - a.val_bce,
     )
     logger.info(
-        msg="  Compare against `val_d` in a run's history.npz. Deconvolve's `d`"
-        " scoring far"
+        msg="\tCompare against `val_d` in a run's history.npz."
+        "deconvolve's `d` scoring far"
     )
     logger.info(
         msg="  above this floor means `d` is the bottleneck, not `g`; scoring at it"

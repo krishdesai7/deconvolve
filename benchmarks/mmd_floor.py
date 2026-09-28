@@ -48,9 +48,9 @@ import jax.numpy as jnp
 import numpy as np
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES, Split
 from deconvolve.data import load_jet_dataset
-from deconvolve.logging_config import configure_logging
-from deconvolve.mmd import bandwidths, build_cache, weighted_mmd
-from deconvolve.train import MMD_SUBSAMPLE
+from deconvolve.instrumentation.logging_config import configure_logging
+from deconvolve.training.engine import MMD_SUBSAMPLE
+from deconvolve.training.mmd import bandwidths, build_cache, weighted_mmd
 from rich.console import Console
 from rich.table import Table
 
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-logger = logging.getLogger("ran.mmd_floor")
+logger: logging.Logger = logging.getLogger("deconvolve.mmd_floor")
 
 #: The value the dispersion analysis has been using, for comparison. It is the
 #: 1/m extrapolation of the ~5e-4 measured at m=8192 in `benchmarks/README.md`.

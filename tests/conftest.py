@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 def _default_cache_is_writable() -> bool:
-    """Whether the process can write Deconvolve's default (non-`tmp_path`) cache dir.
+    """Whether the process can write RAN's default (non-`tmp_path`) cache dir.
 
     A few dataset/workflow tests build a `DeconvolveDataset` without an explicit
     `cache_dir`, so they generate into `constants.CACHE_DIR`. On a locked-down
@@ -55,7 +55,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "writes_default_cache: needs a writable Deconvolve default cache dir "
+        "writes_default_cache: needs a writable default cache dir "
         "(skipped where the filesystem is read-only, e.g. local sandbox runs; "
         "force with DECONVOLVE_RUN_CACHE_TESTS=1)",
     )
@@ -67,6 +67,28 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     if _CACHE_WRITABLE or os.environ.get("DECONVOLVE_RUN_CACHE_TESTS"):
         return
     pytest.skip(f"default cache dir {constants.CACHE_DIR} is not writable")
+
+
+@pytest.fixture(autouse=True)
+def _no_global_config_layer(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point `XDG_CONFIG_HOME` at an empty directory for every test.
+
+    `deconvolve.cli`'s group callback (Task 4 of the layered-config plan) discovers
+    `$XDG_CONFIG_HOME/deconvolve/deconvolve.toml` and folds it into
+    `ctx.default_map`. Without this fixture, the suite would silently depend on
+    whatever the developer (or CI runner) happens to have in their real
+    `~/.config/deconvolve/deconvolve.toml` -- a test
+    asserting the code default for `n-epochs` would pass or fail depending on
+    machine state, not on the code under test. This fixture is autouse and runs
+    before any test-specific `monkeypatch.setenv("XDG_CONFIG_HOME", ...)`
+    (e.g. the `project` fixture in `tests/test_config_cli.py`), whose own call
+    happens later in fixture setup and so still wins for that test.
+    """
+    monkeypatch.setenv(
+        "XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("no-global-config"))
+    )
 
 
 _METRIC_NAMES = ("wasserstein", "jensenshannon", "triangular")

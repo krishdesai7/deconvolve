@@ -35,6 +35,12 @@ SCRIPTS_DIR: Path = Path(__file__).resolve().parent.parent / "scripts"
 # top level; it is checked for syntax but excluded from the rest.
 LMOD_HELPER: str = "_lmod.zsh"
 
+# The hard-coded prefixes the helper falls back to when `MODULESHOME` is unset.
+_LMOD_FALLBACKS: tuple[str, ...] = (
+    "/usr/share/lmod/lmod/init/zsh",
+    "/opt/cray/pe/lmod/lmod/init/zsh",
+)
+
 
 def _scripts() -> Sequence[Path]:
     return sorted(SCRIPTS_DIR.glob("*.zsh"))
@@ -122,11 +128,29 @@ class TestLmodHelper:
         assert "/usr/share/lmod/lmod/init/zsh" in text
         assert "/opt/cray/pe/lmod/lmod/init/zsh" in text
 
-    def test_it_fails_loudly_when_nothing_works(self) -> None:
-        """Silence here would mean the module load fails much later instead."""
+    def test_it_fails_loudly_when_nothing_works(self, tmp_path: Path) -> None:
+        """Silence here would mean the module load fails much later instead.
+
+        "Nothing works" has to be arranged, not assumed. Unsetting `MODULESHOME`
+        alone is not enough on a machine that has Lmod: the helper falls back
+        to the generic and Cray prefixes, finds a real init script there, and
+        succeeds -- which is its job. On Perlmutter this test failed for exactly
+        that reason. So the fallbacks are pointed somewhere that cannot exist,
+        and zsh gets a bare environment: no inherited `MODULESHOME`, no `HOME`
+        with a `.zshenv` that might define `module`, no `PATH` with a `module`
+        binary on it.
+        """
         zsh: str | None = shutil.which("zsh")
         if zsh is None:
             pytest.skip("zsh is not installed")
+
+        missing: Path = tmp_path / "missing"
+        helper: str = (SCRIPTS_DIR / LMOD_HELPER).read_text()
+        for fallback in _LMOD_FALLBACKS:
+            assert fallback in helper, f"{LMOD_HELPER} no longer tries {fallback}"
+            helper = helper.replace(fallback, f"{missing}{fallback}")
+        isolated: Path = tmp_path / LMOD_HELPER
+        _ = isolated.write_text(helper)
 
         result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
             [
@@ -134,8 +158,11 @@ class TestLmodHelper:
                 "-c",
                 (
                     "set -euo pipefail\n"
-                    "unset MODULESHOME\n"
-                    f"source {SCRIPTS_DIR / LMOD_HELPER}\n"
+                    # `/etc/zshenv` is read even so, and a site may define
+                    # `module` there.
+                    "unfunction module 2>/dev/null || true\n"
+                    "unalias module 2>/dev/null || true\n"
+                    f"source {isolated}\n"
                     "print 'REACHED'"
                 ),
             ],
@@ -143,6 +170,7 @@ class TestLmodHelper:
             text=True,
             check=False,
             timeout=60,
+            env={"HOME": str(tmp_path), "PATH": str(missing)},
         )
 
         assert result.returncode != 0

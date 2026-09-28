@@ -21,7 +21,7 @@ def restore_root_logging() -> Iterator[None]:
 
 
 def test_configure_logging_installs_one_rich_handler_and_level() -> None:
-    from deconvolve.logging_config import configure_logging
+    from deconvolve.instrumentation.logging_config import configure_logging
 
     configure_logging("debug")
 
@@ -32,7 +32,7 @@ def test_configure_logging_installs_one_rich_handler_and_level() -> None:
 
 
 def test_configure_logging_is_deterministic_when_called_twice() -> None:
-    from deconvolve.logging_config import configure_logging
+    from deconvolve.instrumentation.logging_config import configure_logging
 
     configure_logging("INFO")
     configure_logging("WARNING")
@@ -44,7 +44,7 @@ def test_configure_logging_is_deterministic_when_called_twice() -> None:
 
 
 def test_configure_logging_rejects_unknown_level() -> None:
-    from deconvolve.logging_config import configure_logging
+    from deconvolve.instrumentation.logging_config import configure_logging
 
     with pytest.raises(ValueError, match="Unknown log level"):
         configure_logging("verbose")

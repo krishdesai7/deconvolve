@@ -1,7 +1,8 @@
 """Are the per-axis metrics missing joint structure?
 
-Every number in `deconvolve.evaluate` is computed one coordinate axis at a time --
-`_wd_per_dim`, `_js_per_dim`, `_triangular_per_dim` all loop over columns. That
+Every number in `deconvolve.evaluation.evaluate` is computed one coordinate
+axis at a time -- `_wd_per_dim`, `_js_per_dim`, `_triangular_per_dim` all
+loop over columns. That
 makes the whole metric suite blind to correlation by construction: two
 distributions with identical marginals and different joint structure score
 identically on all of it. A reweighting that fixes every marginal and leaves
@@ -18,7 +19,7 @@ off-diagonal structure.
 here would mean discarding `w` -- measuring the wrong distribution -- or
 resampling events to represent it, which injects sampling noise into the
 quantity being measured. `w1_weighted` is the same estimator `scipy` computes
-and `deconvolve.evaluate` already relies on, vectorised over projections.
+and `deconvolve.evaluation.evaluate` already relies on, vectorised over projections.
 
 **Standardised against the reference.** Directions are drawn on the sphere, so
 the axes have to be commensurable; without it whichever observable carries the
@@ -45,7 +46,7 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("KERAS_BACKEND", "jax")  # pyrefly: ignore[unused-call-result]
+os.environ.setdefault(key="KERAS_BACKEND", value="jax")  # pyrefly: ignore[unused-call-result]
 
 import argparse
 import json
@@ -59,7 +60,7 @@ import numpy as np
 from deconvolve.coretypes import Split, artifacts_dir
 from deconvolve.data import DeconvolveDataset, load_jet_dataset
 from deconvolve.data.config import gaussian_config_from_run_config
-from deconvolve.logging_config import configure_logging
+from deconvolve.instrumentation.logging_config import configure_logging
 from rich.console import Console
 from rich.table import Table
 
@@ -69,7 +70,7 @@ if TYPE_CHECKING:
     from deconvolve.coretypes import DatasetSplits, Populations
     from numpy.typing import NDArray
 
-logger = logging.getLogger("ran.sliced")
+logger: logging.Logger = logging.getLogger("deconvolve.sliced")
 
 
 def w1_weighted(
@@ -79,7 +80,7 @@ def w1_weighted(
     *,
     u_weights: NDArray[np.floating] | None = None,
     v_weights: NDArray[np.floating] | None = None,
-) -> float:
+) -> np.double:
     """1-D Wasserstein-1 distance between two weighted empirical measures.
 
     `integral |F_u(t) - F_v(t)| dt`, evaluated on the merged support: sort the
@@ -91,30 +92,36 @@ def w1_weighted(
     Weights are normalised, so they are a measure and not a count: scaling all
     of them by a constant cannot change a distance.
     """
-    u = np.asarray(u, dtype=np.double)
-    v = np.asarray(v, dtype=np.double)
-    wu = (
-        np.full(u.shape, 1.0 / u.size)
+    u = np.asarray(a=u, dtype=np.double)
+    v = np.asarray(a=v, dtype=np.double)
+    wu: NDArray[np.double] = (
+        np.full(u.shape, fill_value=1.0 / u.size)
         if u_weights is None
-        else np.asarray(u_weights, dtype=np.double) / np.sum(u_weights)
+        else np.asarray(a=u_weights, dtype=np.double) / np.sum(u_weights)
     )
-    wv = (
-        np.full(v.shape, 1.0 / v.size)
+    wv: NDArray[np.double] = (
+        np.full(v.shape, fill_value=1.0 / v.size)
         if v_weights is None
-        else np.asarray(v_weights, dtype=np.double) / np.sum(v_weights)
+        else np.asarray(a=v_weights, dtype=np.double) / np.sum(a=v_weights)
     )
 
-    pooled = np.concatenate([u, v])
-    order = np.argsort(pooled, kind="stable")
-    values = pooled[order]
-    cdf_u = np.cumsum(np.concatenate([wu, np.zeros_like(wv)])[order])
-    cdf_v = np.cumsum(np.concatenate([np.zeros_like(wu), wv])[order])
-    return float(np.sum(np.abs(cdf_u[:-1] - cdf_v[:-1]) * np.diff(values)))
+    pooled: NDArray[np.double] = np.concatenate([u, v])
+    order: NDArray[np.intp] = np.argsort(a=pooled, kind="stable")
+    values: NDArray[np.double] = pooled[order]
+    cdf_u: NDArray[np.double] = np.cumsum(
+        a=np.concatenate([wu, np.zeros_like(a=wv)])[order]
+    )
+    cdf_v: NDArray[np.double] = np.cumsum(
+        a=np.concatenate([np.zeros_like(a=wu), wv])[order]
+    )
+    return np.sum(a=np.abs(cdf_u[:-1] - cdf_v[:-1]) * np.diff(a=values))
 
 
 def _directions(seed: int, dim: int, n_projections: int) -> NDArray[np.double]:
     """Unit vectors drawn uniformly on the sphere."""
-    raw = np.random.default_rng(seed).normal(size=(n_projections, dim))
+    raw: NDArray[np.double] = np.random.default_rng(seed).normal(
+        size=(n_projections, dim)
+    )
     return raw / np.linalg.norm(raw, axis=1, keepdims=True)
 
 
@@ -133,17 +140,17 @@ def sliced_wasserstein(
     standard deviation first, so a direction on the sphere weights the
     observables comparably rather than by whatever units they arrived in.
     """
-    ref = np.asarray(ref, dtype=np.double)
-    comp = np.asarray(comp, dtype=np.double)
-    centre = ref.mean(axis=0)
-    scale = np.where(ref.std(axis=0) > 0.0, ref.std(axis=0), 1.0)
+    ref = np.asarray(a=ref, dtype=np.double)
+    comp = np.asarray(a=comp, dtype=np.double)
+    centre: NDArray[np.double] = ref.mean(axis=0)
+    scale: NDArray[np.double] = np.where(ref.std(axis=0) > 0.0, ref.std(axis=0), 1.0)
 
-    dirs = _directions(seed, ref.shape[1], n_projections)
+    dirs: NDArray[np.double] = _directions(seed, ref.shape[1], n_projections)
     ref_proj: NDArray[np.double] = ((ref - centre) / scale) @ dirs.T
     comp_proj: NDArray[np.double] = ((comp - centre) / scale) @ dirs.T
     return float(
         np.mean(
-            [
+            a=[
                 w1_weighted(ref_proj[:, k], comp_proj[:, k], v_weights=comp_weights)
                 for k in range(n_projections)
             ]
@@ -179,31 +186,31 @@ def compare(
     finitely many directions and carries Monte-Carlo error of its own; a single
     number would invite reading a difference that is only the draw.
     """
-    before = [
+    before: list[float] = [
         sliced_wasserstein(ref, comp, seed=s, n_projections=n_projections)
         for s in range(repeats)
     ]
-    after = [
+    after: list[float] = [
         sliced_wasserstein(
             ref, comp, seed=s, n_projections=n_projections, comp_weights=weights
         )
         for s in range(repeats)
     ]
     return Comparison(
-        before=float(np.mean(before)),
-        after=float(np.mean(after)),
-        before_sd=float(np.std(before, ddof=1)) if repeats > 1 else 0.0,
-        after_sd=float(np.std(after, ddof=1)) if repeats > 1 else 0.0,
+        before=float(np.mean(a=before)),
+        after=float(np.mean(a=after)),
+        before_sd=float(np.std(a=before, ddof=1)) if repeats > 1 else 0.0,
+        after_sd=float(np.std(a=after, ddof=1)) if repeats > 1 else 0.0,
     )
 
 
 def _standardise(
     ref: NDArray[np.floating], comp: NDArray[np.floating], /
 ) -> tuple[NDArray[np.double], NDArray[np.double]]:
-    ref = np.asarray(ref, dtype=np.double)
-    comp = np.asarray(comp, dtype=np.double)
-    centre = ref.mean(axis=0)
-    scale = np.where(ref.std(axis=0) > 0.0, ref.std(axis=0), 1.0)
+    ref = np.asarray(a=ref, dtype=np.double)
+    comp = np.asarray(a=comp, dtype=np.double)
+    centre: NDArray[np.double] = ref.mean(axis=0)
+    scale: NDArray[np.double] = np.where(ref.std(axis=0) > 0.0, ref.std(axis=0), 1.0)
     return (ref - centre) / scale, (comp - centre) / scale
 
 
@@ -213,7 +220,7 @@ def axis_wasserstein(
     /,
     *,
     comp_weights: NDArray[np.floating] | None = None,
-) -> float:
+) -> np.double:
     """Mean 1-D Wasserstein distance over the coordinate axes.
 
     What `metrics.json` reports, standardised the same way as the sliced number
@@ -221,13 +228,11 @@ def axis_wasserstein(
     than units.
     """
     r, c = _standardise(ref, comp)
-    return float(
-        np.mean(
-            [
-                w1_weighted(r[:, i], c[:, i], v_weights=comp_weights)
-                for i in range(r.shape[1])
-            ]
-        )
+    return np.mean(
+        a=[
+            w1_weighted(r[:, i], c[:, i], v_weights=comp_weights)
+            for i in range(r.shape[1])
+        ]
     )
 
 
@@ -255,13 +260,13 @@ def null_floors(
     as n^-1/2, so that floor is ~1.41x too large and every residual quoted
     against it comes out that much too small.
     """
-    pool = np.asarray(pool, dtype=np.double)
+    pool = np.asarray(a=pool, dtype=np.double)
     if pool.shape[0] < 2 * n:
         raise ValueError(
             f"need two disjoint draws of {n} to calibrate a comparison of that "
             f"size, but the reference pool has {pool.shape[0]} rows"
         )
-    order = np.random.default_rng(seed).permutation(pool.shape[0])
+    order: NDArray[np.long] = np.random.default_rng(seed).permutation(x=pool.shape[0])
     left, right = pool[order[:n]], pool[order[n : 2 * n]]
     return Floors(
         sliced=sliced_wasserstein(left, right, seed=seed, n_projections=n_projections),
@@ -288,7 +293,7 @@ def _load_splits(config: dict[str, Any], /) -> tuple[DatasetSplits, tuple[str, .
         seed=config.get("data_seed", 42),
     ).generate_gaussian_dataset(
         params=gaussian_config_from_run_config(
-            config["gaussian_params"], config["dim"]
+            params=config["gaussian_params"], dim=config["dim"]
         ),
         n_samples=config["n_samples"],
     )
@@ -307,7 +312,7 @@ def main() -> None:
         help="cap on events per side; the merged sort is the cost",
     )
     _ = parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
     configure_logging(level="info")
 
     run_dir: Path = args.run_dir
@@ -318,12 +323,12 @@ def main() -> None:
         artifacts_dir(run_dir) / "generator.keras"
     )
 
-    rng = np.random.default_rng(args.seed)
+    rng: np.random.Generator = np.random.default_rng(args.seed)
     n = min(args.subsample, pop.mc.z.shape[0], pop.data.shape[0])
-    i_mc = rng.permutation(pop.mc.z.shape[0])[:n]
-    i_data = rng.permutation(pop.data.shape[0])[:n]
-    weights = np.asarray(
-        generator(pop.mc.z[i_mc], training=False), dtype=np.double
+    i_mc: NDArray[np.long] = rng.permutation(x=pop.mc.z.shape[0])[:n]
+    i_data: NDArray[np.long] = rng.permutation(x=pop.data.shape[0])[:n]
+    weights: NDArray[np.double] = np.asarray(
+        a=generator(pop.mc.z[i_mc], training=False), dtype=np.double
     ).ravel()
 
     logger.info(
@@ -345,7 +350,7 @@ def main() -> None:
         levels["particle"] = (pop.truth[i_data], pop.mc.z[i_mc])
         floor_pools["particle"] = pop.truth
     else:
-        logger.warning("no truth recorded; particle level skipped")
+        logger.warning(msg="no truth recorded; particle level skipped")
     if pop.data.shape[0] < 2 * n:
         raise SystemExit(
             f"--subsample {n} needs {2 * n} reference events to calibrate a "
@@ -364,14 +369,14 @@ def main() -> None:
     # denominators for the two metrics and cannot be compared directly.
     table.add_column(header="after / floor", justify="right")
     for level, (ref, comp) in levels.items():
-        floors = null_floors(
+        floors: Floors = null_floors(
             floor_pools[level], n=n, seed=args.seed, n_projections=args.n_projections
         )
-        c = compare(
+        c: Comparison = compare(
             ref, comp, weights, n_projections=args.n_projections, repeats=args.repeats
         )
-        axis_before = axis_wasserstein(ref, comp)
-        axis_after = axis_wasserstein(ref, comp, comp_weights=weights)
+        axis_before: np.double = axis_wasserstein(ref, comp)
+        axis_after: np.double = axis_wasserstein(ref, comp, comp_weights=weights)
         table.add_row(
             level,
             "sliced",
@@ -396,7 +401,7 @@ def main() -> None:
         )
     Console().print(table)
     logger.info(
-        "Compare the two 'after / floor' figures, not the two improvements. "
+        msg="Compare the two 'after / floor' figures, not the two improvements. "
         "Similar multiples mean the residual is isotropic and the axis metrics "
         "were not flattering; a larger sliced multiple means the reweighting "
         "fixed the marginals and left joint structure behind."

@@ -20,7 +20,7 @@
 #     sbatch scripts/submit_omnifold.zsh runs/2026-09-06T203848Z
 #
 # The run directory is read for its `config.json` and written for the OmniFold
-# artifacts; the Deconvolve training in it is neither repeated nor disturbed. This is a
+# artifacts; the RAN training in it is neither repeated nor disturbed. This is a
 # separate job from `submit.zsh` rather than a step inside it because OmniFold
 # takes longer on its own than that job's entire wall clock.
 #
@@ -36,13 +36,13 @@
 #     CUDA wheels, which a compute node usually cannot do. Warm it on a login
 #     node first:
 #
-#         uv run --no-project src/deconvolve/baselines/_omnifold_worker.py
+#         uv run --no-project src/ran/baselines/_omnifold_worker.py
 
 set -euo pipefail
 
 RUN_DIR="${1:?usage: sbatch scripts/submit_omnifold.zsh <run_dir>}"
 
-PROJECT_DIR=/global/u1/k/kdesai/Deconvolve
+PROJECT_DIR=/global/u1/k/kdesai/deconvolve
 cd "${PROJECT_DIR}"
 
 if [[ ! -f "${RUN_DIR}/config.json" ]]; then
@@ -70,17 +70,17 @@ source "${PROJECT_DIR}/scripts/_lmod.zsh"
 module load cudatoolkit/12.9
 trap 'module unload cudatoolkit/12.9' EXIT
 
-uv run deconvolve baseline omnifold --run-dir "${RUN_DIR}" "${@:2}"
+uv run deconvolve baseline omnifold "${RUN_DIR}" "${@:2}"
 
 module unload cudatoolkit/12.9
 trap - EXIT
 
 # `--load-run` reloads the saved generator instead of training and redraws the
-# figures, which is what puts the OmniFold curve on them: `_load_baseline_weights`
-# picks up whichever `*_weights.npz` exist at draw time. Then re-score, so
+# figures, putting the OmniFold curve on them: `_load_baseline_weights` picks
+# up whichever `*_weights.npz` exist at draw time. Then re-score, so
 # `metrics.json` and the report agree with the figures.
 uv run deconvolve train --load-run "${RUN_DIR}"
-uv run deconvolve evaluate --run-dir "${RUN_DIR}" --force
+uv run deconvolve evaluate "${RUN_DIR}" --force
 
 module load texlive
 uv run deconvolve report "${RUN_DIR}" --force

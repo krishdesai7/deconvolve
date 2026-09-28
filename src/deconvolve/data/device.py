@@ -1,3 +1,18 @@
+"""Device-resident training data, the third form alongside `Populations`/`ZXY`.
+
+`Populations` is the physics form and `ZXY` the transport form; both are host
+NumPy, because they feed Matplotlib, npz I/O and the IBU baseline. This module
+is the training form: `DeviceSplits.from_splits` is the single host-to-device
+transfer of a run, and after it no batch crosses the boundary again.
+
+All three forms live under `deconvolve.data` because they are all the dataset,
+just at different points in its trip to the accelerator. Both splits are laid
+out for a single fused XLA program: the train split stays flat and is gathered
+by index inside a `lax.scan`, so XLA fuses the gather into the first `Dense`;
+the eval splits are pre-batched with a mask, so evaluation scans with no
+gather at all and still sees every event exactly once.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +32,11 @@ if TYPE_CHECKING:
     from ..coretypes import ZXY, DatasetSplits, EventArray
 
 DEFAULT_EVAL_BATCH_SIZE: Final[int] = 8192
+"""Evaluation batch size.
+
+Evaluation is forward-only and its batching is not part of the training
+contract, so it uses a wider batch than training to keep the scan short.
+"""
 
 # This module is the one host->device seam of a run, which makes it the one
 # place where the dtype pin is worth enforcing rather than merely annotating.
@@ -30,6 +50,12 @@ DEFAULT_EVAL_BATCH_SIZE: Final[int] = 8192
 @partial(jax.tree_util.register_dataclass, data_fields=["z", "x", "y"], meta_fields=[])
 @dataclass(frozen=True, eq=False, slots=True)
 class TrainSplit:
+    """A flat, device-resident split, gathered by index inside the scan.
+
+    Labels are promoted from `np.ubyte` to the compute dtype once, here, rather
+    than in every `1 - y` inside the trace.
+    """
+
     z: Float[Array, "n d"]
     x: Float[Array, "n d"]
     y: Float[Array, " n"]
@@ -54,6 +80,8 @@ class TrainSplit:
 )
 @dataclass(frozen=True, eq=False, slots=True)
 class EvalSplit:
+    """A pre-batched device-resident split; padding rows carry `mask == 0`."""
+
     z: Float[Array, "nb bs d"]
     x: Float[Array, "nb bs d"]
     y: Float[Array, "nb bs"]
@@ -72,8 +100,8 @@ class EvalSplit:
         dim: int = data.z.shape[1]
 
         def _pad2d(arr: EventArray) -> Float[Array, "nb bs d"]:
-            # Edge padding repeats a real row; `mask` is what keeps it out of
-            # every sum, so the value only has to be finite.
+            # Edge padding repeats a real row; `mask` keeps it out of every
+            # sum, so the value only has to be finite.
             wide: Float[Array, "nb bs d"] = jnp.pad(
                 array=jnp.asarray(a=arr, dtype=EVENT_DTYPE),
                 pad_width=((0, pad), (0, 0)),
@@ -101,6 +129,8 @@ class EvalSplit:
 
 
 class DeviceSplits(NamedTuple):
+    """The whole dataset on device, plus the seed that drives batch order."""
+
     train: TrainSplit
     val: EvalSplit
     test: EvalSplit
@@ -115,6 +145,11 @@ class DeviceSplits(NamedTuple):
         batch_size: int | None = None,
         eval_batch_size: int = DEFAULT_EVAL_BATCH_SIZE,
     ) -> Self:
+        """Move a host `DatasetSplits` to device. The one H2D transfer.
+
+        `batch_size` is accepted for symmetry but unused: the train split stays
+        flat, and its batching is decided per epoch by `train_indices`.
+        """
         del batch_size
         return cls(
             train=TrainSplit.from_zxy(splits.train.as_arrays()),
@@ -127,6 +162,12 @@ class DeviceSplits(NamedTuple):
 
 
 def grouping(n: int, batch_size: int, n_disc_steps: int) -> tuple[int, int]:
+    """Split one pass over `n` events into `(groups, disc steps per group)`.
+
+    `n_disc_steps` is clamped to the number of whole batches available. A split
+    too small to fill one group still trains -- it becomes a single group with
+    every batch in it, and one generator update.
+    """
     n_batches: int = n // batch_size
     if n_batches < 1:
         raise ValueError(
@@ -140,6 +181,13 @@ def grouping(n: int, batch_size: int, n_disc_steps: int) -> tuple[int, int]:
 def train_indices(
     key: PRNGKeyArray, n: int, batch_size: int, n_disc_steps: int
 ) -> Int[Array, "groups disc batch"]:
+    """One epoch's batch order, grouped so the update rhythm is structural.
+
+    Each group is `n_disc_steps` discriminator batches; the generator updates
+    once per group, on the group's first batch. The tail that does not fill a
+    whole group is dropped. Because the permutation is redrawn every epoch, it
+    is a different random tail each pass.
+    """
     groups, per_group = grouping(n, batch_size, n_disc_steps)
     keep: int = groups * per_group * batch_size
     order: Int[Array, " n"] = jax.random.permutation(key, x=n)
@@ -149,6 +197,12 @@ def train_indices(
 def gather(
     split: TrainSplit, idx: Int[Array, " b"], /
 ) -> tuple[Float[Array, "b d"], Float[Array, "b d"], Float[Array, " b"]]:
+    """Pull one batch out of the flat split, fused into the first matmul.
+
+    Returns:
+        The batch's particle-level features, detector-level features and
+        labels.
+    """
     return (
         jnp.take(a=split.z, indices=idx, axis=0),
         jnp.take(a=split.x, indices=idx, axis=0),

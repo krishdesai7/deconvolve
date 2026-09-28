@@ -1,0 +1,30 @@
+/* RAN has no logo. Material falls back to its own `material/library` icon
+   when `theme.logo`/`theme.icon.logo` are unset, so suppress it rather than
+   ship a placeholder mark that means nothing. Remove this rule if a real
+   logo is ever added. */
+.md-logo {
+  display: none;
+}
+
+/* The home-page schematic is a vector figure converted from assets/schematic.pdf.
+   Its glyphs are outlines rather than text, so it carries no font dependency and
+   renders identically everywhere; its background is transparent, so the page
+   colour shows through instead of a white slab. */
+/* Material gives `figure` width:fit-content, so the image would otherwise sit
+   at its native 676px inside a wider text column. */
+.md-typeset .ran-figure {
+  width: 100%;
+}
+
+.ran-schematic {
+  width: 100%;
+  height: auto;
+}
+
+/* The figure was drawn for a light page: black text on pale green and blue
+   panels. invert() flips lightness, and hue-rotate(180deg) puts the hues back
+   where they were, so the particle/detector panels stay green and blue and the
+   backprop arrow stays red. 90% rather than 100% keeps blacks off pure white. */
+[data-md-color-scheme="slate"] .ran-schematic {
+  filter: invert(90%) hue-rotate(180deg);
+}

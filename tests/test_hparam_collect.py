@@ -303,7 +303,7 @@ def test_summarize_arm_refuses_a_pairing_key_that_does_not_index_the_runs() -> N
 class TestEffectiveSampleSize:
     """ESS is the mechanism variable for the dispersion penalty.
 
-    `benchmarks/README.md` §2 puts the oracle at 80.1% and Deconvolve at 73.3%, so a
+    `benchmarks/README.md` §2 puts the oracle at 80.1% and RAN at 73.3%, so a
     penalty coefficient is tuned by watching ESS move toward the target, not by
     guessing a scale. `history.npz` records `val_ess` per epoch over the MMD
     subsample; the number that matters is the one at the selected epoch.

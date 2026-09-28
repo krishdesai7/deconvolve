@@ -8,13 +8,13 @@ from deconvolve.coretypes import (
     KerasVariable,
     Variables,
 )
-from deconvolve.evaluate import _get_weights as evaluate_weights
-from deconvolve.models import build_discriminator, build_generator
+from deconvolve.evaluation.evaluate import _get_weights as evaluate_weights
 
 # Specifically what this test is checking
-from deconvolve.plotting import _get_weights as plotting_weights  # pyrefly: ignore[implicit-reexport]
-from deconvolve.train import TrainResult, _make_steps
-from deconvolve.workflow import _load_artifacts
+from deconvolve.evaluation.plotting import _get_weights as plotting_weights  # pyrefly: ignore[implicit-reexport]
+from deconvolve.training.engine import TrainResult, _make_steps
+from deconvolve.training.models import build_discriminator, build_generator
+from deconvolve.workflows.train import _load_artifacts
 from jax._src.basearray import Array as JaxArray
 
 if TYPE_CHECKING:

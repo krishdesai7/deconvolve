@@ -10,19 +10,19 @@ The **covariance** is the other half, and the one the speed argument pays for.
 Unbinned unfolding weights are routinely propagated as if their bin-to-bin
 correlations were zero. They are not, and measuring them takes a hundred
 retrainings --- which at OmniFold's cost is not an analysis anyone runs, and
-at Deconvolve's is twenty minutes on a node. `variance.npz` carries the full `K x K`
+at RAN's is twenty minutes on a node. `variance.npz` carries the full `K x K`
 matrix for every observable.
 
 One caveat is stated rather than buried, because a referee will raise it:
-Deconvolve's weights preserve the total count by construction, so a spectrum's bins
-sum to a fixed number and its covariance is singular with rank `K - 1`. That
-constraint *alone* induces negative off-diagonals. For the equal-occupancy
-bins used here the pure-closure expectation is the multinomial value
-`-1 / (K - 1)` on every off-diagonal element, and it is written into the
-output next to the measurement so the comparison is available rather than
-assumed. Structure beyond that flat value --- neighbouring bins correlating
-more strongly than distant ones, say --- is the part normalization cannot
-explain.
+RAN's weights preserve the total count by construction, so a spectrum's bins
+sum to a fixed number and its covariance is singular with rank `K - 1`: every
+row sums to zero. For bins of equal variance that fixes the *average*
+correlation of a bin with the others at `-1 / (K - 1)`, the multinomial value
+for equal-occupancy bins. It fixes nothing else --- individual entries are
+free, and can lie on either side of it --- so it is a reference, not a floor.
+It is written into the output next to the measurement. Structure around that
+average --- neighbouring bins correlating more strongly than distant ones,
+say --- is the part normalization cannot explain.
 """
 
 from __future__ import annotations
@@ -46,6 +46,8 @@ from .variance import (
     component_covariances,
     correlation,
     decompose,
+    evaluation_covariance,
+    evaluation_variance,
     quantile_edges,
     weighted_means,
 )
@@ -67,15 +69,25 @@ if TYPE_CHECKING:
 logger: Logger = logging.getLogger(name=__name__)
 mpl.use(backend="Agg")
 
-SOURCES: tuple[str, str, str] = ("data (bootstrap)", "initialization", "interaction")
+# The residual is the interaction plus everything else that varies from cell to
+# cell and with neither axis: the split, the batch order and the selection
+# subsamples (`design.split_seed`), and any hardware non-determinism.
+SOURCES: tuple[str, str, str] = (
+    "data (bootstrap)",
+    "initialization",
+    "interaction, split and order",
+)
 
 
 def multinomial_off_diagonal(n_bins: int, /) -> float:
-    """The correlation a fixed total imposes on equal-occupancy bins, alone.
+    """The average off-diagonal correlation a fixed total implies.
 
-    Under a multinomial with `p_i = 1 / K` every off-diagonal correlation is
-    `-1 / (K - 1)`. Anything a measured matrix does beyond that flat floor is
-    structure the normalization constraint cannot account for.
+    A fixed total makes every covariance row sum to zero, which for bins of
+    equal variance puts the average correlation of a bin with the others at
+    `-1 / (K - 1)`; a multinomial with `p_i = 1 / K` has exactly that value
+    in every entry. The constraint fixes only the average, so a measured
+    matrix is read against this as a reference: its structure around the
+    average is what normalization does not explain.
     """
     if n_bins < 2:
         raise ValueError(f"need at least 2 bins, got {n_bins}")
@@ -120,7 +132,7 @@ def _evaluation_events(design: Design, /) -> EventArray:
         data_seed=meta["data_seed"],
         variables=tuple(meta["variables"]),
         params=(
-            gaussian_config_from_run_config(raw, meta["dim"])
+            gaussian_config_from_run_config(params=raw, dim=meta["dim"])
             if raw is not None
             else None
         ),
@@ -144,8 +156,16 @@ def _variable_names(design: Design, /) -> list[str]:
     return [f"dim_{i}" for i in range(meta["dim"])]
 
 
-def _summary_row(components: VarianceComponents, /) -> dict[str, float]:
-    """One observable's decomposition, as standard deviations and shares."""
+def _summary_row(
+    components: VarianceComponents, evaluation: float, /
+) -> dict[str, float]:
+    """One observable's decomposition, as standard deviations and shares.
+
+    `var_total` is the run-to-run total the grid measures. `var_evaluation` is
+    the evaluation set's own sampling variance, which cancels from every
+    component and is therefore outside that total; a quoted uncertainty adds
+    it back.
+    """
     total: float = float(components.total)
     return {
         "sd_total": float(np.sqrt(max(total, 0.0))),
@@ -159,6 +179,8 @@ def _summary_row(components: VarianceComponents, /) -> dict[str, float]:
         "sd_naive_quadrature": float(
             np.sqrt(max(float(components.naive_quadrature), 0.0))
         ),
+        "var_evaluation": evaluation,
+        "sd_evaluation": float(np.sqrt(max(evaluation, 0.0))),
     }
 
 
@@ -188,6 +210,12 @@ def _render(summary: dict[str, dict[str, float]], /, console: Console | None) ->
             f"{row['sd_naive_quadrature']:.5f}",
             f"(SD {inflation:+.1f}%)",
         )
+        table.add_row(
+            "",
+            "evaluation sample",
+            f"{row['sd_evaluation']:.5f}",
+            "(add to total)",
+        )
         table.add_section()
     active.print(table)
 
@@ -202,18 +230,18 @@ def _plot_correlations(
     """One heatmap per observable of the bootstrap bin-to-bin correlation."""
     figure = Figure(figsize=(4.0 * min(len(names), 3), 3.6 * ((len(names) + 2) // 3)))
     figure.canvas = FigureCanvasPdf(figure)
-    axes = figure.subplots(
+    axes: NDArray[Any] = figure.subplots(
         nrows=(len(names) + 2) // 3, ncols=min(len(names), 3), squeeze=False
     )
-    flat_axes: Sequence[Axes] = cast("Sequence[Axes]", list(axes.ravel()))
+    flat_axes: Sequence[Axes] = cast(typ="Sequence[Axes]", val=list(axes.ravel()))
     for ax, name in zip(flat_axes, names, strict=False):
         image: AxesImage = ax.imshow(
-            matrices[name], cmap="RdBu_r", vmin=-1.0, vmax=1.0, origin="lower"
+            X=matrices[name], cmap="RdBu_r", vmin=-1.0, vmax=1.0, origin="lower"
         )
-        _ = ax.set_title(label=f"{name}  (closure floor {null[name]:+.3f})", fontsize=9)
+        _ = ax.set_title(label=f"{name}  (closure mean {null[name]:+.3f})", fontsize=9)
         _ = ax.set_xlabel(xlabel="bin")
         _ = ax.set_ylabel(ylabel="bin")
-        _ = figure.colorbar(image, ax=ax, fraction=0.046)
+        _ = figure.colorbar(mappable=image, ax=ax, fraction=0.046)
     for ax in flat_axes[len(names) :]:
         ax.set_axis_off()
     _ = figure.suptitle(t="Bootstrap correlation of the unfolded spectrum")
@@ -242,7 +270,12 @@ def collect(
 
     for i, name in enumerate(iterable=names):
         column: EventArray = z_eval[:, i]
-        summary[name] = _summary_row(decompose(weighted_means(column, design.weights)))
+        # Averaged over cells: the evaluation variance depends on each run's
+        # weights, and the grid samples the distribution of those runs.
+        summary[name] = _summary_row(
+            decompose(weighted_means(column, design.weights)),
+            float(evaluation_variance(column, design.weights).mean()),
+        )
 
         edges: NDArray[np.double] = quantile_edges(column, n_bins=n_bins)
         spectra: NDArray[np.double] = binned_spectra(
@@ -257,6 +290,9 @@ def collect(
             f"{name}_cov_data": covariances.data,
             f"{name}_cov_init": covariances.init,
             f"{name}_cov_interaction": covariances.interaction,
+            f"{name}_cov_evaluation": evaluation_covariance(
+                column, design.weights, edges=edges
+            ).mean(axis=(0, 1)),
             f"{name}_corr_data": correlations[name],
         }
 

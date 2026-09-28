@@ -1,6 +1,6 @@
 """Tests for the loss-curve figure.
 
-`losses.pdf` carried two identical dashed lines for a long time: `train.py`
+`losses.pdf` carried two identical dashed lines for a long time: `engine.py`
 recorded the validation BCE into both the `val_d` and `val_g` history columns,
 and `plot_losses` faithfully drew both. Nothing failed --- the figure just
 claimed to show something it did not measure --- so these pin the shape of the
@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pytest
-from deconvolve import plotting
 from deconvolve.coretypes import (
     JET_OBS,
     PANEL_COLUMNS,
@@ -26,7 +25,8 @@ from deconvolve.coretypes import (
     figure_pages,
 )
 from deconvolve.data import ArrayDataset
-from deconvolve.plotting import (
+from deconvolve.evaluation import plotting
+from deconvolve.evaluation.plotting import (
     _DETECTOR,
     _hist_ratio_panel,
     _plot_level,
@@ -105,7 +105,7 @@ def test_a_panel_is_labelled_even_without_a_baseline() -> None:
     assert ax.get_ylabel() == "Events"
     assert ax.get_title() == "Detector level"
     _, labels = ax.get_legend_handles_labels()
-    assert labels == ["Data", "Sim", "Deconvolve"]
+    assert labels == ["Data", "Sim", "RAN"]
 
 
 def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
@@ -135,16 +135,16 @@ def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
     )
 
     _, labels = ax.get_legend_handles_labels()
-    assert labels == ["Data", "Sim", "Deconvolve", "IBU", "OmniFold"]
+    assert labels == ["Data", "Sim", "RAN", "IBU", "OmniFold"]
 
 
 def test_ran_is_drawn_more_prominently_than_the_baseline() -> None:
-    """Deconvolve's step line was fainter than IBU's. On the same panel."""
-    assert plotting.ALPHA_DECONVOLVE > plotting.ALPHA_IBU > plotting.ALPHA_FILL
+    """RAN's step line was fainter than IBU's. On the same panel."""
+    assert plotting.ALPHA_RAN > plotting.ALPHA_IBU > plotting.ALPHA_FILL
 
 
 def test_ran_has_a_colour_of_its_own() -> None:
-    assert plotting.COLOR_DECONVOLVE not in {
+    assert plotting.COLOR_RAN not in {
         plotting.COLOR_NATURE,
         plotting.COLOR_MC,
         plotting.COLOR_IBU,
@@ -202,7 +202,7 @@ def test_multilevel_figure_keeps_rendered_content_inside_page(
         del save_path
         captured.extend(figures)
 
-    monkeypatch.setattr("deconvolve.plotting._save_pages", capture)
+    monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", capture)
     values = np.array(
         [[-1.0, -0.5], [0.0, 0.2], [0.5, 0.8], [1.0, 1.2]], dtype=np.single
     )
@@ -283,7 +283,7 @@ def _plot_twelve_dim_level(save_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     mc = rng.normal(size=(64, dim)).astype(np.single)
     w = np.ones(64, dtype=np.single)
     baselines = [ibu_overlay([np.ones(64, dtype=np.single) for _ in range(dim)])]
-    monkeypatch.setattr("deconvolve.plotting._save_pages", _capture_save)
+    monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", _capture_save)
     _plot_level(
         nature,
         mc,
@@ -306,7 +306,7 @@ def _panel_titles_for(
     mc = rng.normal(size=(64, dim)).astype(np.single)
     w = np.ones(64, dtype=np.single)
     baselines = [ibu_overlay([np.ones(64, dtype=np.single) for _ in range(dim)])]
-    monkeypatch.setattr("deconvolve.plotting._save_pages", _capture_save)
+    monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", _capture_save)
     _plot_level(
         nature,
         mc,
@@ -332,7 +332,7 @@ def _one_dim_level(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Figure:
     mc = rng.normal(size=(64, 1)).astype(np.single)
     w = np.ones(64, dtype=np.single)
     baselines = [ibu_overlay([np.ones(64, dtype=np.single)])]
-    monkeypatch.setattr("deconvolve.plotting._save_pages", _capture_save)
+    monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", _capture_save)
     _plot_level(nature, mc, w, _DETECTOR, tmp_path / "levels.pdf", None, baselines)
     return _last_drawn_figure()
 
@@ -496,7 +496,7 @@ def test_plot_levels_uses_the_same_page_height_for_matching_panel_counts(
     def generator(z: NDArray[np.single]) -> NDArray[np.single]:
         return np.ones((len(z), 1), dtype=np.single)
 
-    monkeypatch.setattr("deconvolve.plotting._save_pages", capture)
+    monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", capture)
     plot_levels(
         dataset,
         cast("DeconvolveModel", generator),
@@ -892,10 +892,10 @@ class TestBaselineOverlays:
         assert ibu.marker != omnifold.marker
 
     def test_ran_is_painted_above_every_baseline(self) -> None:
-        """Deconvolve is the method being showcased; it must not sit under a baseline.
+        """RAN is the method being showcased; it must not sit under a baseline.
 
-        The overlays are drawn *after* Deconvolve so they read last in the legend, and
-        at linewidth 4 the last one drawn would otherwise bury Deconvolve wherever the
+        The overlays are drawn *after* RAN so they read last in the legend, and
+        at linewidth 4 the last one drawn would otherwise bury RAN wherever the
         curves agree --- which on a converged run is everywhere. Caught by
         rendering the figure and looking at it, not by a green suite.
         """
@@ -927,15 +927,15 @@ class TestBaselineOverlays:
             label: artist
             for artist, label in zip(*ax.get_legend_handles_labels(), strict=True)
         }
-        deconvolve_z = by_label["Deconvolve"].get_zorder()
-        assert deconvolve_z > by_label["IBU"].get_zorder()
-        assert deconvolve_z > by_label["OmniFold"].get_zorder()
+        ran_z = by_label["RAN"].get_zorder()
+        assert ran_z > by_label["IBU"].get_zorder()
+        assert ran_z > by_label["OmniFold"].get_zorder()
 
     def test_every_panel_of_a_page_carries_both_baselines(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The overlays are indexed per panel; an off-by-one would drop one."""
-        monkeypatch.setattr("deconvolve.plotting._save_pages", _capture_save)
+        monkeypatch.setattr("deconvolve.evaluation.plotting._save_pages", _capture_save)
         rng = np.random.default_rng(0)
         dim = 3
         nature = rng.normal(size=(64, dim)).astype(np.single)
@@ -959,4 +959,4 @@ class TestBaselineOverlays:
         assert len(panels) == dim
         for panel in panels:
             _, labels = panel.get_legend_handles_labels()
-            assert labels == ["Data", "Sim", "Deconvolve", "IBU", "OmniFold"]
+            assert labels == ["Data", "Sim", "RAN", "IBU", "OmniFold"]

@@ -175,7 +175,7 @@ def _environment(dlopen: dict[str, str]) -> dict[str, object]:
         },
         "ld_library_path": os.environ.get("LD_LIBRARY_PATH", "<unset>")[:600],
         "nvidia_packages": packages,
-        "wheels_preloaded": os.environ.get("_DECONVOLVE_PROBE_REEXEC") == "1",
+        "wheels_preloaded": os.environ.get("_RAN_PROBE_REEXEC") == "1",
         "dlopen": dlopen,
         "nvidia_wheel_libs": _nvidia_wheel_libs(),
     }
@@ -257,16 +257,16 @@ def _preload_wheels_and_reexec() -> None:
     that makes an in-process "fix" look like it works while measuring the
     unfixed path. `_DECONVOLVE_PROBE_REEXEC` guards against looping.
     """
-    if os.environ.get("DECONVOLVE_PROBE_PRELOAD_WHEELS") != "1":
+    if os.environ.get(key="DECONVOLVE_PROBE_PRELOAD_WHEELS") != "1":
         return
-    if os.environ.get("_DECONVOLVE_PROBE_REEXEC") == "1":
+    if os.environ.get(key="_DECONVOLVE_PROBE_REEXEC") == "1":
         return
 
-    dirs = _wheel_lib_dirs()
+    dirs: list[str] = _wheel_lib_dirs()
     if not dirs:
         return
 
-    existing = os.environ.get("LD_LIBRARY_PATH", "")
+    existing: str = os.environ.get(key="LD_LIBRARY_PATH", default="")
     os.environ["LD_LIBRARY_PATH"] = (
         ":".join([*dirs, existing]) if existing else ":".join(dirs)
     )
@@ -277,9 +277,9 @@ def _preload_wheels_and_reexec() -> None:
 def main() -> None:
     _preload_wheels_and_reexec()
     # Before any TensorFlow import, for the reason given in `_environment`.
-    dlopen = _dlopen_report()
+    dlopen: dict[str, str] = _dlopen_report()
     try:
-        result = probe(dlopen)
+        result: dict[str, object] = probe(dlopen)
     # The driver needs a reason on stdout, not a traceback on stderr: an
     # unparseable worker is indistinguishable from a crashed one.
     except BaseException as exc:  # ruff: ignore[blind-except]
@@ -290,7 +290,7 @@ def main() -> None:
         }
     # One line of JSON on stdout is the entire protocol. TF writes banners to
     # stderr regardless of TF_CPP_MIN_LOG_LEVEL, so stdout must stay clean.
-    print(json.dumps(result))
+    print(json.dumps(obj=result))
 
 
 if __name__ == "__main__":

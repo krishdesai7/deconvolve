@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR=/global/u1/k/kdesai/Deconvolve
+PROJECT_DIR=/global/u1/k/kdesai/deconvolve
 
 FLAG=${FLAG:---lr-g}
 LEVELS=${LEVELS:-"3e-5 1e-4 3e-4"}
@@ -19,7 +19,7 @@ SEEDS=${SEEDS:-"0 1 2 3 4 5 6 7"}
 # than an ensemble's for that reason alone. Swap the two to measure the other
 # half:
 #
-#   REPLICATE_FLAG=--data-seed FIXED_ARGS="--seed 0" bash scripts/submit_hparam.sh
+#   REPLICATE_FLAG=--data-seed FIXED_ARGS="--seed 0" zsh scripts/submit_hparam.zsh
 REPLICATE_FLAG=${REPLICATE_FLAG:---seed}
 FIXED_ARGS=${FIXED_ARGS:---data-seed 42}
 

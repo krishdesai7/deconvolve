@@ -66,7 +66,7 @@ class TestGrouping:
         """A split too small for one group still trains, as one short group.
 
         This is what the host loop did when `step % n_disc_steps == 0` fired
-        only at step 0 because the pass ran out of batches first.
+        only at step 0 because the pass deconvolve out of batches first.
         """
         assert grouping(n=100, batch_size=32, n_disc_steps=5) == (1, 3)
 

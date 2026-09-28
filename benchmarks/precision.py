@@ -11,14 +11,16 @@ if TYPE_CHECKING:
     from typing import Any, Final
 
     from deconvolve.coretypes import DatasetSplits, DeconvolveModel, EventArray
-    from deconvolve.train import TrainResult
+    from deconvolve.training.engine import TrainResult
     from numpy.typing import NDArray
 
     class ModelBuilder(Protocol):
-        """The exact shape of `deconvolve.models.build_{generator,discriminator}`.
+        """The shape of
+        `deconvolve.training.models.build_{generator,discriminator}`.
 
-        Spelled out rather than `Callable[..., DeconvolveModel]` so that rebinding the
-        module attributes below type-checks instead of needing a suppression.
+        Spelled out rather than `Callable[..., DeconvolveModel]` so that
+        rebinding the module attributes below type-checks instead of needing a
+        suppression.
         """
 
         def __call__(
@@ -39,7 +41,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 os.environ["JAX_ENABLE_X64"] = str(object=int(DTYPE == "float64"))
 
 import deconvolve  # ruff: ignore[unused-import] -- import order is load-bearing; see above
-import deconvolve.train as train_module
+import deconvolve.training.engine as engine_module
 import numpy as np
 from deconvolve.coretypes import (
     Events,
@@ -58,12 +60,14 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 
 def _builders_at(dtype: str) -> tuple[ModelBuilder, ModelBuilder]:
     """Rebuild the model factories at `dtype` without mutating the source file."""
-    source: str = (REPO_ROOT / "src" / "deconvolve" / "models.py").read_text()
+    source: str = (
+        REPO_ROOT / "src" / "deconvolve" / "training" / "models.py"
+    ).read_text()
     namespace: dict[str, Any] = {}
     exec(  # ruff: ignore[exec-builtin] -- module's own source, recompiled with one literal changed
         compile(
             source=source.replace('"float32"', f'"{dtype}"'),
-            filename="deconvolve/models.py",
+            filename="deconvolve/training/models.py",
             mode="exec",
         ),
         namespace,
@@ -80,8 +84,8 @@ def main() -> None:
     # Rebinding the module's builders to the same factories recompiled at
     # another dtype -- the measurement. Left unannotated: pyrefly rejects an
     # annotation on a non-self attribute.
-    train_module.build_generator = generator  # ty: ignore[invalid-assignment]
-    train_module.build_discriminator = discriminator  # ty: ignore[invalid-assignment]
+    engine_module.build_generator = generator  # ty: ignore[invalid-assignment]
+    engine_module.build_discriminator = discriminator  # ty: ignore[invalid-assignment]
 
     rng: np.random.Generator = np.random.default_rng(seed=0)
     z_true: NDArray[scalar] = rng.normal(size=(N_SAMPLES, DIM)).astype(dtype=scalar)
@@ -111,7 +115,7 @@ def main() -> None:
     splits: DatasetSplits = DeconvolveDataset(batch_size=1024, seed=0).splits_from_data(
         data=pops.interleave()
     )
-    result: TrainResult = train_module.train(
+    result: TrainResult = engine_module.train(
         splits,
         dim=DIM,
         hidden_units=64,

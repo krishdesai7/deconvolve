@@ -21,7 +21,7 @@ reproducible from a command in this directory._
 ### 1. The detector-level objective is saturated
 
 A converged, unweighted classifier separates `x_sim` from `x_data` by
-**0.014786 nats** (`ceiling.py` A). After Deconvolve reweights, a *fresh* converged
+**0.014786 nats** (`ceiling.py` A). After Deconvolve reweights, a _fresh_ converged
 classifier at a learning rate that demonstrably works finds only **0.000087
 nats** (`ceiling.py` C) — `g` removes **99.4%** of the available mismatch.
 Stable across seeds (0.000087 / 0.000173 / 0.000176).
@@ -35,11 +35,11 @@ Scoring the **oracle** weight function `w*(z)` — the particle-level likelihood
 ratio, fitted on truth — against Deconvolve's own weights on the criterion Deconvolve selects
 with (`ceiling.py` D, held-out test split):
 
-| weights | detector MMD² | particle MMD² | ESS |
-| ------- | ------------: | ------------: | --: |
-| unweighted   | 3.960e-2  | 5.899e-2  | 100% |
-| oracle `w*`  | +8.020e-4 | −1.898e-4 | 80.1% |
-| Deconvolve          | **−2.322e-4** | 4.579e-3 | 73.3% |
+| weights     | detector MMD² | particle MMD² |   ESS |
+| ----------- | ------------: | ------------: | ----: |
+| unweighted  |      3.960e-2 |      5.899e-2 |  100% |
+| oracle `w*` |     +8.020e-4 |     −1.898e-4 | 80.1% |
+| Deconvolve         | **−2.322e-4** |      4.579e-3 | 73.3% |
 
 **Deconvolve scores better than the truth on the detector-level criterion**, on events
 it never saw, while scoring far worse at particle level. This is not noise and
@@ -54,20 +54,20 @@ more correct.
 
 ### 3. Capacity is irrelevant; the objective sets the performance
 
-`tilt.py` replaces the generator with an exponential family
+`tilt.py` replaces the generator with an exponential family`
 `w(z; b) = exp(-b·T(z))`, fitted by moment-matching at detector level — a convex
 root-find with no adversary and no training:
 
-| method                    | parameters | particle | detector |
-| ------------------------- | ---------: | -------: | -------: |
-| tilt, degree 1            | **6**      | +78.5%   | +92.5%   |
-| tilt, degree 2            | 27         | +77.0%   | +94.8%   |
-| Deconvolve                       | ~34,000    | +78.9%   | +92.1%   |
-| oracle (fitted on truth)  | —          | **+93.2%** | +82.8% |
+| method                   | parameters |   particle | detector |
+| ------------------------ | ---------: | ---------: | -------: |
+| tilt, degree 1           |      **6** |     +78.5% |   +92.5% |
+| tilt, degree 2           |         27 |     +77.0% |   +94.8% |
+| Deconvolve                      |    ~34,000 |     +78.9% |   +92.1% |
+| oracle (fitted on truth) |          — | **+93.2%** |   +82.8% |
 
 **Six parameters match thirty-four thousand.** Across three orders of magnitude
 of capacity, every method that fits detector level lands at 77–79% at particle
-level; the method that fits *truth* reaches 93.2%. That ~15-point gap is the
+level; the method that fits _truth_ reaches 93.2%. That ~15-point gap is the
 price of not having truth, and it is not an optimisation failure.
 
 Degree 2 is the sharpest demonstration: 21 extra parameters **improve the
@@ -84,29 +84,29 @@ Measured two independent ways.
 closure consistent with zero (Herwig −0.000329 ± 0.000777, Pythia −0.000458 ±
 0.000328):
 
-| conditioning `Z`  | `I(S; X_m \| Z)`      | vs `Z = m` |
-| ----------------- | --------------------: | ---------: |
-| `m`               | 0.009006 ± 0.000461   | —          |
-| `m, ang2`         | 0.004488 ± 0.000329   | −50%, 8.0σ |
-| all six           | 0.002365 ± 0.000322   | −74%, 11.8σ |
-| all twelve        | 0.001623 ± 0.000380   | −82%       |
+| conditioning `Z` |    `I(S; X_m \| Z)` |  vs `Z = m` |
+| ---------------- | ------------------: | ----------: |
+| `m`              | 0.009006 ± 0.000461 |           — |
+| `m, ang2`        | 0.004488 ± 0.000329 |  −50%, 8.0σ |
+| all six          | 0.002365 ± 0.000322 | −74%, 11.8σ |
+| all twelve       | 0.001623 ± 0.000380 |        −82% |
 
 **Oracle residual** (`ceiling.py` D, per observable in isolation) — the share of
-each observable's detector-level MMD² that the *true* particle-level likelihood
+each observable's detector-level MMD² that the _true_ particle-level likelihood
 ratio cannot remove:
 
-| var | residual | detector/particle info |
-| --- | -------: | ---------------------: |
-| **m** | **45.3%** | **3.73** |
-| f_ch | 12.0% | 0.95 |
-| M | 5.6% | 1.20 |
-| ptd, n_ch, tau21, sdm | ≤3.5% | ≤1.14 |
-| w, zg, ang2, lha, q | **0.0%** | ≤0.85 |
+| var                   |  residual | detector/particle info |
+| --------------------- | --------: | ---------------------: |
+| **m**                 | **45.3%** |               **3.73** |
+| f_ch                  |     12.0% |                   0.95 |
+| M                     |      5.6% |                   1.20 |
+| ptd, n_ch, tau21, sdm |     ≤3.5% |                  ≤1.14 |
+| w, zg, ang2, lha, q   |  **0.0%** |                  ≤0.85 |
 
-For five observables the oracle removes the detector discrepancy *completely* —
+For five observables the oracle removes the detector discrepancy _completely_ —
 reweighting `z` fully explains `x`, as universal-response theory requires. Mass
 leaves 45%, six times the next worst in absolute terms. The last column is the
-mechanism: mass is the only observable carrying *more* generator-discriminating
+mechanism: mass is the only observable carrying _more_ generator-discriminating
 information at detector level than at particle level, and reweighting `z` can
 only remove the particle-level part.
 
@@ -131,12 +131,12 @@ measured rather than asserted. Going lower does nothing: 1e-5 against 3e-5 is
 **The plateau below 3e-5 is cancellation, not saturation**, and that is the
 interesting part. Per observable, 3e-5 → 1e-5:
 
-| observable | Δ | p |
-| ---------- | ---: | ---: |
-| f_ch  | **+12.0 ± 4.9** | 0.04 |
-| m     | **−6.3 ± 1.8**  | 0.01 |
-| tau21 | −1.6 ± 0.4      | 0.01 |
-| the other nine | flat | — |
+| observable     |               Δ |    p |
+| -------------- | --------------: | ---: |
+| f_ch           | **+12.0 ± 4.9** | 0.04 |
+| m              |  **−6.3 ± 1.8** | 0.01 |
+| tau21          |      −1.6 ± 0.4 | 0.01 |
+| the other nine |            flat |    — |
 
 Neither p clears Bonferroni at 24 tests, so read the sizes loosely — but the
 signs are the point. Lowering `lr_g` does not improve the solution uniformly;
@@ -168,7 +168,7 @@ Two cautions for whoever runs the next knob:
 
 `--lambda-dispersion` penalises the variance of `g`'s normalised MC weights,
 which is the same axis `lr_g` acts on indirectly — ESS runs 71.1% → 74.3% →
-76.7% as `lr_g` falls, so `lr_g`'s effect *was* a dispersion effect. The penalty
+76.7% as `lr_g` falls, so `lr_g`'s effect _was_ a dispersion effect. The penalty
 pushes it directly, and turns the §2 pathology into a one-parameter family you
 can walk.
 
@@ -180,14 +180,14 @@ scores against truth. The floor is **measured** by `mmd_floor.py`, at
 1.159e-4 ± 1.0e-5, and the threshold is two floors because the floor is one
 sigma of a zero-mean estimator:
 
-| λ | 11 obs | jet mass | detector | ESS | Δ MMD (floors) | in the tied set |
-| ---: | ---: | ---: | ---: | ---: | ---: | :-- |
-| 0 | 85.65 | 32.57 | 93.13 | 74.3% | +0.2 | yes |
-| 0.003 | 87.93 | 23.03 | 93.78 | 78.8% | +0.0 | yes |
-| **0.01** | **91.02** | **18.54** | 92.42 | 82.8% | +1.1 | **yes** |
-| 0.03 | 85.45 | 41.15 | 80.96 | 88.9% | +9.2 | no |
-| 0.1 | 55.42 | **78.87** | 51.95 | 95.7% | +67.6 | no |
-| 1.0 | 10.54 | 19.60 | 9.91 | 99.9% | +255.6 | no |
+|        λ |    11 obs |  jet mass | detector |   ESS | Δ MMD (floors) | in the tied set |
+| -------: | --------: | --------: | -------: | ----: | -------------: | :-------------- |
+|        0 |     85.65 |     32.57 |    93.13 | 74.3% |           +0.2 | yes             |
+|    0.003 |     87.93 |     23.03 |    93.78 | 78.8% |           +0.0 | yes             |
+| **0.01** | **91.02** | **18.54** |    92.42 | 82.8% |           +1.1 | **yes**         |
+|     0.03 |     85.45 |     41.15 |    80.96 | 88.9% |           +9.2 | no              |
+|      0.1 |     55.42 | **78.87** |    51.95 | 95.7% |          +67.6 | no              |
+|      1.0 |     10.54 |     19.60 |     9.91 | 99.9% |         +255.6 | no              |
 
 **The peak of the aggregate is the trough of jet mass.** λ=0.01 maximises the
 eleven non-mass observables and minimises the twelfth, in the same run. Paired
@@ -212,17 +212,17 @@ floor is a noise scale, the question is distance from the best arm, and the
 verdicts above survive both fixes unchanged.
 
 This is §2 in its sharpest form. Previously it was an observation about which
-*epoch* happened to be truth-best; here it is a dial, and turning it toward
+_epoch_ happened to be truth-best; here it is a dial, and turning it toward
 truth is exactly turning it away from the objective. At λ=0.1 the generator is
 barely reweighting (ESS 95.7%) and mass still reaches 78.9%, so most of the
-particle-level mass discrepancy is removable by a *gentle* reweighting and the
+particle-level mass discrepancy is removable by a _gentle_ reweighting and the
 aggressive reweighting the detector objective demands is what destroys it —
 which is what §4's non-universal mass response predicts.
 
 **ESS is a mechanism variable, not a target.** The oracle's 80.1% falls between
 λ=0.003 (78.8%) and λ=0.01 (82.8%) — i.e. at the aggregate's peak and mass's
 trough. Calibrating a coefficient to the oracle's ESS puts you at the worst
-setting for jet mass, because ESS is a scalar summary of a weight *function*
+setting for jet mass, because ESS is a scalar summary of a weight _function_
 and reaching the oracle's spread through a detector-shaped penalty gives the
 oracle's dispersion with a different function.
 
@@ -233,15 +233,15 @@ mass climbs back through the λ=0 baseline of 32.57 only at **λ ≈ 0.0240**. T
 criterion stops accepting the arm **1.49× in λ before** mass recovers. The
 headroom is separated from the admissible set by the criterion itself.
 
-| λ | 11 obs | jet mass | ESS | Δ MMD (floors) | in the tied set |
-| ---: | ---: | ---: | ---: | ---: | :-- |
-| 0 | 85.65 | 32.57 | 74.3% | +0.2 | yes |
-| 0.01 | 91.02 | 18.54 | 82.8% | +1.1 | yes |
-| **0.015** | **91.51** | 19.63 | 84.7% | +1.6 | **yes** |
-| 0.02 | 90.37 | 27.00 | 86.4% | +3.3 | no |
-| 0.025 | 88.27 | 33.89 | 87.7% | +5.6 | no |
-| 0.03 | 85.45 | 41.15 | 88.9% | +8.8 | no |
-| 0.1 | 55.42 | 78.87 | 95.7% | +64.2 | no |
+|         λ |    11 obs | jet mass |   ESS | Δ MMD (floors) | in the tied set |
+| --------: | --------: | -------: | ----: | -------------: | :-------------- |
+|         0 |     85.65 |    32.57 | 74.3% |           +0.2 | yes             |
+|      0.01 |     91.02 |    18.54 | 82.8% |           +1.1 | yes             |
+| **0.015** | **91.51** |    19.63 | 84.7% |           +1.6 | **yes**         |
+|      0.02 |     90.37 |    27.00 | 86.4% |           +3.3 | no              |
+|     0.025 |     88.27 |    33.89 | 87.7% |           +5.6 | no              |
+|      0.03 |     85.45 |    41.15 | 88.9% |           +8.8 | no              |
+|       0.1 |     55.42 |    78.87 | 95.7% |          +64.2 | no              |
 
 Judge admissibility against the best arm **ever measured**, not the best in one
 job: this sweep held no λ=0 arm, so λ=0.02 reads as tied against its own job and
@@ -264,18 +264,18 @@ Two of these are measurements and two are not, and the difference is the
 per-run spread. Across six default-configuration jet runs differing only in
 initialization, particle jet mass has **SD 7.16**; unpaired, resolving a
 2-point difference on it needs ~201 runs per arm. Every arm below was **n=1**,
-each at a *different* seed, so the bullets marked underpowered record that
+each at a _different_ seed, so the bullets marked underpowered record that
 nothing was found, not that nothing is there. `hparam_collect.py` and
 `scripts/submit_hparam.sh` exist to redo them with pairing and replicates.
 
-- **`lr_d`** — *underpowered, not null.* One run per level across a 30× range,
+- **`lr_d`** — _underpowered, not null._ One run per level across a 30× range,
   each at its own seed. What is solid is the reason to expect a null:
   `log2 − val_d` stays at 0.0011–0.0014 and never approaches the 0.0148 floor,
   because after reweighting that signal is no longer there to find. That is an
   argument, and the four runs do not test it.
 - **Generator capacity** — solid where it rests on `tilt.py` (§3), which is a
   deterministic convex solve with no seed: 6 parameters reach +78.5% and 27
-  reach +77.0%. The *Deconvolve* number in that table (+78.9%) is a single run and
+  reach +77.0%. The _Deconvolve_ number in that table (+78.9%) is a single run and
   carries a ±3 error bar, so read the tilt ladder, not the comparison to it.
 - **More observables** — 6 → 7 (`+ang2`) → 12 gave particle mass 22.5% → 31.1%
   → 31.4%, which looks like the predicted pattern but is **not evidence**: nine
@@ -320,7 +320,7 @@ initialization, how far `g` travels from `w ≡ 1`, how smooth it is forced to
 be, how dispersed its weights are allowed to get. The seed is the proof: a knob
 with no semantics at all moves particle mass by 24 points.
 
-So the knobs worth tuning are the ones that move *along* the manifold, not the
+So the knobs worth tuning are the ones that move _along_ the manifold, not the
 ones that fit the objective harder — §3 shows fitting harder is actively
 harmful (degree 1 → 2 improves detector 92.5 → 94.8 and degrades particle
 78.5 → 77.0). That prediction held: `lr_g` and `--lambda-dispersion` both move
@@ -340,7 +340,7 @@ What is the most a hyperparameter sweep could buy? Run this before spending on
 one.
 
 ```zsh
-uv run benchmarks/ceiling.py                       # six jet variables, 1M events
+uv run benchmarks/ceiling.py                       # all twelve jet variables, 1M events
 uv run benchmarks/ceiling.py --n-samples 200000    # a quicker read
 uv run benchmarks/ceiling.py --var m --var w
 uv run benchmarks/ceiling.py --run-dir runs/2026-… # adds C and D
@@ -365,8 +365,8 @@ between the generators and no reweighting of `z_gen` can fix both.
 
 **C, whether the residual is real or `d` gave up.** A and B bound what is
 achievable; C audits what a finished run did. Freeze a saved generator,
-reweight `x_sim` by its own weights, and converge a *fresh* discriminator
-against `x_data`. Scored through `deconvolve.train.weighted_bce`, so the number is
+reweight `x_sim` by its own weights, and converge a _fresh_ discriminator
+against `x_data`. Scored through `deconvolve.training.engine.weighted_bce`, so the number is
 `val_d` as `history.npz` defines it rather than something close to it. `--epoch`
 audits any epoch, not just the selected one, which is what `params.npz` exists
 for.
@@ -374,7 +374,7 @@ for.
 **D, whether the criterion prefers the oracle or the run.** A and C establish
 that detector level is saturated; that leaves the question resolution cannot
 answer — among weight functions that all match at detector level, does the
-criterion *rank* the truth-optimal one first? Scoring `w*` on the same weighted
+criterion _rank_ the truth-optimal one first? Scoring `w*` on the same weighted
 MMD the training loop selects with settles it.
 
 C and D read a run directory, and C refuses to run unless that run's
@@ -421,18 +421,18 @@ as many moments as there are parameters is a square root-find whose Jacobian is
 `exp(quadratic)` — degree 1 provably cannot represent it and degree 2 contains
 it:
 
-| config | degree 1 | degree 2 | degree 3 |
-| ------ | -------- | -------- | -------- |
-| 2d | +46.0% (2p) | **+95.3%** (5p) | +95.0% (9p) |
-| 4d | +32.1% (4p) | **+93.6%** (14p) | +93.6% (34p) |
-| 6d | +31.2% (6p) | **+95.5%** (27p) | +95.6% (83p) |
+| config | degree 1    | degree 2         | degree 3     |
+| ------ | ----------- | ---------------- | ------------ |
+| 2d     | +46.0% (2p) | **+95.3%** (5p)  | +95.0% (9p)  |
+| 4d     | +32.1% (4p) | **+93.6%** (14p) | +93.6% (34p) |
+| 6d     | +31.2% (6p) | **+95.5%** (27p) | +95.6% (83p) |
 
 Degree 2 captures essentially everything and degree 3 adds nothing, which is
 where theory says the ladder saturates. Residuals sit at machine precision.
 
 The `first-moment transfer` block is what it exists to produce on jets.
 Boltzmann guarantees a `b` reproducing any achievable `E_w[T(z)]`; it does not
-say the `b` found at *detector* level is that one. That holds only if the
+say the `b` found at _detector_ level is that one. That holds only if the
 response is mean-preserving and shared between data and MC.
 
 ## `response.py`
@@ -530,7 +530,7 @@ so it is directly comparable to §2's oracle at 80.1% (13124 of 16384) and Decon
 at 73.3%. It is the mechanism variable for `--lambda-dispersion`, which is how
 that coefficient gets calibrated instead of guessed. The `lr_g` sweep shows why
 it belongs here: ESS runs 11654 → 12175 → 12566 (71.1% → 74.3% → 76.7%) as
-`lr_g` falls, so `lr_g`'s effect *is* a dispersion effect and the penalty
+`lr_g` falls, so `lr_g`'s effect _is_ a dispersion effect and the penalty
 pushes the same variable directly. Note ESS is the mechanism, not the target:
 1e-5 has the highest ESS and no better aggregate.
 
@@ -605,7 +605,7 @@ uv run benchmarks/boundary.py
 
 The primary metric is the ratio of host numpy time to training loop time. Training scales with the accelerator; host numpy and the npz cache write do not. On CPU numpy looks cheap. On an A100 the same numpy may be most of the run.
 
-That ratio is what decided the metric port, and the port has happened: `_wd_per_dim`, `_js_per_dim` and `_triangular_per_dim` are `jnp` and run on device. The benchmark still imports those same helpers, so it now measures the ported path rather than the question that motivated it --- what is left on the host is the npz write and the `dim x n_bins` divergence reductions.
+`_wd_per_dim`, `_js_per_dim` and `_triangular_per_dim` are `jnp` and run on device, and the benchmark imports those same helpers, so what is left on the host is the npz write and the `dim x n_bins` divergence reductions.
 
 ## `precision.py`
 
@@ -673,13 +673,13 @@ uv run benchmarks/gpu_coexistence.py --json coexistence.json
 
 One A100-40GB, Perlmutter, September 2026. All five arms pass:
 
-| Arm | Parent | Free MiB before the worker | Worker |
-| --- | --- | --- | --- |
-| `control` | never touches JAX | 40441 / 40960 | ok |
-| `preallocate-default` | JAX on GPU, shipped defaults | 9675 | ok |
-| `preallocate-false` | `XLA_PYTHON_CLIENT_PREALLOCATE=false` | 39749 | ok |
-| `mem-fraction-0.4` | `XLA_PYTHON_CLIENT_MEM_FRACTION=0.4` | 23829 | ok |
-| `parent-on-cpu` | `JAX_PLATFORMS=cpu` | 40441 | ok |
+| Arm                   | Parent                                | Free MiB before the worker | Worker |
+| --------------------- | ------------------------------------- | -------------------------- | ------ |
+| `control`             | never touches JAX                     | 40441 / 40960              | ok     |
+| `preallocate-default` | JAX on GPU, shipped defaults          | 9675                       | ok     |
+| `preallocate-false`   | `XLA_PYTHON_CLIENT_PREALLOCATE=false` | 39749                      | ok     |
+| `mem-fraction-0.4`    | `XLA_PYTHON_CLIENT_MEM_FRACTION=0.4`  | 23829                      | ok     |
+| `parent-on-cpu`       | `JAX_PLATFORMS=cpu`                   | 40441                      | ok     |
 
 **No mitigation is needed.** The concern was that JAX preallocates ~75% of the
 card on its first device allocation, leaving a TensorFlow worker nothing --- and
@@ -716,7 +716,7 @@ failed on one. Acting on the worker's column alone fixes the wrong thing.
 
 `missing_libraries`, parsed from TF's own `Could not load dynamic library 'X'`
 lines, is the authoritative field. The `dlopen` table is kept because it
-separates *absent* from *merely off the system path* --- each row is
+separates _absent_ from _merely off the system path_ --- each row is
 cross-referenced against the wheels on disk --- but it is labelled as
 supporting evidence and nothing more. Getting TF to emit those lines needs
 `TF_CPP_VMODULE=dso_loader=1`; `TF_CPP_MIN_LOG_LEVEL` does not reach them, and

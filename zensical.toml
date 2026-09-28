@@ -1,0 +1,114 @@
+[project]
+site_name = "Deconvolve"
+site_description = "Reweighting Adversarial Networks for High Energy Physics"
+site_author = "Krish Desai"
+repo_url = "https://github.com/krishdesai7/deconvolve"
+repo_name = "krishdesai7/deconvolve"
+
+docs_dir = "docs"
+site_dir = "site"
+
+extra_css = ["stylesheets/extra.css"]
+extra_javascript = [
+  "javascripts/mermaid.mjs",
+  "javascripts/mathjax.js",
+  "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
+]
+
+# `api/` is written by `scripts/gen_api_docs.py` before each build; its
+# SUMMARY.md supplies that section's nav through literate-nav.
+nav = [
+  { "Overview" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Quickstart" = "getting-started/quickstart.md" },
+  ] },
+  { "User Guide" = [
+    { "CLI Reference" = "user-guide/cli.md" },
+    { "Configuration" = "user-guide/configuration.md" },
+    { "Datasets" = "user-guide/datasets.md" },
+    { "Evaluation & Metrics" = "user-guide/evaluation.md" },
+    { "Baselines" = "user-guide/baselines.md" },
+    { "Reporting & Artifacts" = "user-guide/reporting.md" },
+  ] },
+  { "Theory & Methodology" = [
+    { "Adversarial Reweighting" = "theory/reweighting.md" },
+    { "MMD Model Selection" = "theory/mmd.md" },
+    { "Saturation & Diagnostics" = "theory/diagnostics.md" },
+  ] },
+  { "Architecture" = [
+    { "System Design" = "architecture/system-design.md" },
+    { "Data Model" = "architecture/data-model.md" },
+    { "Precision & Hardware" = "architecture/precision.md" },
+    { "Caching & Seeding" = "architecture/caching-seeding.md" },
+    { "Timing & Profiling" = "architecture/timing.md" },
+    { "Uncertainty Quantification" = "architecture/uncertainty.md" },
+  ] },
+  { "API Reference" = "api/" },
+  { "Developer Guide" = [
+    { "Contributing" = "developer/contributing.md" },
+    { "Releasing" = "developer/releasing.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.expand",
+  "navigation.top",
+  "navigation.tracking",
+  "search.suggest",
+  "search.highlight",
+  "content.code.copy",
+  "content.code.annotate",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "material/brightness-7"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "material/brightness-4"
+toggle.name = "Switch to light mode"
+
+[project.plugins.literate-nav]
+nav_file = "SUMMARY.md"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+show_source = true
+show_root_heading = true
+show_root_toc_entry = true
+show_category_heading = false
+merge_init_into_class = true
+docstring_style = "google"
+filters = ["!^_", "!^logger$"]
+show_if_no_docstring = true
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+footnotes = {}
+md_in_html = {}
+pymdownx.details = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+pymdownx.highlight = { anchor_linenums = true, line_spans = "__span", pygments_lang_class = true }
+pymdownx.inlinehilite = {}
+pymdownx.snippets = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.arithmatex.generic = true
+toc.permalink = true

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def test_render_metrics_outputs_named_columns_and_values() -> None:
-    from deconvolve.evaluate import render_metrics
+    from deconvolve.evaluation.evaluate import render_metrics
 
     output = StringIO()
     console = Console(file=output, color_system=None, width=120)

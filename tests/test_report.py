@@ -1,4 +1,4 @@
-"""Tests for `deconvolve.report`'s template loading and value-formatting primitives."""
+"""Tests for `deconvolve.reporting.report`'s template loading and value formatting."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import pytest
-from deconvolve import report
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES
+from deconvolve.reporting import report
 
 
 def test_the_template_ships_with_the_package() -> None:
@@ -90,7 +90,7 @@ def test_a_non_finite_improvement_leaves_the_rest_of_the_row_intact() -> None:
     )
 
     # Two absent-IBU cells, two absent-OmniFold cells, and the non-finite
-    # Deconvolve improvement.
+    # RAN improvement.
     assert body.count(r"\multicolumn{1}{c}{---}") == 5
     # The scaled `after` still lands: 0.1 x 10^3.
     assert "100" in body
@@ -654,7 +654,7 @@ class TestOmniFoldColumns:
         assert "50" in body
 
     def test_the_methods_are_ordered_ibu_omnifold_ran(self) -> None:
-        """Deconvolve sits last, where the eye lands, behind what it is compared to.
+        """RAN sits last, where the eye lands, behind what it is compared to.
 
         Ordering is positional in the row -- nothing labels the cells -- so a
         swapped pair would silently attribute each method's numbers to another.
@@ -663,19 +663,19 @@ class TestOmniFoldColumns:
             "detector",
             "wasserstein",
             ("m",),
-            {"detector_m": _entry(1.0, 0.001)},  # Deconvolve: 1.0
+            {"detector_m": _entry(1.0, 0.001)},  # RAN: 1.0
             {"detector_m": _entry(1.0, 0.002)},  # IBU: 2.0
             {"detector_m": _entry(1.0, 0.003)},  # OmniFold: 3.0
             frozenset(),
         )
 
         cells = [c.strip() for c in body.splitlines()[-1].split("&")]
-        # label, Sim, IBU, IBU%, OmniFold, OmniFold%, Deconvolve, Deconvolve%
+        # label, Sim, IBU, IBU%, OmniFold, OmniFold%, RAN, RAN%
         assert len(cells) == report._TABLE_COLUMNS
         assert cells[2].removeprefix(r"\bfseries ").startswith("2")
         assert cells[4].removeprefix(r"\bfseries ").startswith("3")
         assert cells[6].removeprefix(r"\bfseries ").startswith("1")
-        # Deconvolve performed best (1.0 vs 2.0 and 3.0), so its cells are bolded
+        # RAN performed best (1.0 vs 2.0 and 3.0), so its cells are bolded
         assert cells[6].startswith(r"\bfseries")
         assert cells[7].startswith(r"\bfseries")
         assert not cells[2].startswith(r"\bfseries")
@@ -683,7 +683,7 @@ class TestOmniFoldColumns:
 
     def test_best_performing_method_is_bolded(self) -> None:
         r"""The method achieving lowest distance is highlighted with \bfseries."""
-        # OmniFold (0.001) wins over Deconvolve (0.002) and IBU (0.003)
+        # OmniFold (0.001) wins over RAN (0.002) and IBU (0.003)
         body = report.metrics_table(
             "detector",
             "wasserstein",

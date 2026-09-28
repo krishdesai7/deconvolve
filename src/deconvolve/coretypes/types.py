@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Protocol, TypedDict
 import numpy as np
 
 # `Variables` is used as a runtime annotation by the `@jaxtyped(beartype)`
-# functions in `deconvolve.train`, and beartype has to evaluate the alias to check
-# it -- so `JaxArray` cannot hide under TYPE_CHECKING.
+# functions in `deconvolve.training.engine`, and beartype has to evaluate the
+# alias to check it -- so `JaxArray` cannot hide under TYPE_CHECKING.
 from jax import Array as JaxArray
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import ArrayLike, NDArray
 
-    from ..train import TrainState
+    from ..training import TrainState
 
 # ---------------------------------
 # Plotting
@@ -78,12 +78,12 @@ class StatelessOptimizer(Protocol):
 
 
 # `jax.value_and_grad(..., has_aux=True)` reveals as `(...) -> tuple[Any, Any]`,
-# so naming the real shape here is a legal narrowing -- and it is what makes the
-# destructuring at the call sites typed instead of `Any`.
+# so naming the real shape here is a legal narrowing that types the
+# destructuring at the call sites instead of leaving it as `Any`.
 type GradsAndAux = tuple[tuple[JaxArray, Variables], Variables]
 #: `g`'s aux carries a second array: the loss it is *scored* on, which is not
 #: the loss it is differentiated through once a dispersion penalty is on. See
-#: `train.weight_dispersion`.
+#: `engine.weight_dispersion`.
 type GenGradsAndAux = tuple[tuple[JaxArray, tuple[Variables, JaxArray]], Variables]
 
 
