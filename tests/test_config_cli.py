@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import io
+import json
 import os
 from typing import TYPE_CHECKING, cast
 
 import pytest
 from deconvolve.cli import app
 from deconvolve.config import Layer, Resolved, origins_for
+from deconvolve.config.show import render
+from rich.console import Console
 from typer.testing import CliRunner
 
 if TYPE_CHECKING:
@@ -169,6 +173,26 @@ def test_config_show_json_is_machine_readable(project: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["values"]["train"]["n-epochs"] == 500
     assert "deconvolve.toml" in payload["origins"]["train"]["n-epochs"]
+
+
+def test_config_show_json_stays_plain_on_a_forced_terminal() -> None:
+    """`FORCE_COLOR` (or CI) forces a terminal; `--json` must still parse."""
+    buffer = io.StringIO()
+    resolved = Resolved(
+        values={("train",): {"n_epochs": 500}},
+        origins={("train",): {"n_epochs": "deconvolve.toml:/p/deconvolve.toml"}},
+        layers=(Layer(origin="deconvolve.toml:/p/deconvolve.toml", data={}),),
+    )
+
+    render(
+        resolved,
+        {},
+        console=Console(file=buffer, force_terminal=True, color_system="truecolor"),
+        as_json=True,
+    )
+
+    assert "\x1b[" not in buffer.getvalue()
+    assert json.loads(buffer.getvalue())["values"]["train"]["n-epochs"] == 500
 
 
 def test_config_show_as_json_is_not_layerable(project: Path) -> None:

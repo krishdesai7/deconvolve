@@ -161,7 +161,12 @@ def render(
     """
     active: Console = console or Console()
     if as_json:
-        active.print_json(json=json.dumps(obj=_payload(resolved, command), default=str))
+        # Unhighlighted: `--json` is for pipes, and a forced terminal
+        # (`FORCE_COLOR`, CI) would otherwise wrap every token in ANSI codes.
+        active.print_json(
+            json=json.dumps(obj=_payload(resolved, command), default=str),
+            highlight=False,
+        )
         return
     active.print(_layers_table(resolved))
     active.print(_values_table(resolved, command))

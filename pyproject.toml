@@ -128,6 +128,11 @@ env = [
     "OPENBLAS_NUM_THREADS = 1",
     "MKL_NUM_THREADS = 1",
     "XLA_PYTHON_CLIENT_PREALLOCATE = false",
+    # Typer forces Rich terminal output when `GITHUB_ACTIONS` (or `FORCE_COLOR`,
+    # `PY_COLORS`) is set, and the option highlighter then splits `--n-epochs`
+    # into separately styled pieces, so an assertion on CLI output passes
+    # locally and fails in CI. This is Typer's own off switch.
+    "_TYPER_FORCE_DISABLE_TERMINAL = 1",
 ]
 
 
