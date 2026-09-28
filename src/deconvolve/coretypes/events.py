@@ -78,6 +78,20 @@ class Events:
         )
 
 
+def _check_event_array(name: str, array: EventArray, /) -> None:
+    """One array is at the pinned dtype and 2-D, `(events, features)`."""
+    if array.dtype != EVENT_DTYPE:
+        raise ValueError(
+            f"{name} is {array.dtype}; events must be "
+            f"{np.dtype(EVENT_DTYPE)}, narrowed where the source builds them"
+        )
+    if array.ndim != 2:
+        raise ValueError(
+            f"{name} has shape {array.shape}; events must be 2-D, "
+            "(events, features), even with a single feature"
+        )
+
+
 @dataclass(frozen=True, eq=False, slots=True)
 class Populations:
     """The physics view of a labelled sample.
@@ -114,16 +128,11 @@ class Populations:
             "truth": self.truth,
         }
         for name, array in arrays.items():
-            if array.dtype != EVENT_DTYPE:
-                raise ValueError(
-                    f"{name} is {array.dtype}; events must be "
-                    f"{np.dtype(EVENT_DTYPE)}, narrowed where the source builds them"
-                )
-            if array.ndim != 2:
-                raise ValueError(
-                    f"{name} has shape {array.shape}; events must be 2-D, "
-                    "(events, features), even with a single feature"
-                )
+            _check_event_array(name, array)
+        self._check_alignment(arrays)
+
+    def _check_alignment(self, arrays: dict[str, EventArray], /) -> None:
+        """The four arrays describe the same observables and nature events."""
         for name, array, reference in (
             ("truth", self.truth, "mc.z"),
             ("data", self.data, "mc.x"),

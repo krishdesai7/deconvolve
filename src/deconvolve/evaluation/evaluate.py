@@ -604,27 +604,33 @@ def render_metrics(
             for var in var_names
             if f"{level}_{var}" in metrics
         ]
-        if not level_metrics:
-            continue
-        table = Table(
-            title=f"{run_name} — {level.title()} level",
-            caption=f"All distances x{METRIC_DISPLAY_SCALE:g}",
-        )
-        table.add_column(header="Variable")
-        table.add_column(header="Metric")
-        table.add_column(header="Before", justify="right")
-        table.add_column(header="After", justify="right")
-        table.add_column(header="Improvement", justify="right")
-        for var, m in level_metrics:
-            for i, (key, label) in enumerate(_METRIC_LABELS):
-                table.add_row(
-                    var if i == 0 else "",
-                    label,
-                    f"{m[f'{key}_before'] * METRIC_DISPLAY_SCALE:.4f}",
-                    f"{m[f'{key}_after'] * METRIC_DISPLAY_SCALE:.4f}",
-                    f"{m[f'{key}_improvement_pct']:+.1f}%",
-                )
-        active_console.print(table)
+        if level_metrics:
+            active_console.print(_metrics_table(run_name, level, level_metrics))
+
+
+def _metrics_table(
+    run_name: str, level: str, level_metrics: list[tuple[str, Any]], /
+) -> Table:
+    """One level's metrics, one row per (variable, metric), scaled for display."""
+    table = Table(
+        title=f"{run_name} — {level.title()} level",
+        caption=f"All distances x{METRIC_DISPLAY_SCALE:g}",
+    )
+    table.add_column(header="Variable")
+    table.add_column(header="Metric")
+    table.add_column(header="Before", justify="right")
+    table.add_column(header="After", justify="right")
+    table.add_column(header="Improvement", justify="right")
+    for var, m in level_metrics:
+        for i, (key, label) in enumerate(_METRIC_LABELS):
+            table.add_row(
+                var if i == 0 else "",
+                label,
+                f"{m[f'{key}_before'] * METRIC_DISPLAY_SCALE:.4f}",
+                f"{m[f'{key}_after'] * METRIC_DISPLAY_SCALE:.4f}",
+                f"{m[f'{key}_improvement_pct']:+.1f}%",
+            )
+    return table
 
 
 def evaluate_runs(run_dir: Path = RUN_DIR, force: bool = False) -> None:

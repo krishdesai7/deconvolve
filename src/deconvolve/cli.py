@@ -56,12 +56,15 @@ def _gate_autoenv(command: Command, spec: CommandSpec | None, /) -> None:
     what keeps an exported `DECONVOLVE_INSTALL_COMPLETION` from firing on
     every invocation.
     """
+    # No spec means nothing is layerable, here and in every subcommand.
+    options: dict[str, Any] = spec.options if spec is not None else {}
+    children: dict[str, CommandSpec] = spec.children if spec is not None else {}
     for param in command.params:
         if isinstance(param, TyperOption) and param.name is not None:
-            param.allow_from_autoenv = spec is not None and param.name in spec.options
+            param.allow_from_autoenv = param.name in options
     if isinstance(command, TyperGroup):
         for name, child in command.commands.items():
-            _gate_autoenv(child, spec.children.get(name) if spec is not None else None)
+            _gate_autoenv(child, children.get(name))
 
 
 class _GatedGroup(TyperGroup):
