@@ -1,3 +1,12 @@
+"""The variance budget for a RAN measurement, and its bin-to-bin covariance.
+
+A `B x S` grid of bootstrap replicates crossed with initialization seeds,
+trained one cell per invocation (`design`), decomposed into its data,
+initialization and residual components (`variance`), and written up by
+`report.collect`. The design and what it measures are described in the
+Uncertainty Quantification architecture page.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

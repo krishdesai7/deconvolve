@@ -617,6 +617,7 @@ def plot_detector_level(
     baselines: Sequence[BaselineOverlay] = (),
     variables: tuple[str, ...] | None = None,
 ) -> None:
+    """Detector level: data against simulation, before and after reweighting."""
     test: Populations = _collect_data(test_dataset)
 
     _plot_level(
@@ -639,6 +640,7 @@ def plot_particle_level(
     baselines: Sequence[BaselineOverlay] = (),
     variables: tuple[str, ...] | None = None,
 ) -> None:
+    """Particle level: truth against generation, before and after reweighting."""
     test: Populations = _collect_data(test_dataset)
 
     _plot_level(

@@ -87,14 +87,10 @@ test = [
 # `hishel.Controller` no longer exists.
 release = ["rooster==0.1.1"]
 docs = [
-    # Capped: MkDocs 2.0 removes the plugin system entirely, which would
-    # break mkdocstrings and the Material theme.
-    "mkdocs>=1.6.0,<2",
-    "mkdocs-gen-files>=0.6.1,<=0.6.1",
-    "mkdocs-literate-nav>=0.6.3,<=0.6.3",
-    "mkdocs-material>=9.5.0,<=9.7.7",
-    "mkdocs-section-index>=0.3.12,<=0.3.12",
-    "mkdocstrings[python]>=0.26.0,<=1.0.6",
+    "mkdocstrings-python>=2.0.9,<=2.0.9",
+    # Capped: Zensical is pre-1.0 and its MkDocs-plugin compatibility layer
+    # (mkdocstrings, literate-nav) is still moving between releases.
+    "zensical>=0.0.65,<=0.0.65",
 ]
 
 

@@ -165,3 +165,9 @@ Same as `submit_hparam.zsh`, and it matters more here: a cold cache would pull 3
 - `N_BINS`: Bins for the covariance, passed to `collect`. Equal-occupancy, so a discrete observable can come back with fewer.
 - `RUN_ARGS`: Arguments passed to `deconvolve uncertainty freeze` on the login node, before any cell exists — not to the cells themselves, which read the frozen `design.json` instead. Defaults to the paper's configuration on purpose — a design run at cheaper settings is a variance budget for a model nobody is publishing.
 - `NODES`, `PROJECT_DIR`, `DESIGN_DIR`, `JOB`: as in `submit_hparam.zsh`.
+
+# Docs
+
+## gen_api_docs.py
+
+Writes the API reference under `docs/api/`: one page per public module under `src/deconvolve/`, an index per package, and the `SUMMARY.md` that literate-nav turns into that section's nav. Zensical has no hook for generated pages (it does not support `mkdocs-gen-files`), so `just doc-build` and `just doc-serve` run this first. The output is wiped and rewritten each time and is gitignored; never edit it by hand. Page content comes from docstrings, rendered by mkdocstrings at build time.

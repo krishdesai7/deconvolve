@@ -1,3 +1,11 @@
+"""CLI choice enums.
+
+They live here rather than beside the code they select for so that a choice
+type is not tied to the module that consumes it -- `DatasetName` names an
+option `deconvolve.data` implements, and `LogLevel` one that
+`deconvolve.instrumentation.logging_config` does.
+"""
+
 from __future__ import annotations
 
 from enum import StrEnum, auto

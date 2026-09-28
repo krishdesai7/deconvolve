@@ -61,15 +61,17 @@ def link(parts: tuple[str, ...], *, package: bool, base: tuple[str, ...]) -> str
 def write(rel: Path, text: str) -> None:
     path = OUT / rel
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    _ = path.write_text(text)
 
 
 def package_page(pkg: tuple[str, ...]) -> str:
     if len(pkg) == 1:
         head = (
             "# API Reference\n\n"
-            "Generated from the source tree, type annotations and docstrings "
-            "on every docs build.\n\n"
+            f"::: {PACKAGE}\n"
+            "    options:\n"
+            "      members: false\n"
+            "      show_root_heading: false\n\n"
         )
     else:
         # `members: false`: packages re-export their submodules' names,

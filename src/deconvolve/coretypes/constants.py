@@ -1,3 +1,9 @@
+"""Fixed values shared across the package.
+
+The Zenodo jet dataset, its cache layout, plot metadata, the default purity
+threshold, and the stand-in for an absent particle level.
+"""
+
 from __future__ import annotations
 
 import math
@@ -23,17 +29,30 @@ if TYPE_CHECKING:
 # this line.
 EVENT_DTYPE: Final[type[np.single]] = np.single
 
-# Everything RAN can regenerate lives under one root: the dataset `.npz`
-# caches and the XLA compilation cache. `DECONVOLVE_CACHE_DIR` relocates the whole
-# tree, which a cluster needs (on Perlmutter `$HOME` is small and quota'd;
-# `$SCRATCH` is not). This is deliberately not derived from `XDG_CACHE_HOME`.
-#
-# Read once, at import, since the `cache_dir=` defaults throughout `deconvolve.data`
-# bind to this module-level constant at import either way.
 CACHE_ENV_VAR: Final[LiteralString] = "DECONVOLVE_CACHE_DIR"
+"""The environment variable that relocates `CACHE_DIR`."""
 CACHE_DIR: Final[Path] = Path(
     os.environ.get(key=CACHE_ENV_VAR) or ".cache"
 ).expanduser()
+"""The one root for everything RAN can regenerate.
+
+Generated Gaussian datasets, the per-variable jet caches pulled from Zenodo,
+and the XLA compilation cache under `jax/`. It is `.cache` unless
+`DECONVOLVE_CACHE_DIR` (the value of `CACHE_ENV_VAR`) says otherwise,
+relocating the tree to e.g. `$SCRATCH` on a cluster where `$HOME` is quota'd
+and shared, as on Perlmutter.
+
+It is deliberately not derived from `XDG_CACHE_HOME`. That variable is already
+set, or defaults to `~/.cache`, on most Linux systems -- deriving from it would
+silently move every existing checkout's cache and orphan the jet data already
+on disk.
+
+`~` is expanded, and an empty value falls back to the default rather than
+being taken as the current directory: a SLURM `--export` forwarding an unset
+variable delivers `""`, not absence. The value is read once, at import,
+because the `cache_dir=` defaults throughout `deconvolve.data` bind to
+`CACHE_DIR` at import either way.
+"""
 
 # XLA keys its persistent cache on lowered HLO plus the jaxlib and backend
 # versions, so a stale entry is a miss rather than a wrong answer -- upgrading
@@ -118,24 +137,32 @@ class JetVarInfo(NamedTuple):
     symbol: str
 
 
-# The value `_get_var` writes for a jet groomed to nothing, where ln(rho^2) is
-# undefined. It is **not** a bound on the observable: real jets reach -37.9, so
-# this sentinel sits inside the distribution rather than below it, and ~0.75% of
-# events fall past it. `SDM_XLIM` is a separate number for that reason -- an
-# axis limit chosen for where the bulk lives, not derived from the sentinel.
-#
-# The degenerate jets are a spike superimposed on a smooth tail, and the
-# fraction is generator-dependent (detector level: Herwig 0.034%, Pythia
-# 0.057%) -- exactly the shape of thing `benchmarks/response.py` is built to
-# detect. But the most information an "is it at the floor?" bit can carry at
-# those rates is 1.5e-5 nats, against a measured I(S; X | Z) of 3.6e-3 --
-# 0.42% of the effect. Moving the sentinel would shift the standardization
-# statistics for a correction two orders of magnitude below what it would fix.
-#
-# The spike is never ambiguous, either: reaching exactly -14.0 from a
-# continuous log is measure-zero, so an event at the sentinel is a degenerate
-# jet and nothing else.
 LOG_RHO_FLOOR: Final[float] = -14.0
+r"""The value `_get_var` writes for a jet groomed to nothing.
+
+Soft drop grooms some jets down to a single prong, leaving $m_{sd} = 0$ and
+$\ln(\rho) = \ln\left(\frac{m_{sd}^2}{p_T^2}\right) = -\infty$. Those jets
+take this value instead. Unlike $-\infty$ (or the $10^{-100}$ the upstream
+OmniFold observable adds inside the log, which floors at $-230$) it does not
+swamp the mean and variance that the features are standardized by.
+
+It is **not** a bound on the observable: real jets reach -37.9, so this
+sentinel sits inside the distribution rather than below it, and ~0.75% of
+events fall past it. `SDM_XLIM` is a separate number for that reason -- an
+axis limit chosen for where the bulk lives, not derived from the sentinel.
+
+The degenerate jets are a spike superimposed on a smooth tail, and the
+fraction is generator-dependent (detector level: Herwig 0.034%, Pythia
+0.057%) -- exactly the shape of thing `benchmarks/response.py` is built to
+detect. But the most information an "is it at the floor?" bit can carry at
+those rates is 1.5e-5 nats, against a measured $I(S; X | Z)$ of 3.6e-3 --
+0.42% of the effect. Moving the sentinel would shift the standardization
+statistics for a correction two orders of magnitude below what it would fix.
+
+The spike is never ambiguous, either: reaching exactly -14.0 from a
+continuous log is measure-zero, so an event at the sentinel is a degenerate
+jet and nothing else.
+"""
 
 # Covers ~99.25% of events. The remainder is a genuine tail, not an artifact.
 SDM_XLIM: Final[tuple[float, float]] = (-14.0, -2.0)
@@ -257,6 +284,24 @@ def display_order(variables: Sequence[str], /) -> tuple[int, ...]:
 
 DEFAULT_PURITY_THRESHOLD: Final[np.double] = np.sqrt(0.5)
 TRUTH_SENTINEL: Final[np.double] = np.double(np.iinfo(int_type=np.short).min)
+"""Stands in for a particle-level value that does not exist.
+
+That happens in one place: a real measurement, which has data but no answer
+key.
+
+It has to be finite. `normalize_weights` annihilates the nature rows of the
+generator's output by multiplying by $(1 - y) = 0$, and under IEEE 754 that
+annihilates any finite number but not a NaN. `0 * np.nan` is `np.nan`, which
+then spreads through the class-normalizing sum to every weight in the batch,
+and through `jax.grad` to every gradient. Sanitizing the masked output would
+not help either, since the `np.nan` is already in `z` when `g` forward-passes
+it. The fix has to sit at the input, and be an ordinary number.
+
+$-2^{15}$ is that number: absurd on sight for any standardized observable,
+exact in every IEEE binary format down to float16, and far enough inside
+float16's range (65504) that it survives a narrowing cast instead of becoming
+`±inf`, which would put `0 * inf = nan` right back.
+"""
 
 # What `deconvolve leakage-check --poison` overwrites z_true with. Any far-off-manifold
 # value does the job, so this is only a default -- but it must not be

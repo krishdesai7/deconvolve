@@ -22,7 +22,7 @@
 # inside the 90 minutes requested.
 #
 # This is the grid shape the published numbers use
-# (src/ran/uncertainty/README.md): a B=50 run confirmed against it (every lag
+# (notes/agent/uncertainty.md): a B=50 run confirmed against it (every lag
 # correlation within 0.01, every effective rank within 0.2) before B=100
 # superseded it as the smaller grid's individual off-diagonal entries moved by
 # up to 0.39 -- too much to publish a single matrix entry from, even though the
@@ -31,7 +31,7 @@
 # Those published numbers were measured at `-n1000000`. The default below is
 # now 1.6M, matching what `scripts/submit.zsh` trains, so a design run here
 # supersedes them rather than describing a different model -- see the note in
-# `src/ran/uncertainty/README.md` under "What the design measured". Both grids
+# `notes/agent/uncertainty.md` under "What the design measured". Both grids
 # have to be rerun for that to hold: a decomposition at one sample size and a
 # covariance at another do not describe the same measurement.
 #

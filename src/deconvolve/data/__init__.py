@@ -1,3 +1,14 @@
+"""The dataset, from its sources to the accelerator.
+
+The same events are described in three forms along the way. Sources
+(`jets`, and the Gaussian draw in `datasets`) produce
+`deconvolve.coretypes.Populations`, the physics form; `Populations.interleave`
+turns it into a `ZXY`, the labelled transport form that `datasets` shuffles
+and splits; and `device` moves those splits onto the accelerator as the
+training form. `config` parses Gaussian dataset configs, and `download`
+fetches and caches the jet data.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

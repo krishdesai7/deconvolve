@@ -17,8 +17,11 @@ fixed dataset, vary the dataset at one fixed seed --- estimate
 quadrature gives `sigma_a^2 + sigma_b^2 + 2 sigma_eps^2`, which overstates the
 total by exactly the interaction term: the part of a run that depends on the
 *combination* of dataset and seed and is attributable to neither. In a min-max
-game that term is not small, so the naive sum is not a conservative
-approximation to quote --- it is a wrong number in a known direction.
+game that term is not small: the effect of an init seed already fails to
+transfer across `lr_g` arms (measured `r = +0.04`), which is the same
+phenomenon in a different coordinate. So the naive sum is not a conservative
+approximation to quote --- it is a wrong number in a known direction, and the
+only way to know by how much is to run the grid.
 
 `decompose` therefore reads a full `B x S` grid and returns all three
 components, from the balanced two-way crossed random-effects ANOVA:
@@ -40,9 +43,8 @@ is method variance.
 
 The evaluation set's own sampling variance is common to every cell, so it
 cancels from all three components; `evaluation_variance` and
-`evaluation_covariance` supply it separately. See
-`Seeding` in `CLAUDE.md` for the two axes and
-`XLA_FLAGS=--xla_gpu_deterministic_ops=true` for the residual GPU
+`evaluation_covariance` supply it separately. See `notes/agent/seeding.md`
+for the two axes and `XLA_FLAGS=--xla_gpu_deterministic_ops=true` for the residual GPU
 nondeterminism.
 
 Components are moment estimators, not variances of anything, so an unlucky

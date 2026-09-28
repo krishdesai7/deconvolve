@@ -1,3 +1,17 @@
+"""Gaussian dataset configuration.
+
+Configuration files for Gaussian datasets are YAML files with the following
+structure:
+
+```yaml
+mu_gen: float | list[float]
+mu_true: float | list[float]
+sigma_gen: float | list[float] | list[list[float]]
+sigma_true: float | list[float] | list[list[float]]
+sigma_detector: float | list[float] | list[list[float]]
+```
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -100,6 +114,22 @@ def sigma_to_covariance(
 def gaussian_config_from_run_config(
     params: Mapping[str, Any], dim: int
 ) -> GaussianConfig:
+    """Rebuild a `GaussianConfig` from a run's `config.json` `gaussian_params`.
+
+    Accepts every format `runs/` has ever held -- two deprecated formats and
+    one current format. Two share their key names:
+
+    - `cov_gen`: covariance matrices, written since the type refactor.
+    - `sigma_gen` (2-D): covariance matrices under the old name -- master's
+      `__main__` stored `cov_gen` as `sigma_gen`.
+    - `sigma_gen` (scalar or vector): a raw sigma, from before that, needing
+      promotion.
+
+    A 2-D `sigma_*` is taken as an already-formed matrix (checked for shape,
+    symmetry and positive-definiteness); anything else goes through
+    `sigma_to_covariance`, so a raw scalar promotes to σ²I and a vector to
+    diag(σ²). The `cov_*` spelling needs no promotion at all.
+    """
     missing: set[str] = {"mu_gen", "mu_true"} - params.keys()
     if missing:
         raise ValueError(f"gaussian_params missing required keys: {missing}")
@@ -135,6 +165,7 @@ def gaussian_config_from_run_config(
 
 
 def parse_gaussian_config(config_path: Path) -> GaussianConfig:
+    """Parse a Gaussian YAML config file, promoting each sigma to a covariance."""
     with config_path.open() as f:
         raw: dict[str, Any] = yaml.safe_load(stream=f)
 

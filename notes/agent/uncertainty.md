@@ -26,7 +26,8 @@ rest of the array does not share. See "The freeze path" in
 model.
 
 Three things are decided here rather than left to the caller, and
-`src/deconvolve/uncertainty/README.md` argues each at length.
+[the Uncertainty Quantification page](../../docs/architecture/uncertainty.md)
+sets each out in full.
 
 **Three sources, not two.** Finite sample (bootstrap), split and batch order
 (`data_seed`), and initialization (`seed`). Only the first is a statistical
@@ -77,5 +78,95 @@ replicates has rank `B - 1`, so at `B <= K` every correlation saturates at
 heatmap speak for itself.
 
 The finalized numbers — an 8x8 decomposition and a 100x2 covariance on the
-shipped jet configuration — are recorded in `src/deconvolve/uncertainty/README.md`,
-along with the two caveats that bound them.
+shipped jet configuration — are recorded below, along with the two caveats
+that bound them.
+
+## What the design measured
+
+> **Measured under the previous design.** Everything below predates three
+> corrections made on 2026-09-27: replicates were split *after* resampling
+> (about half of each validation set was also training data), the split was
+> fixed by the replicate (so its variance was counted in the data
+> component), and the evaluation sample's own variance was not reported. The
+> data component and every figure derived from it --- in particular the
+> 0.63-0.80x ratio below --- are therefore not the statistical uncertainty
+> they are presented as, and must be re-measured. The structural findings
+> (no seed main effect; a large residual; strongly correlated neighbouring
+> bins) are the most likely to survive, but that too is to be confirmed.
+
+> **Superseded configuration.** Everything below was measured at
+> `-n1000000`. The shipped run is now `-n1600000` (`scripts/submit.zsh`), and a
+> variance budget at one sample size does not describe a measurement at
+> another: the finite-sample component is the one being reported, and it is the
+> one that moves with N. Both grids are being rerun at 1.6M — the decomposition
+> _and_ the covariance, since mixing sizes across the two would describe no
+> single model. Until those land, the numbers here are the best available and
+> are quantitatively wrong for the current run. The structural findings
+> (initialization has no main effect; the interaction dominates) are what is
+> expected to survive, because neither is a statement about sample size.
+
+Three grids on the twelve-observable jet run at the then-shipped configuration
+(`-n1000000 -l3 -u128`, `lr_g` 3e-5, `lambda_dispersion` 0.015), 2026-09-02 to
+2026-09-03: an 8x8 for the decomposition, and 50x2 then 100x2 for the
+covariance, the second superseding the first once it confirmed nothing moved.
+All 364 cells across the three trained, no non-finite scores, ESS/m 0.851-0.852
+throughout. The numbers below are final: 8x8 for the decomposition, 100x2 for
+the covariance.
+
+**Initialization has no main effect.** Across all twelve observables the seed
+component of the unfolded mean runs from -3.7% to +11.2% of the total
+variance, most of it negative --- that is, unresolved at this grid size and
+consistent with zero. The same is true of the selection criterion itself:
+decomposing `mmd_test` gives `data 89.5% / init -1.1% / interaction 11.6%` on
+the 8x8, `97.9% / -0.0% / 2.1%` on the 50x2, and `96.1% / -0.0% / 3.9%` on the
+100x2 --- stable across three independent grids of increasing size.
+
+This is not the same as saying initialization does not matter. It matters
+almost entirely _in combination with the dataset_: the interaction carries
+38-59% of the variance of the unfolded mean. A seed has no dataset-independent
+effect, which is why the effect of a seed failed to transfer across `lr_g`
+arms (`r = +0.04`) --- there was never a transferable thing to find. What the
+literature calls "ensemble spread" is, here, an interaction term.
+
+**Consequences, in the order they matter:**
+
+- Quadrature-summing two one-dimensional sweeps overstates the total SD by
+  **18-26%** (mean 20.8%), which is the interaction being counted twice.
+- Ensembling over seeds at fixed data reduces the initialization and
+  residual terms in proportion to the ensemble size, converging on the
+  bootstrap component. Its SD is **0.63-0.80x** a single run's spread (mean
+  0.73x); that factor is the most ensembling can buy.
+- Which bootstrap replicate was drawn determines fit quality more than
+  which seed did: at the 100x2 grid, 10 of the 19 datasets with at least one
+  cell reading `mmd_test > 5e-4` (~4 floors) have it in _both_ seeds, against
+  2.1 expected if the two seeds failed independently. A bad fit is a property
+  of the dataset, not of the initialization drawn for it.
+
+**The off-diagonals are large, and coherent.** Against a closure reference of
+`-1/19 = -0.053`, the measured adjacent-bin correlation of the unfolded
+spectrum is **0.90-0.94**, falling to 0.42-0.68 at lag 3 and to
+-0.09-0.27 at lag 5, then turning negative across the spectrum. The
+covariance is dominated by two or three modes: effective rank 2.3-3.6 out of
+20 bins (16 for `n_ch`), with the top two eigenvalues carrying 73-98% of the
+trace. Propagating a diagonal covariance understates the error on a linear
+functional of the spectrum by a median factor of **1.60** (range 1.22-2.62 for
+the mean; 1.49-1.97 for a top-quartile fraction).
+
+So the assumption is not merely wrong in magnitude, it is wrong in shape: the
+true covariance is nearly rank-2, and no rescaling of per-bin error bars can
+represent it. This held to within 0.01 on every lag correlation and 0.2 on
+every effective rank between the 50x2 and 100x2 grids; only individual
+off-diagonal entries moved (by up to 0.39 at B=50). This motivated the larger
+grid; entry-by-entry stability was not checked beyond B=100.
+
+**Two caveats, because they bound what the numbers support.**
+
+- `S = 2` makes the `Cov_eps / S` correction subtract half the interaction ---
+  the largest correction any design shape asks for. The 8x8 measures the
+  interaction to 49 degrees of freedom, so the correction is well determined;
+  it is still the term to check first if a number looks wrong.
+- **Quote the exact weighted mean, not the binned proxy.** Scoring the mean
+  off bin centres inflates its SD by a median 24%, and by 2.5x on jet mass,
+  whose outer quantile bin is wide enough to give a fluctuation there a large
+  lever arm. `weighted_means` is the exact quantity, and the summary table
+  reports it; `variance.npz`'s covariances are for binned functionals.

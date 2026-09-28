@@ -89,6 +89,12 @@ def _prepare_gaussian(
     n_samples: int,
     data_seed: int,
 ) -> tuple[DatasetSplits, int, GaussianConfig]:
+    """Build Gaussian splits from a reloaded run's config, or from a YAML file.
+
+    Returns:
+        The splits, the dimensionality, and the parsed Gaussian params. The
+            last is so a fresh run can record them in its own `config.json`.
+    """
     builder: DeconvolveDataset = DeconvolveDataset(
         batch_size=batch_size, seed=data_seed
     )
@@ -198,6 +204,14 @@ def _save_run(
     run_dir: Path | None = None,
     origins: dict[str, str] | None = None,
 ) -> Path:
+    """Write models, history and config to a run directory.
+
+    A fresh timestamped one unless `run_dir` names it. Gaussian params are
+    stored as covariance matrices so runs are self-contained and reloadable
+    without the original YAML. `init_seed` is the resolved weight-init seed,
+    never None, so a run drawn from entropy is still reproducible via `--seed`
+    after the fact.
+    """
     with phase("save"):
         return _write_run_dir(
             g,

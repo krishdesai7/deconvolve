@@ -1,3 +1,18 @@
+"""The event data model, in its two representations.
+
+`Populations` is the view that represents the physical sources of events, and
+`ZXY` that represents the events as they exist in a ML pipeline. Conversion
+between the two is not strictly lossless. Converting from `ZXY` to populations
+discards ordering information. Converting from `Populations` to `ZXY` is,
+however, lossless. Weight vectors are indexed against a `Populations`, never
+against a `ZXY`, so nothing should round-trip.
+
+The various event dataclasses take `eq=False` because they hold arrays: a
+generated `__eq__` compares fields with `==` and a generated `__hash__` hashes
+them. Both operations raise when called on arrays. They can only be compared
+for identity.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +45,12 @@ class Split(Flag):
 
 @dataclass(frozen=True, eq=False, slots=True)
 class Events:
+    """A corresponding pair of particle-level `z` and detector-level `x` events.
+
+    The arrays are row-aligned: row `i` of each is the same event seen at the
+    two levels.
+    """
+
     z: EventArray
     x: EventArray
 
@@ -59,6 +80,23 @@ class Events:
 
 @dataclass(frozen=True, eq=False, slots=True)
 class Populations:
+    """The physics view of a labelled sample.
+
+    Construct through `create`, which sets `truth` to
+    `deconvolve.coretypes.constants.TRUTH_SENTINEL` when there is none; the
+    field itself is always present.
+
+    Attributes:
+        mc: The simulation, its particle level generation (`mc.z`) paired per
+            event with the corresponding detector level simulation (`mc.x`);
+            that pairing is used to build a response matrix.
+        data: The natural measurement.
+        truth: The particle-level answer key. It exists only because every
+            dataset here is a closure test. A real measurement has no such
+            array, and no network may ever see it. Keeping it out of `mc`
+            means a function handed the MC cannot reach it.
+    """
+
     mc: Events
     data: EventArray
     truth: EventArray
@@ -114,6 +152,18 @@ class Populations:
         data: EventArray,
         truth: EventArray | None = None,
     ) -> Self:
+        """Build a sample, filling `truth` with `TRUTH_SENTINEL` if there is none.
+
+        A real measurement has no answer key. Filling the field rather than
+        dropping it keeps one type for both cases, and keeps the sample
+        trainable: the nature rows of `z` are `truth`, so they reach the
+        generator, and only a finite value there lets `normalize_weights`
+        annihilate them as intended. See
+        `deconvolve.coretypes.constants.TRUTH_SENTINEL` for why not NaN.
+
+        `truth` is particle level, so it takes its columns from `mc.z` and its
+        rows from `data`.
+        """
         resolved_truth: EventArray = (
             truth
             if truth is not None
@@ -125,9 +175,22 @@ class Populations:
 
     @property
     def has_truth(self) -> bool:
+        """Whether the sample has a particle-level answer key.
+
+        `False` if `truth` is populated with `TRUTH_SENTINEL`. Any metric
+        computed against a sentinel `truth` is meaningless but finite, so
+        unfolding code that scores against the particle level has to ask
+        rather than wait to be told.
+        """
         return not np.all(a=self.truth == TRUTH_SENTINEL)
 
     def require_truth(self) -> EventArray:
+        """Return `truth`, or raise `ValueError` if there is none.
+
+        Scoring against the sentinel yields a finite, meaningless number
+        instead of an obvious failure, so the particle-level comparisons ask
+        for the answer key through here rather than reading the field.
+        """
         if not self.has_truth:
             raise ValueError(
                 "this sample has no particle-level truth to score against: it "
@@ -136,6 +199,11 @@ class Populations:
         return self.truth
 
     def interleave(self) -> ZXY:
+        """Stack into the labelled transport form, nature rows first.
+
+        The resulting row order is an artifact of stacking rather than
+        anything meaningful, so callers shuffle before splitting.
+        """
         return ZXY(
             Events(
                 z=np.concatenate([self.truth, self.mc.z], axis=0),
@@ -152,6 +220,12 @@ class Populations:
 
 @dataclass(frozen=True, eq=False, slots=True)
 class ZXY:
+    """Events labelled by provenance: `y = 1` for nature, `y = 0` for MC.
+
+    The form in which they get shuffled, split, batched and trained on.
+    `partition` converts to the physics form, `Populations.interleave` back.
+    """
+
     events: Events
     y: NDArray[np.ubyte]
 
@@ -208,6 +282,12 @@ class DatasetSplits(NamedTuple):
     test: ArrayDataset
 
     def select(self, which: Split = Split.ALL, /) -> ZXY:
+        """Concatenate the requested splits into one labelled sample.
+
+        The split a row came from is not recorded on the result: it is a
+        property of the query, not of the events, and nothing downstream of
+        this call can act on it.
+        """
         chosen: list[ZXY] = [
             split.as_arrays()
             for flag, split in (

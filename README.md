@@ -333,7 +333,7 @@ Deconvolve/
 └── .cache/                       Cached datasets and XLA compilation cache
 ```
 
-`src/deconvolve/coretypes/`, `src/deconvolve/data/`, `src/deconvolve/baselines/` and `src/deconvolve/uncertainty/` each carry their own `README.md` with module-level detail.
+Module-level detail lives in the docstrings, rendered as the API Reference of the documentation site.
 
 ## Datasets
 

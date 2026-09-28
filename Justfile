@@ -66,11 +66,14 @@ ci:
 
 # Build the documentation site into site/.
 doc-build:
-    uv run --group docs mkdocs build --strict
+    uv run --no-project python scripts/gen_api_docs.py
+    uv run --group docs zensical build --strict
 
-# Serve the documentation locally with live-reload.
+# Serve the documentation locally with live-reload. The API pages are
+# generated once at startup; restart after adding or removing a module.
 doc-serve:
-    uv run --group docs mkdocs serve
+    uv run --no-project python scripts/gen_api_docs.py
+    uv run --group docs zensical serve
 
 
 # --- Mutable operations (writes) ---

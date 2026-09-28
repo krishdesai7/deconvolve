@@ -84,8 +84,8 @@ runs/<timestamp>Z/             One run. Two files at the top, the rest below:
 └── jax/                         XLA persistent compilation cache
 ```
 
-`src/deconvolve/coretypes/`, `src/deconvolve/data/`, `src/deconvolve/baselines/` and
-`src/deconvolve/uncertainty/` each carry their own `README.md`.
+Module-level detail lives in docstrings, rendered under `docs/api/` by
+`scripts/gen_api_docs.py`.
 
 The cubic-response sweep (`deconvolve sweep`, `src/deconvolve/experiments/`,
 `scripts/submit_sweep.zsh`) has been retired and sits under `legacy/`, which is

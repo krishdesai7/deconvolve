@@ -1,3 +1,12 @@
+"""Load jet substructure data for RAN training.
+
+Checks `CACHE_DIR` (`.cache/`, or wherever `DECONVOLVE_CACHE_DIR` points) for
+per-variable `.npz` files. If missing, invokes `download_jet_data` to fetch
+from Zenodo. Loads, subsamples, z-score standardizes (using MC gen-level
+statistics only), and builds the train/val/test splits via
+`DeconvolveDataset`.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -69,7 +78,28 @@ def load_jet_dataset(
     order of every array downstream, `_save_run` records it, and a later
     `deconvolve evaluate` or `deconvolve baseline ibu` must reproduce it exactly
     to label those columns --- or to feed a trained generator its own features.
-    Passing a `set` or `frozenset` here is a bug, not a convenience.
+    Passing a `set` or `frozenset` here is a bug, not a convenience: its
+    iteration order depends on per-process randomized string hashes and so
+    cannot survive into the second process. A set is refused outright, and
+    duplicate and unknown names are refused too.
+
+    Each selected substructure variable is z-score standardized using the MC
+    gen-level (`z_gen`) mean and std. The same parameters are applied to all
+    four arrays (`z_true`, `x_data`, `z_gen`, `x_sim`) to avoid information
+    leakage and preserve correlations.
+
+    Args:
+        n_samples: Number of events to use per class (data and MC).
+        batch_size: Batch size for the returned splits.
+        cache_dir: Directory containing per-variable `.npz` files.
+        variables: Which substructure variables to use, **in column order**.
+        seed: Dataset seed, controlling the shuffle, the train/val/test split
+            and the per-epoch batch order. Independent of the weight-init
+            seed passed to `train`.
+
+    Returns:
+        The splits, the feature dimensionality, and the standardization
+            parameters `{var_name: (mu, sigma)}`.
     """
     _reject_unordered(variables)
     # The npz caches on disk are float64, as the Zenodo release ships them.

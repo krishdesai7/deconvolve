@@ -1,3 +1,9 @@
+"""Records, constants and aliases shared across the package.
+
+Types owned by exactly one module stay with that module. E.g., `TrainResult`
+and `TrainState` are in `deconvolve.training.engine`.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
