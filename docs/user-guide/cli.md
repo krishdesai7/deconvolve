@@ -109,7 +109,7 @@ deconvolve evaluate RUN_DIR [--force]
 
 | Argument | Type | Description |
 | :--- | :--- | :--- |
-| `RUN_DIR` | `Path` | Run directory to evaluate. |
+| `RUN_DIR` | `Path` | Run, or directory of runs, to evaluate. |
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -129,7 +129,7 @@ deconvolve report RUN_DIR [--force] [--no-compile]
 
 | Argument | Type | Description |
 | :--- | :--- | :--- |
-| `RUN_DIR` | `Path` | Run directory to evaluate. |
+| `RUN_DIR` | `Path` | Run directory to report on. |
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -269,7 +269,6 @@ Usage:
 
 ```shell
 deconvolve uncertainty run CELL DESIGN_DIR
-                                [--force]
                                 [-B<int>]
                                 [-S<int>]
                                 [--n-eval <int>]
@@ -299,7 +298,6 @@ Trains one `(bootstrap dataset, init seed)` cell of the design. Takes the same a
 
 | Long option | Short | Type | Default |
 | :--- | :--- | :--- | :--- |
-| `--force` | | `bool` | `False` |
 | `--n-datasets` | `-B` | `int` | Value from `design.json`. |
 | `--n-seeds` | `-S` | `int` | Value from `design.json`. |
 | `--n-eval` | | `int` | Value from `design.json`. |

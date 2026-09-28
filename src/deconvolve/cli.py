@@ -268,7 +268,7 @@ def train_command(
 def evaluate_command(
     run_dir: Annotated[
         Path,
-        typer.Argument(help="Run directory to report on."),
+        typer.Argument(help="Run, or directory of runs, to evaluate."),
     ],
     force: bool = False,
 ) -> None:
