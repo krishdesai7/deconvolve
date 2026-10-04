@@ -1,0 +1,75 @@
+{
+  "batch_size": 1024,
+  "n_samples": 500000,
+  "dim": 1,
+  "dataset": "gaussian",
+  "seed": 1175258683,
+  "data_seed": 42,
+  "hidden_units": 64,
+  "n_layers": 2,
+  "n_epochs": 100,
+  "n_disc_steps": 5,
+  "lr_g": 3e-05,
+  "lr_d": 0.0001,
+  "lambda_dispersion": 0.015,
+  "mmd_subsample": 16384,
+  "mmd_sigmas_detector": [
+    0.37350645661354065,
+    0.5282178965767872,
+    0.7470129132270813,
+    1.0564357931535744,
+    1.4940258264541626
+  ],
+  "mmd_sigmas_particle": [
+    0.33440330624580383,
+    0.47291769099521935,
+    0.6688066124916077,
+    0.9458353819904387,
+    1.3376132249832153
+  ],
+  "mmd_test": 0.00537872314453125,
+  "best_epoch": 98,
+  "gaussian_params": {
+    "dim": 1,
+    "mu_gen": [
+      0.5
+    ],
+    "mu_true": [
+      0.0
+    ],
+    "cov_gen": [
+      [
+        0.81
+      ]
+    ],
+    "cov_true": [
+      [
+        1.0
+      ]
+    ],
+    "cov_detector": [
+      [
+        0.25
+      ]
+    ]
+  },
+  "_origin": {
+    "batch_size": "default",
+    "config": "command-line",
+    "data_seed": "default",
+    "dataset": "default",
+    "hidden_units": "default",
+    "lambda_dispersion": "default",
+    "log_every": "default",
+    "lr_d": "default",
+    "lr_g": "default",
+    "n_disc_steps": "default",
+    "n_epochs": "default",
+    "n_layers": "default",
+    "n_samples": "default",
+    "plots": "default",
+    "run_dir": "default",
+    "seed": "default",
+    "variable": "default"
+  }
+}
