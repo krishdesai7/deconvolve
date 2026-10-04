@@ -17,7 +17,7 @@
 \robustify\bfseries
 
 % Replacement contract:
-% Replace the six <<...>> tokens before compilation. CONFIG_ROWS, TIMINGS_ROWS, DETECTOR_TABLE, and PARTICLE_TABLE are complete LaTeX row bodies, including row terminators. Each metrics body also owns its first \midrule and provides data rows in physics display order. Numbers are inserted at full precision in plain decimal notation. All rounding policy lives here, not in the generator. Configuration KEYS passed to \ConfigPair or \ConfigWide are detokenized and may contain underscores; text VALUES are not, and must be wrapped in \ConfigVal or otherwise escaped by the generator.
+% Replace every <<...>> token before compilation. CONFIG_ROWS, TIMINGS_ROWS and the per-level metric bodies (<LEVEL>_WASSERSTEIN, _JS, _VLC and _SLICED) are complete LaTeX row bodies, including row terminators. Each metrics body also owns its first \midrule and provides data rows in physics display order; a _SLICED body is a single joint row. Numbers are inserted at full precision in plain decimal notation. All rounding policy lives here, not in the generator. Configuration KEYS passed to \ConfigPair or \ConfigWide are detokenized and may contain underscores; text VALUES are not, and must be wrapped in \ConfigVal or otherwise escaped by the generator.
 
 \newcommand{\RunName}{\detokenize{<<RUN_NAME>>}}
 
@@ -248,6 +248,30 @@
 \bottomrule
 \end{tabular}
 \endgroup
+\vspace{0.7em}
+
+% One row: a single distance over every observable at once, the only number in the report that sees correlations.
+\FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Sim.}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+<<DETECTOR_SLICED>>
+\bottomrule
+\end{tabular}
+\endgroup
+\par\vspace{0.25em}
+{\footnotesize\color{ReportGray} Mean 1D Wasserstein distance over random directions, in units of Data's per-observable standard deviation. IBU is scored on the product of its per-observable weights.\par}
 \vspace{1.1em}
 
 \clearpage
@@ -317,6 +341,30 @@
 \bottomrule
 \end{tabular}
 \endgroup
+\vspace{0.7em}
+
+% One row: a single distance over every observable at once, the only number in the report that sees correlations.
+\FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Gen}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+<<PARTICLE_SLICED>>
+\bottomrule
+\end{tabular}
+\endgroup
+\par\vspace{0.25em}
+{\footnotesize\color{ReportGray} Mean 1D Wasserstein distance over random directions, in units of Truth's per-observable standard deviation. IBU is scored on the product of its per-observable weights.\par}
 \vspace{1.1em}
 
 \clearpage

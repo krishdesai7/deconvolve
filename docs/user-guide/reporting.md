@@ -67,8 +67,8 @@ deconvolve report runs/2026-09-19T164500Z
 
 1. **Configuration.** Every setting in `config.json`.
 2. **Timing.** How long each phase of training took, from `timings.json`. The table is empty unless the run was trained with `DECONVOLVE_TIMING=1`.
-3. **Detector-level metrics.** Three tables (Wasserstein, JS divergence, VLC divergence) comparing each method's reweighted Simulation to Data, one row per observable. The columns are: unweighted Simulation (*Sim.*), IBU, <span style="font-variant: small-caps;">OmniFold</span> and <span style="font-variant: small-caps;">Deconvolve</span>, each method with its improvement over *Sim.* in percent.
-4. **Particle-level metrics.** The same three tables, comparing to Truth, with the unweighted Generation sample (*Gen.*) as the reference.
+3. **Detector-level metrics.** Three tables (Wasserstein, JS divergence, VLC divergence) comparing each method's reweighted Simulation to Data, one row per observable, then a one-row table for the joint sliced Wasserstein distance over all observables (see [Sliced Wasserstein distance](evaluation.md#4-sliced-wasserstein-distance)). The columns are: unweighted Simulation (*Sim.*), IBU, <span style="font-variant: small-caps;">OmniFold</span> and <span style="font-variant: small-caps;">Deconvolve</span>, each method with its improvement over *Sim.* in percent.
+4. **Particle-level metrics.** The same four tables, comparing to Truth, with the unweighted Generation sample (*Gen.*) as the reference.
 5. **Detector- and particle-level figures.** One panel per observable. Each panel overlays the histograms of Nature, Unweighted MC and the Reweighted MC, with a Ratio panel underneath. IBU and <span style="font-variant: small-caps;">OmniFold</span> are overlaid as well, if their results are available.
 6. **Training diagnostics.**
     - The generator and discriminator losses over training (`losses.pdf`), with a reference line at \(\log 2\), the value the loss takes when the discriminator can no longer tell the two samples apart.
@@ -81,6 +81,7 @@ All distances in the tables are multiplied by \(10^3\) (see [Display scale](eval
 - **A baseline that has not been run** shows dashes (—) in its columns. The rest of the report is unaffected.
 - **An observable IBU could not unfold** because of purity-based binning collapsing to a single bin is marked with a dagger (†).
 - **The absence of a `metrics.json`** is indicated by a note in place of the tables. Run `deconvolve evaluate RUN_DIR` and rebuild the report with `--force`.
+- **A `metrics.json` without joint metrics** (written before they existed) is indicated by a note in the sliced Wasserstein table. Rerun `deconvolve evaluate RUN_DIR --force`, and the baselines with `--force` to fill their columns too.
 
 ---
 
@@ -101,7 +102,7 @@ for key, entry in metrics.items():
         print(f"{observable:>6}: {entry['wasserstein_improvement_pct']:+.1f}%")
 ```
 
-The keys and fields of `metrics.json` are described under [Output](evaluation.md#output). The baseline files have the same layout, so the same loop may be used for `metrics_ibu.json` and `metrics_omnifold.json`.
+The keys and fields of `metrics.json` are described under [Output](evaluation.md#output). The baseline files have the same layout, so the same loop may be used for `metrics_ibu.json` and `metrics_omnifold.json`. The joint sliced Wasserstein scores are under `metrics["joint"]["particle"]` and `metrics["joint"]["detector"]`.
 
 To read the per-epoch training history:
 

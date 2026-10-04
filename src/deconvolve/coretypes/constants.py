@@ -74,6 +74,12 @@ RUN_DIR: Final[Path] = Path("runs")
 # scaled.
 METRIC_DISPLAY_SCALE: Final[float] = 1e3
 
+# The one `metrics.json` key that is not `<level>_<variable>`: the sliced
+# Wasserstein distance scores every observable at once, so it has no variable
+# to be keyed by. It holds one record per level, `{"detector": ..., "particle":
+# ...}`, and anything iterating the per-variable entries skips it by this name.
+JOINT_METRICS_KEY: Final[LiteralString] = "joint"
+
 # A run directory is read by people. `config.json` and `report.pdf` stay at the
 # root because they are what a person opens; everything else -- checkpoints,
 # arrays, figures, the metrics and timing JSON -- is supporting material and

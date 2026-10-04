@@ -307,7 +307,8 @@ class TestEvaluateSingle:
             assert saved.files == ["weights"]
         assert set(metrics) == {
             f"{level}_dim_{i}" for level in ("detector", "particle") for i in range(dim)
-        }
+        } | {"joint"}
+        assert set(metrics["joint"]) == {"detector", "particle"}
 
         # A second call must not re-run the unfolding.
         def _explode(**_kwargs: object) -> EventArray:

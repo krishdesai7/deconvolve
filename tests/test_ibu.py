@@ -555,7 +555,52 @@ def test_ibu_and_ran_agree_on_metric_key_order(
     ran_keys = list(json.loads((run_dir / "artifacts/metrics.json").read_text()))
     ibu_keys = list(json.loads((run_dir / "artifacts/metrics_ibu.json").read_text()))
     assert ibu_keys == ran_keys
-    assert ibu_keys == ["detector_m", "detector_w", "particle_m", "particle_w"]
+    assert ibu_keys == [
+        "detector_m",
+        "detector_w",
+        "particle_m",
+        "particle_w",
+        "joint",
+    ]
+
+
+def test_ibu_and_ran_both_record_a_joint_score_per_level(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The report's joint table reads the same two records out of each file."""
+    run_dir: Path = _run_with_ibu(tmp_path, ("m", "w"), monkeypatch)
+
+    for name in ("metrics.json", "metrics_ibu.json"):
+        joint: dict[str, dict[str, float]] = json.loads(
+            (run_dir / "artifacts" / name).read_text()
+        )["joint"]
+        assert set(joint) == {"detector", "particle"}
+        for record in joint.values():
+            assert set(record) == {
+                "sliced_wasserstein_before",
+                "sliced_wasserstein_after",
+                "sliced_wasserstein_improvement_pct",
+            }
+            assert all(np.isfinite(value) for value in record.values())
+
+
+def test_joint_weights_are_the_normalized_product_of_the_1d_weights() -> None:
+    """IBU's implied joint: the observables reweighted as if independent."""
+    weights = np.array([[1.0, 2.0, 3.0, 2.0], [2.0, 1.0, 1.0, 4.0]], dtype=np.single)
+
+    joint = ibu.joint_weights(weights)
+
+    product = np.array([2.0, 2.0, 3.0, 8.0])
+    np.testing.assert_allclose(joint, product / product.mean(), rtol=1e-6)
+    assert joint.dtype == np.single
+
+
+def test_a_refused_variable_drops_out_of_the_joint_weights() -> None:
+    """A skipped variable is weight one everywhere, so a factor of one."""
+    unfolded = np.array([0.5, 1.5, 1.0, 1.0], dtype=np.single)
+    weights = np.stack([unfolded, np.ones_like(unfolded)])
+
+    np.testing.assert_allclose(ibu.joint_weights(weights), unfolded, rtol=1e-6)
 
 
 def test_ibu_records_which_variables_it_gave_up_on(

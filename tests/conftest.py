@@ -109,11 +109,20 @@ def _metric_entry(before: float, after: float) -> dict[str, float]:
 
 
 def _metrics(variables: Sequence[str], before: float, after: float) -> dict[str, Any]:
-    return {
+    per_variable: dict[str, Any] = {
         f"{level}_{variable}": _metric_entry(before, after)
         for level in ("detector", "particle")
         for variable in variables
     }
+    joint: dict[str, dict[str, float]] = {
+        level: {
+            "sliced_wasserstein_before": before,
+            "sliced_wasserstein_after": after,
+            "sliced_wasserstein_improvement_pct": (1.0 - after / before) * 100.0,
+        }
+        for level in ("detector", "particle")
+    }
+    return per_variable | {"joint": joint}
 
 
 def _write_figures(artifacts: Path) -> None:

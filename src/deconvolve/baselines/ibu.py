@@ -17,27 +17,29 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..coretypes import (
     DEFAULT_PURITY_THRESHOLD,
+    JOINT_METRICS_KEY,
     IBUResult,
     VariableOutcome,
     artifacts_dir,
 )
-from ..evaluation import apply_to_runs, render_metrics
+from ..evaluation import apply_to_runs, render_metrics, warn_if_no_joint
 from ..training import EPS
 from ._shared import (
     evaluate_dimension,
+    evaluate_joint,
     load_populations,
     parse_run_config,
 )
 
 if TYPE_CHECKING:
     from logging import Logger
-    from typing import Final
+    from typing import Any, Final
 
     from numpy._typing import _DTypeLikeFloat
     from numpy.typing import NDArray
@@ -416,6 +418,24 @@ def unfold_variable(
     )
 
 
+def joint_weights(weights: NDArray[np.single]) -> NDArray[np.single]:
+    """One weight per event from IBU's `(dim, n)` per-variable weights.
+
+    IBU unfolds each variable on its own, so it never produces a joint
+    reweighting; the product of its 1D weights, renormalized, is the joint it
+    implicitly assumes -- the observables reweighted as if independent. That is
+    exactly the assumption the sliced Wasserstein distance exists to test, so
+    it is what IBU's joint score is computed on.
+
+    A variable IBU refused to unfold carries weight one everywhere and drops
+    out of the product. The product is taken in float64: twelve factors can
+    leave float32's comfortable range before the normalization brings them
+    back.
+    """
+    product: NDArray[np.double] = np.prod(a=weights, axis=0, dtype=np.double)
+    return _normalize_weights((product / product.mean()).astype(np.single))
+
+
 def _run_and_evaluate(
     config: RunConfig,
     n_iterations: int = 10,
@@ -472,6 +492,7 @@ def _run_and_evaluate(
         variable_names=config.variable_names,
         weights=weights,
         outcomes=tuple(outcomes),
+        joint=evaluate_joint(test, joint_weights(weights)),
     )
 
 
@@ -480,7 +501,7 @@ def evaluate_single(
     force: bool = False,
     n_iterations: int = 10,
     purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD,
-) -> dict[str, MetricRecord]:
+) -> dict[str, Any]:
     """Run IBU on a single run's dataset and save comparison metrics.
 
     It fits on train+val, then scores the held-out test split with the result,
@@ -497,9 +518,9 @@ def evaluate_single(
 
     if out_path.exists() and outcomes_path.exists() and not force:
         logger.info("%s: metrics_ibu.json exists, skipping (use --force)", run_dir.name)
-        return cast(
-            typ="dict[str, MetricRecord]", val=json.loads(s=out_path.read_text())
-        )
+        existing: dict[str, Any] = json.loads(s=out_path.read_text())
+        warn_if_no_joint(run_dir.name, out_path.name, existing)
+        return existing
 
     raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
     config: RunConfig = parse_run_config(raw_config)
@@ -521,7 +542,8 @@ def evaluate_single(
         purity_threshold=purity_threshold,
     )
 
-    json.dump(obj=result.metrics, fp=out_path.open(mode="w"), indent=2)
+    metrics: dict[str, Any] = {**result.metrics, JOINT_METRICS_KEY: result.joint}
+    json.dump(obj=metrics, fp=out_path.open(mode="w"), indent=2)
 
     # `outcomes` records the variables IBU's purity binning gave up on and
     # returned unchanged. Without it, a report showing `IBU == Sim` and a 0.0%
@@ -543,8 +565,8 @@ def evaluate_single(
         out_path,
         weights_path,
     )
-    render_metrics(f"{run_dir.name} [IBU]", result.metrics, list(result.variable_names))
-    return result.metrics
+    render_metrics(f"{run_dir.name} [IBU]", metrics, list(result.variable_names))
+    return metrics
 
 
 def evaluate_runs(

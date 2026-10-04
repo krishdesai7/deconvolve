@@ -1,7 +1,10 @@
 """Distance metrics on the test sets of completed runs.
 
 Per-dimension 1D Wasserstein distances, Jensen-Shannon divergences and
-triangular discriminators, both before and after reweighting.
+triangular discriminators, both before and after reweighting -- plus one joint
+number per level, the sliced Wasserstein distance, because every per-dimension
+metric is blind to correlations by construction: two samples with identical
+marginals and different joint structure score identically on all of them.
 
 **Every one of them runs on device.** The `jnp` implementation is vectorized
 across dimensions, so one dispatch computes every column, and only the
@@ -33,6 +36,7 @@ from rich.table import Table
 
 from ..coretypes import (
     EVENT_DTYPE,
+    JOINT_METRICS_KEY,
     METRIC_DISPLAY_SCALE,
     RUN_DIR,
     DatasetName,
@@ -48,7 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from logging import Logger
     from pathlib import Path
-    from typing import Any
+    from typing import Any, Final
 
     from jax import Array as JaxArray
     from numpy.typing import NDArray
@@ -59,6 +63,7 @@ if TYPE_CHECKING:
         DeconvolveModel,
         EventArray,
         GaussianConfig,
+        JointMetricRecord,
         Populations,
     )
     from ..data import ArrayDataset
@@ -510,6 +515,123 @@ def _metrics_per_dim(
     )
 
 
+SLICED_PROJECTIONS: Final[int] = 128
+"""Random directions the sliced Wasserstein distance averages over.
+
+The estimate carries Monte-Carlo error from the finite set of directions, but
+every number in every metrics file is taken over the *same* directions -- one
+seed, one count -- so before/after and RAN/IBU/OmniFold differences are paired
+comparisons and that error largely cancels out of them. `benchmarks/sliced.py`
+repeats over seeds when the spread itself is the question.
+"""
+
+SLICED_SEED: Final[int] = 0
+"""Seed for the projection directions; fixed so every file shares them."""
+
+# Projections per device dispatch. Each one sorts a pooled `(2n,)` column, so
+# all 128 at once on a 200k-event test split is a few hundred MB of sort
+# scratch; a block bounds it, and a fixed block is one compile.
+_SLICED_BLOCK: Final[int] = 32
+
+
+def _sliced_directions(
+    dim: int, n_projections: int = SLICED_PROJECTIONS, seed: int = SLICED_SEED
+) -> NDArray[np.single]:
+    """`(dim, n_projections)` unit vectors drawn uniformly on the sphere.
+
+    Drawn on the host, in float64, exactly as `benchmarks/sliced.py` draws
+    them -- the same seed gives the same directions, which is what lets the
+    test suite hold this device port against that float64 reference.
+    """
+    raw: NDArray[np.double] = np.random.default_rng(seed).normal(
+        size=(n_projections, dim)
+    )
+    unit: NDArray[np.double] = raw / np.linalg.norm(raw, axis=1, keepdims=True)
+    return unit.T.astype(EVENT_DTYPE)
+
+
+@jax.jit
+def _projected_w1(
+    ref: JaxArray, comp: JaxArray, weights: JaxArray, directions: JaxArray
+) -> JaxArray:
+    """1D Wasserstein distance along each column of `directions`.
+
+    `HIGHEST`, because XLA's default float32 matmul on an A100 is TF32 -- a
+    10-bit input mantissa -- which would put a ~1e-3 relative error into every
+    projected coordinate before the distance is even taken.
+    """
+    return _cdf_gap_integral(
+        jnp.matmul(ref, directions, precision=jax.lax.Precision.HIGHEST),
+        jnp.matmul(comp, directions, precision=jax.lax.Precision.HIGHEST),
+        weights,
+    )
+
+
+def _sliced_wasserstein(
+    ref: EventArray,
+    comp: EventArray,
+    weights: EventArray | JaxArray | None = None,
+    n_projections: int = SLICED_PROJECTIONS,
+    seed: int = SLICED_SEED,
+) -> float:
+    """Mean 1D Wasserstein distance over random directions on the sphere.
+
+    Axis-aligned Wasserstein is the special case where the directions are the
+    basis vectors; drawing them on the sphere is what makes this see the
+    off-diagonal structure the per-dimension metrics cannot.
+
+    Both samples are standardized by the *reference's* per-axis mean and
+    standard deviation first. Without it, whichever observable carries the
+    largest numerical scale dominates every projection and the metric quietly
+    becomes a measurement of that one axis. The result is therefore in units of
+    the reference's standard deviations, not comparable to the raw per-axis
+    distances -- improvement percentages are the cross-metric comparison.
+
+    `weights` reweights `comp` only, as everywhere else in this module. The
+    per-direction distances are averaged on the host in float64.
+    """
+    ref_2d, comp_2d, w = _prepare(ref, comp, weights)
+    centre: JaxArray = jnp.mean(a=ref_2d, axis=0)
+    spread: JaxArray = jnp.std(a=ref_2d, axis=0)
+    scale: JaxArray = jnp.where(spread > 0, spread, 1.0)
+    ref_std: JaxArray = (ref_2d - centre) / scale
+    comp_std: JaxArray = (comp_2d - centre) / scale
+
+    directions: NDArray[np.single] = _sliced_directions(
+        ref_2d.shape[1], n_projections, seed
+    )
+    distances: list[NDArray[np.double]] = [
+        np.asarray(
+            a=_projected_w1(
+                ref_std,
+                comp_std,
+                w,
+                jnp.asarray(directions[:, start : start + _SLICED_BLOCK]),
+            ),
+            dtype=np.double,
+        )
+        for start in range(0, n_projections, _SLICED_BLOCK)
+    ]
+    return float(np.mean(a=np.concatenate(distances)))
+
+
+def joint_entry(
+    ref: EventArray, comp: EventArray, weights: EventArray | JaxArray
+) -> JointMetricRecord:
+    """One level's record under `metrics.json`'s `JOINT_METRICS_KEY`.
+
+    Shared with the baselines, so every method is scored over the same
+    directions.
+    """
+    was: float = _sliced_wasserstein(ref, comp)
+    now: float = _sliced_wasserstein(ref, comp, weights)
+    return {
+        "sliced_wasserstein_before": was,
+        "sliced_wasserstein_after": now,
+        "sliced_wasserstein_improvement_pct": _improvement(before=was, after=now),
+    }
+
+
 def _metric_entry(before: MetricSet, after: MetricSet, index: int) -> dict[str, float]:
     """One variable's row of `metrics.json`, in `MetricSet` field order.
 
@@ -533,13 +655,31 @@ def _improvement(before: float, after: float) -> float:
     return (1 - after / before) * 100 if before > 0 else 0.0
 
 
+def warn_if_no_joint(run_name: str, filename: str, metrics: Mapping[str, Any]) -> None:
+    """Flag a cached metrics file written before the joint metrics existed.
+
+    The cache is left alone rather than recomputed behind the user's back --
+    for OmniFold that would mean retraining -- but a report built from it shows
+    dashes in the joint table, so the way out is named here.
+    """
+    if JOINT_METRICS_KEY not in metrics:
+        logger.warning(
+            "%s: %s predates the joint (sliced Wasserstein) metrics; "
+            "rerun with --force to add them",
+            run_name,
+            filename,
+        )
+
+
 def evaluate_run(run_dir: Path, force: bool = False) -> dict[str, Any]:
     """Evaluate a single run directory."""
     out_path: Path = artifacts_dir(run_dir) / "metrics.json"
 
     if out_path.exists() and not force:
         logger.info("%s: metrics.json exists, skipping (use --force)", run_dir.name)
-        return cast(typ="dict[str, Any]", val=json.loads(s=out_path.read_text()))
+        existing: dict[str, Any] = json.loads(s=out_path.read_text())
+        warn_if_no_joint(run_dir.name, out_path.name, existing)
+        return existing
 
     # Imported here, not at module scope, so this module stays keras-free on
     # import.
@@ -565,6 +705,7 @@ def evaluate_run(run_dir: Path, force: bool = False) -> dict[str, Any]:
         var_names = [f"dim_{i}" for i in range(dim)]
 
     metrics: dict[str, Any] = {}
+    joint: dict[str, JointMetricRecord] = {}
 
     for level, data, mc in [
         ("detector", test.data, test.mc.x),
@@ -575,6 +716,11 @@ def evaluate_run(run_dir: Path, force: bool = False) -> dict[str, Any]:
 
         for i, var in enumerate(iterable=var_names):
             metrics[f"{level}_{var}"] = _metric_entry(before, after, index=i)
+        joint[level] = joint_entry(ref=data, comp=mc, weights=w)
+
+    # After every per-variable entry, so the file still reads detector then
+    # particle top to bottom before the joint summary.
+    metrics[JOINT_METRICS_KEY] = joint
 
     json.dump(obj=metrics, fp=out_path.open(mode="w"), indent=2)
     logger.info("%s: saved metrics to %s", run_dir.name, out_path)
@@ -596,8 +742,13 @@ def render_metrics(
     console: Console | None = None,
     /,
 ) -> None:
-    """Render evaluation metrics as one Rich table per available level."""
+    """Render evaluation metrics as one Rich table per available level.
+
+    The level's joint (sliced Wasserstein) row, when the file has one, closes
+    its table.
+    """
     active_console: Console = console or Console()
+    joint: Mapping[str, Any] = metrics.get(JOINT_METRICS_KEY, {})
     for level in ("detector", "particle"):
         level_metrics: list[tuple[str, Any]] = [
             (var, metrics[f"{level}_{var}"])
@@ -605,11 +756,17 @@ def render_metrics(
             if f"{level}_{var}" in metrics
         ]
         if level_metrics:
-            active_console.print(_metrics_table(run_name, level, level_metrics))
+            active_console.print(
+                _metrics_table(run_name, level, level_metrics, joint.get(level))
+            )
 
 
 def _metrics_table(
-    run_name: str, level: str, level_metrics: list[tuple[str, Any]], /
+    run_name: str,
+    level: str,
+    level_metrics: list[tuple[str, Any]],
+    joint: Mapping[str, Any] | None = None,
+    /,
 ) -> Table:
     """One level's metrics, one row per (variable, metric), scaled for display."""
     table = Table(
@@ -630,6 +787,15 @@ def _metrics_table(
                 f"{m[f'{key}_after'] * METRIC_DISPLAY_SCALE:.4f}",
                 f"{m[f'{key}_improvement_pct']:+.1f}%",
             )
+    if joint is not None:
+        table.add_section()
+        table.add_row(
+            "all (joint)",
+            "Sliced W",
+            f"{joint['sliced_wasserstein_before'] * METRIC_DISPLAY_SCALE:.4f}",
+            f"{joint['sliced_wasserstein_after'] * METRIC_DISPLAY_SCALE:.4f}",
+            f"{joint['sliced_wasserstein_improvement_pct']:+.1f}%",
+        )
     return table
 
 

@@ -25,6 +25,7 @@ from ..coretypes import (
     ARTIFACTS_DIR,
     JET_OBS,
     JET_VARIABLE_GROUPS,
+    JOINT_METRICS_KEY,
     METRIC_DISPLAY_SCALE,
     artifacts_dir,
     display_order,
@@ -302,13 +303,25 @@ _METRICS: Final[tuple[tuple[str, str], ...]] = (
 _TABLE_COLUMNS: Final[int] = 8
 
 
-def _metric_value(
-    source: Mapping[str, Any] | None, key: str, metric_key: str, /
-) -> float | None:
-    """Extract a finite metric value from a source mapping, or `None`."""
+def _entry(
+    source: Mapping[str, Any] | None, level: str, variable: str | None, /
+) -> Mapping[str, Any] | None:
+    """One method's record for a variable at a level, or `None` where it has none.
+
+    `variable=None` is the level's joint record, which lives one level down
+    under `JOINT_METRICS_KEY` rather than at `<level>_<variable>`. A metrics
+    file written before the joint metrics existed simply has none.
+    """
     if source is None:
         return None
-    entry: Mapping[str, Any] | None = source.get(key)
+    if variable is None:
+        joint: Mapping[str, Any] = source.get(JOINT_METRICS_KEY) or {}
+        return joint.get(level)
+    return source.get(f"{level}_{variable}")
+
+
+def _metric_value(entry: Mapping[str, Any] | None, metric_key: str, /) -> float | None:
+    """Extract a finite metric value from one record, or `None`."""
     if entry is None:
         return None
     val: object = entry.get(metric_key)
@@ -318,7 +331,7 @@ def _metric_value(
 
 
 def _best_methods(
-    variable: str,
+    variable: str | None,
     level: str,
     metric: str,
     ran: Mapping[str, Any],
@@ -332,7 +345,6 @@ def _best_methods(
     IBU is excluded if purity binning failed (`daggered`). Only evaluated when at least
     two methods are competing.
     """
-    key: str = f"{level}_{variable}"
     metric_key: str = f"{metric}_after"
     sources: tuple[tuple[str, Mapping[str, Any] | None], ...] = (
         ("ran", ran),
@@ -342,7 +354,7 @@ def _best_methods(
     candidates: dict[str, float] = {
         name: val
         for name, src in sources
-        if (val := _metric_value(src, key, metric_key)) is not None
+        if (val := _metric_value(_entry(src, level, variable), metric_key)) is not None
     }
     if len(candidates) < 2:
         return frozenset()
@@ -358,7 +370,7 @@ def _best_methods(
 def _method_cells(
     source: Mapping[str, Any] | None,
     level: str,
-    variable: str,
+    variable: str | None,
     metric: str,
     /,
     *,
@@ -369,12 +381,10 @@ def _method_cells(
     A baseline that has not been run on a directory has no entry, and the template fixes
     the column count, so the pair has to be *filled* rather than omitted.
     """
-    entry: Mapping[str, float] | None = (
-        source.get(f"{level}_{variable}") if source is not None else None
-    )
+    entry: Mapping[str, Any] | None = _entry(source, level, variable)
     if entry is None:
         return (_DASH, _DASH)
-    val: str = decimal(entry[f"{metric}_after"] * METRIC_DISPLAY_SCALE)
+    val: str = decimal(float(entry[f"{metric}_after"]) * METRIC_DISPLAY_SCALE)
     impr: str = decimal(entry[f"{metric}_improvement_pct"])
     if is_best:
         if val != _DASH:
@@ -384,8 +394,13 @@ def _method_cells(
     return (val, impr)
 
 
+# The joint table's single row stands for every observable at once; kept no wider
+# than the "Observable" header, so its columns line up with the tables above it.
+_JOINT_LABEL: Final[str] = r"\textit{All}"
+
+
 def _row(
-    variable: str,
+    variable: str | None,
     level: str,
     metric: str,
     ran: Mapping[str, Any],
@@ -398,12 +413,13 @@ def _row(
 
     RAN goes last: the eye reads a row left to right and stops at the end, so the method
     under test sits where a reader lands, with the baselines in front of it.
+    `variable=None` is the level's joint row, which RAN's file must carry.
     """
-    symbol: str = (
-        JET_OBS[variable].symbol if variable in JET_OBS else latex_text(variable)
-    )
+    symbol: str = _JOINT_LABEL if variable is None else _symbol(variable)
     label: str = rf"{symbol}\(^\dag\)" if daggered else symbol
-    ours: Mapping[str, float] = ran[f"{level}_{variable}"]
+    ours: Mapping[str, Any] = cast(
+        typ="Mapping[str, Any]", val=_entry(ran, level, variable)
+    )
 
     best: frozenset[str] = _best_methods(
         variable, level, metric, ran, ibu, omnifold, daggered
@@ -411,7 +427,7 @@ def _row(
 
     cells: list[str] = [
         label,
-        decimal(ours[f"{metric}_before"] * METRIC_DISPLAY_SCALE),
+        decimal(float(ours[f"{metric}_before"]) * METRIC_DISPLAY_SCALE),
     ]
     cells.extend(_method_cells(ibu, level, variable, metric, is_best="ibu" in best))
     cells.extend(
@@ -457,6 +473,36 @@ def metrics_table(
     return "\n".join(lines)
 
 
+# A `metrics.json` from before the joint metrics: one spanning row naming the
+# fix, rather than a row of dashes that reads as "every method failed".
+_NO_JOINT: Final[str] = (
+    r"\midrule"
+    "\n"
+    rf"\multicolumn{{{_TABLE_COLUMNS}}}{{@{{}}l}}{{\itshape No joint metrics in "
+    r"metrics.json: rerun \texttt{deconvolve evaluate --force}.} \\"
+)
+
+
+def joint_table(
+    level: str,
+    ran: Mapping[str, Any],
+    ibu: Mapping[str, Any] | None,
+    omnifold: Mapping[str, Any] | None,
+    /,
+) -> str:
+    """One level's sliced Wasserstein body: a single row over every observable.
+
+    Same eight columns as the per-variable tables, so the template reuses their
+    spec and header. IBU is never daggered here: its joint score is taken on
+    the product of its per-variable weights, in which a refused variable is
+    simply a factor of one, so there is always a number to show.
+    """
+    if _entry(ran, level, None) is None:
+        return _NO_JOINT
+    row: str = _row(None, level, "sliced_wasserstein", ran, ibu, omnifold, False)
+    return f"\\midrule\n{row}"
+
+
 def skipped_variables(
     run_dir: Path, ibu: Mapping[str, Any] | None, /
 ) -> frozenset[str]:
@@ -470,7 +516,8 @@ def skipped_variables(
         return frozenset(
             key.split(sep="_", maxsplit=1)[1]
             for key, entry in ibu.items()
-            if entry["wasserstein_after"] == entry["wasserstein_before"]
+            if key != JOINT_METRICS_KEY
+            and entry["wasserstein_after"] == entry["wasserstein_before"]
         )
     return frozenset(o["variable_name"] for o in outcomes if o["status"] == "skipped")
 
@@ -531,6 +578,19 @@ def _table(
     )
 
 
+def _joint(
+    level: str,
+    ran: Mapping[str, Any] | None,
+    ibu: Mapping[str, Any] | None,
+    omnifold: Mapping[str, Any] | None,
+    /,
+) -> str:
+    """A joint body, or the not-found row when there are no metrics at all."""
+    if not ran:
+        return _NO_METRICS
+    return joint_table(level, ran, ibu, omnifold)
+
+
 def _figure_pages(artifacts: Path, stem: str, dim: int, /) -> str:
     r"""One `\ReportGraphic` block per page of a paginated level figure.
 
@@ -586,6 +646,10 @@ def render(run_dir: Path, /) -> str:
             )
             for level in ("detector", "particle")
             for metric_tag, metric in _METRICS
+        ),
+        *(
+            (f"<<{level.upper()}_SLICED>>", _joint(level, ran, ibu, omnifold))
+            for level in ("detector", "particle")
         ),
         (
             "<<DETECTOR_FIGURES>>",

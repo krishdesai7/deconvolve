@@ -4,11 +4,15 @@ from typing import TYPE_CHECKING
 
 from . import evaluate, plotting
 from .evaluate import (
+    SLICED_PROJECTIONS,
+    SLICED_SEED,
     MetricSet,
     apply_to_runs,
     evaluate_run,
     evaluate_runs,
+    joint_entry,
     render_metrics,
+    warn_if_no_joint,
 )
 from .plotting import (
     ALPHA_FILL,
@@ -53,6 +57,8 @@ __all__: Final[Sequence[str]] = (
     "LOSS_YLIM_FRACTION",
     "SELECTION_MMD_LINTHRESH",
     "SELECTION_SMOOTHING_WINDOW",
+    "SLICED_PROJECTIONS",
+    "SLICED_SEED",
     "Z_BASELINE",
     "Z_RAN",
     "AxesHist",
@@ -63,6 +69,7 @@ __all__: Final[Sequence[str]] = (
     "evaluate_run",
     "evaluate_runs",
     "ibu_overlay",
+    "joint_entry",
     "omnifold_overlay",
     "plot_detector_level",
     "plot_levels",
@@ -71,4 +78,5 @@ __all__: Final[Sequence[str]] = (
     "plot_selection",
     "plotting",
     "render_metrics",
+    "warn_if_no_joint",
 )

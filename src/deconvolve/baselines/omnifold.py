@@ -24,10 +24,15 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from ..coretypes import artifacts_dir
-from ..evaluation import apply_to_runs, render_metrics
+from ..coretypes import JOINT_METRICS_KEY, artifacts_dir
+from ..evaluation import apply_to_runs, render_metrics, warn_if_no_joint
 from ..instrumentation import timing
-from ._shared import evaluate_dimension, load_populations, parse_run_config
+from ._shared import (
+    evaluate_dimension,
+    evaluate_joint,
+    load_populations,
+    parse_run_config,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -39,7 +44,6 @@ if TYPE_CHECKING:
 
     from ..coretypes import (
         EventArray,
-        MetricRecord,
         RunConfig,
         UnfoldingPopulations,
     )
@@ -248,9 +252,9 @@ def _record_iteration_timings(result: Mapping[str, NDArray[Any]], /) -> None:
 
 def _metrics_for(
     config: RunConfig, data: UnfoldingPopulations, weights: EventArray
-) -> dict[str, MetricRecord]:
+) -> dict[str, Any]:
     """Both levels, scored by the same helpers every other baseline uses."""
-    metrics: dict[str, MetricRecord] = {}
+    metrics: dict[str, Any] = {}
     for dimension, name in enumerate(iterable=config.variable_names):
         metrics[f"detector_{name}"] = evaluate_dimension(
             data.test.data[:, dimension], data.test.mc.x[:, dimension], weights
@@ -258,6 +262,7 @@ def _metrics_for(
         metrics[f"particle_{name}"] = evaluate_dimension(
             data.test.truth[:, dimension], data.test.mc.z[:, dimension], weights
         )
+    metrics[JOINT_METRICS_KEY] = evaluate_joint(data.test, weights)
     return metrics
 
 
@@ -267,7 +272,7 @@ def evaluate_single(
     n_iterations: int = DEFAULT_N_ITERATIONS,
     n_epochs: int = DEFAULT_N_EPOCHS,
     batch_size: int = DEFAULT_BATCH_SIZE,
-) -> dict[str, MetricRecord]:
+) -> dict[str, Any]:
     """Run OmniFold on one run's dataset and save its comparison metrics."""
     out_path: Path = artifacts_dir(run_dir) / "metrics_omnifold.json"
     weights_path: Path = artifacts_dir(run_dir) / "omnifold_weights.npz"
@@ -276,9 +281,9 @@ def evaluate_single(
         logger.info(
             "%s: metrics_omnifold.json exists, skipping (use --force)", run_dir.name
         )
-        return cast(
-            typ="dict[str, MetricRecord]", val=json.loads(s=out_path.read_text())
-        )
+        existing: dict[str, Any] = json.loads(s=out_path.read_text())
+        warn_if_no_joint(run_dir.name, out_path.name, existing)
+        return existing
 
     with timing.phase("parse_config"):
         raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
@@ -310,7 +315,7 @@ def evaluate_single(
         )
 
     with timing.phase("evaluate", detail=f"{len(config.variable_names)} variables"):
-        metrics: dict[str, MetricRecord] = _metrics_for(config, data, weights)
+        metrics: dict[str, Any] = _metrics_for(config, data, weights)
 
     json.dump(obj=metrics, fp=out_path.open(mode="w"), indent=2)
     # Keyword, not positional: np.savez names positional arrays "arr_0", and

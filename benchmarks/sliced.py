@@ -1,9 +1,14 @@
 """Are the per-axis metrics missing joint structure?
 
-Every number in `deconvolve.evaluation.evaluate` is computed one coordinate
-axis at a time -- `_wd_per_dim`, `_js_per_dim`, `_triangular_per_dim` all
-loop over columns. That
-makes the whole metric suite blind to correlation by construction: two
+The float64 host reference for the sliced Wasserstein distance that
+`deconvolve.evaluation.evaluate` now records in `metrics.json` (under
+`"joint"`); `tests/test_evaluate_metrics.py` holds that device port to this
+one. What this script adds is the study around it: repeats over projection
+seeds, the per-axis comparison, and the null floors.
+
+The per-dimension metrics (`_wd_per_dim`, `_js_per_dim`,
+`_triangular_per_dim`) each look at one coordinate axis at a time. That
+makes them blind to correlation by construction: two
 distributions with identical marginals and different joint structure score
 identically on all of it. A reweighting that fixes every marginal and leaves
 the correlations wrong would be reported as a complete success.

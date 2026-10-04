@@ -36,6 +36,9 @@ def test_every_token_the_generator_fills_is_in_the_template() -> None:
         "<<PARTICLE_WASSERSTEIN>>",
         "<<PARTICLE_JS>>",
         "<<PARTICLE_VLC>>",
+        # One joint row per level, the only number that sees correlations.
+        "<<DETECTOR_SLICED>>",
+        "<<PARTICLE_SLICED>>",
     }
 
 
@@ -410,7 +413,8 @@ def test_missing_metrics_degrade_to_a_row_rather_than_raising(
 
     source: str = report.render(reference_run)
 
-    assert source.count("metrics.json not found") == 6  # 3 metrics x 2 levels
+    # (3 per-variable metrics + the joint table) x 2 levels
+    assert source.count("metrics.json not found") == 8
     assert rf"\multicolumn{{{report._TABLE_COLUMNS}}}" in source
 
 
@@ -730,3 +734,83 @@ class TestOmniFoldColumns:
         row = body.splitlines()[-1]
         assert len(row.split("&")) == report._TABLE_COLUMNS
         assert row.count(r"\multicolumn{1}{c}{---}") == 2
+
+
+def _joint(before: float, after: float) -> dict[str, float]:
+    return {
+        "sliced_wasserstein_before": before,
+        "sliced_wasserstein_after": after,
+        "sliced_wasserstein_improvement_pct": (1 - after / before) * 100,
+    }
+
+
+class TestJointTable:
+    """The sliced Wasserstein row: one per level, read from `metrics["joint"]`."""
+
+    def test_is_one_row_with_every_column_filled(self) -> None:
+        ran = {"joint": {"detector": _joint(1.0, 0.1)}}
+        ibu = {"joint": {"detector": _joint(1.0, 0.5)}}
+        omnifold = {"joint": {"detector": _joint(1.0, 0.3)}}
+
+        body = report.joint_table("detector", ran, ibu, omnifold)
+
+        lines = body.splitlines()
+        assert lines[0] == r"\midrule"
+        assert len(lines) == 2
+        cells = [c.strip() for c in lines[1].split("&")]
+        assert len(cells) == report._TABLE_COLUMNS
+        assert r"\textit{All}" in cells[0]
+        assert cells[1] == "1000"  # Sim, scaled
+        assert cells[2].startswith("500")  # IBU
+        assert cells[4].startswith("300")  # OmniFold
+        assert cells[6] == r"\bfseries 100"  # RAN, best
+        assert not cells[2].startswith(r"\bfseries")
+
+    def test_reads_the_requested_level(self) -> None:
+        ran = {
+            "joint": {
+                "detector": _joint(1.0, 0.1),
+                "particle": _joint(2.0, 0.2),
+            }
+        }
+        body = report.joint_table("particle", ran, None, None)
+        cells = [c.strip() for c in body.splitlines()[-1].split("&")]
+        assert cells[1] == "2000"
+
+    def test_a_missing_baseline_renders_dashes(self) -> None:
+        ran = {"joint": {"detector": _joint(1.0, 0.1)}}
+        body = report.joint_table("detector", ran, None, None)
+        assert body.count(r"\multicolumn{1}{c}{---}") == 4
+
+    def test_a_baseline_file_from_before_the_joint_metrics_renders_dashes(
+        self,
+    ) -> None:
+        ran = {"joint": {"detector": _joint(1.0, 0.1)}}
+        old_ibu = {"detector_m": _entry(1.0, 0.5)}
+        body = report.joint_table("detector", ran, old_ibu, None)
+        assert body.count(r"\multicolumn{1}{c}{---}") == 4
+
+    def test_a_metrics_file_from_before_the_joint_metrics_names_the_fix(
+        self,
+    ) -> None:
+        """Dashes in RAN's own columns would read as RAN having failed."""
+        body = report.joint_table(
+            "detector", {"detector_m": _entry(1.0, 0.1)}, None, None
+        )
+        assert "evaluate --force" in body
+        assert body.count("&") == 0
+
+    def test_the_joint_record_does_not_confuse_the_ibu_skip_fallback(
+        self, tmp_path: Path
+    ) -> None:
+        """Without `ibu_outcomes.json` the skip set is inferred from the entries."""
+        ibu = {
+            "detector_m": _entry(1.0, 1.0),
+            "detector_w": _entry(1.0, 0.5),
+            "joint": {"detector": _joint(1.0, 0.7)},
+        }
+        assert report.skipped_variables(tmp_path, ibu) == frozenset({"m"})
+
+    def test_reaches_the_rendered_report(self, reference_run: Path) -> None:
+        source = report.render(reference_run)
+        assert source.count(r"\textit{All}") == 2

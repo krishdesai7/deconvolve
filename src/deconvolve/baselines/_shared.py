@@ -24,12 +24,20 @@ from ..evaluation.evaluate import (
     _load_splits,
     _triangular_per_dim,
     _wd_per_dim,
+    joint_entry,
 )
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from ..coretypes import ZXY, DatasetSplits, EventArray, MetricRecord, Populations
+    from ..coretypes import (
+        ZXY,
+        DatasetSplits,
+        EventArray,
+        JointMetricRecord,
+        MetricRecord,
+        Populations,
+    )
 
 
 def _positive_int(value: object, key: str) -> int:
@@ -188,4 +196,21 @@ def evaluate_dimension(
         "triangular_before": triangular_before,
         "triangular_after": triangular_after,
         "triangular_improvement_pct": _improvement(triangular_before, triangular_after),
+    }
+
+
+def evaluate_joint(
+    test: Populations, weights: EventArray
+) -> dict[str, JointMetricRecord]:
+    """Both levels' joint (sliced Wasserstein) records, for `JOINT_METRICS_KEY`.
+
+    `weights` is one weight per test event, applied to every observable at
+    once -- the joint distribution a method actually produces, which is the
+    thing the per-dimension scores cannot see.
+    """
+    return {
+        "detector": joint_entry(ref=test.data, comp=test.mc.x, weights=weights),
+        "particle": joint_entry(
+            ref=test.require_truth(), comp=test.mc.z, weights=weights
+        ),
     }

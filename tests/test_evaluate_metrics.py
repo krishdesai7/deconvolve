@@ -6,6 +6,8 @@ and `jensenshannon` are what the numbers in every run predating the port were
 produced by, and a port that shifts them is a port that invalidates the archive.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -16,12 +18,17 @@ from deconvolve.evaluation.evaluate import (
     _js_per_dim,
     _metrics_per_dim,
     _normalized_histograms,
+    _sliced_directions,
+    _sliced_wasserstein,
     _triangular_from_histograms,
     _triangular_per_dim,
     _wd_per_dim,
+    joint_entry,
 )
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import wasserstein_distance
+
+from benchmarks.sliced import sliced_wasserstein as _reference_sliced
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -431,4 +438,101 @@ class TestFusedMetrics:
         np.testing.assert_allclose(
             _metrics_per_dim(ref, comp, weights=jnp.asarray(w)).wasserstein,
             _metrics_per_dim(ref, comp, weights=w).wasserstein,
+        )
+
+
+class TestSlicedWasserstein:
+    """The one joint number in `metrics.json`.
+
+    `benchmarks/sliced.py` is the float64 host reference this device port is
+    held against; it draws the same directions from the same seed, so the two
+    must agree to float32 accuracy, not merely in distribution.
+    """
+
+    def _samples(
+        self, seed: int, n: int = 6000
+    ) -> tuple[NDArray[np.single], NDArray[np.single], NDArray[np.single]]:
+        rng = np.random.default_rng(seed)
+        # Wildly different scales per axis: what the standardization is for.
+        scales = np.array([1.0, 10.0, 100.0, 0.1])
+        ref: NDArray[np.single] = (rng.normal(size=(n, 4)) * scales).astype(np.float32)
+        comp: NDArray[np.single] = (
+            (rng.normal(size=(n, 4)) * 1.3 + 0.2) * scales
+        ).astype(np.float32)
+        w = rng.gamma(2.0, size=n).astype(np.float32)
+        return ref, comp, w
+
+    def test_draws_the_benchmarks_directions(self) -> None:
+        from benchmarks.sliced import _directions
+
+        np.testing.assert_allclose(
+            _sliced_directions(5, n_projections=64, seed=3),
+            _directions(3, 5, 64).T,
+            rtol=1e-6,
+        )
+
+    def test_matches_the_float64_reference_unweighted(self) -> None:
+        ref, comp, _ = self._samples(0)
+        assert _sliced_wasserstein(ref, comp) == pytest.approx(
+            _reference_sliced(ref, comp, seed=0), rel=1e-5
+        )
+
+    def test_matches_the_float64_reference_weighted(self) -> None:
+        ref, comp, w = self._samples(1)
+        assert _sliced_wasserstein(ref, comp, w) == pytest.approx(
+            _reference_sliced(ref, comp, seed=0, comp_weights=w), rel=1e-5
+        )
+
+    def test_is_invariant_to_rescaling_the_weights(self) -> None:
+        ref, comp, w = self._samples(2)
+        assert _sliced_wasserstein(ref, comp, w * 37.0) == pytest.approx(
+            _sliced_wasserstein(ref, comp, w), rel=1e-5
+        )
+
+    def test_is_invariant_to_rescaling_an_observable(self) -> None:
+        """Standardized against the reference, so units cannot pick the winner."""
+        ref, comp, _ = self._samples(3)
+        stretch = np.array([1.0, 1e3, 1.0, 1.0], dtype=np.float32)
+        assert _sliced_wasserstein(ref * stretch, comp * stretch) == pytest.approx(
+            _sliced_wasserstein(ref, comp), rel=1e-4
+        )
+
+    def test_sees_correlation_that_the_axis_metrics_miss(self) -> None:
+        """Identical marginals, opposite correlation: the reason it exists."""
+        rng = np.random.default_rng(4)
+        n = 20_000
+        cov_pos = np.array([[1.0, 0.8], [0.8, 1.0]])
+        cov_neg = np.array([[1.0, -0.8], [-0.8, 1.0]])
+        a = rng.multivariate_normal([0, 0], cov_pos, size=n).astype(np.float32)
+        b = rng.multivariate_normal([0, 0], cov_neg, size=n).astype(np.float32)
+        same = rng.multivariate_normal([0, 0], cov_pos, size=n).astype(np.float32)
+
+        per_axis_gap = _wd_per_dim(a, b).max()
+        per_axis_floor = _wd_per_dim(a, same).max()
+        assert per_axis_gap < 3 * per_axis_floor
+
+        assert _sliced_wasserstein(a, b) > 10 * _sliced_wasserstein(a, same)
+
+    def test_a_projection_count_off_the_block_size_still_averages_them_all(
+        self,
+    ) -> None:
+        ref, comp, _ = self._samples(5, n=2000)
+        assert _sliced_wasserstein(ref, comp, n_projections=40) == pytest.approx(
+            _reference_sliced(ref, comp, seed=0, n_projections=40), rel=1e-5
+        )
+
+    def test_joint_entry_scores_before_and_after(self) -> None:
+        ref, comp, w = self._samples(6)
+
+        entry = joint_entry(ref, comp, w)
+
+        assert entry["sliced_wasserstein_before"] == pytest.approx(
+            _sliced_wasserstein(ref, comp)
+        )
+        assert entry["sliced_wasserstein_after"] == pytest.approx(
+            _sliced_wasserstein(ref, comp, w)
+        )
+        assert entry["sliced_wasserstein_improvement_pct"] == pytest.approx(
+            (1 - entry["sliced_wasserstein_after"] / entry["sliced_wasserstein_before"])
+            * 100
         )

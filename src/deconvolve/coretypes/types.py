@@ -167,6 +167,14 @@ class MetricRecord(TypedDict):
     triangular_improvement_pct: float
 
 
+class JointMetricRecord(TypedDict):
+    """Before/after sliced Wasserstein distance over every variable at one level."""
+
+    sliced_wasserstein_before: float
+    sliced_wasserstein_after: float
+    sliced_wasserstein_improvement_pct: float
+
+
 # ---------------------------------
 # Data
 # ---------------------------------
