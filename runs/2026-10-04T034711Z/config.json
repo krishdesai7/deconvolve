@@ -1,0 +1,144 @@
+{
+  "batch_size": 1024,
+  "n_samples": 500000,
+  "dim": 4,
+  "dataset": "gaussian",
+  "seed": 46522706,
+  "data_seed": 42,
+  "hidden_units": 64,
+  "n_layers": 2,
+  "n_epochs": 100,
+  "n_disc_steps": 5,
+  "lr_g": 3e-05,
+  "lr_d": 0.0001,
+  "lambda_dispersion": 0.015,
+  "mmd_subsample": 16384,
+  "mmd_sigmas_detector": [
+    0.7952483892440796,
+    1.1246510575243356,
+    1.5904967784881592,
+    2.249302115048671,
+    3.1809935569763184
+  ],
+  "mmd_sigmas_particle": [
+    0.6679391264915466,
+    0.9446085715239836,
+    1.3358782529830933,
+    1.8892171430479672,
+    2.6717565059661865
+  ],
+  "mmd_test": 0.0030770301818847656,
+  "best_epoch": 99,
+  "gaussian_params": {
+    "dim": 4,
+    "mu_gen": [
+      1.0,
+      0.0,
+      -0.5,
+      0.5
+    ],
+    "mu_true": [
+      0.8,
+      0.1,
+      -0.6,
+      0.7
+    ],
+    "cov_gen": [
+      [
+        1.0,
+        0.07,
+        -0.22,
+        0.24
+      ],
+      [
+        0.07,
+        0.49,
+        0.0,
+        0.056
+      ],
+      [
+        -0.22,
+        0.0,
+        1.21,
+        0.616
+      ],
+      [
+        0.24,
+        0.056,
+        0.616,
+        0.64
+      ]
+    ],
+    "cov_true": [
+      [
+        0.64,
+        0.0,
+        -0.24,
+        0.192
+      ],
+      [
+        0.0,
+        0.36,
+        0.12,
+        0.0
+      ],
+      [
+        -0.24,
+        0.12,
+        1.0,
+        0.3
+      ],
+      [
+        0.192,
+        0.0,
+        0.3,
+        0.36
+      ]
+    ],
+    "cov_detector": [
+      [
+        0.16000000000000003,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.25,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.36,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.09
+      ]
+    ]
+  },
+  "_origin": {
+    "batch_size": "default",
+    "config": "command-line",
+    "data_seed": "default",
+    "dataset": "default",
+    "hidden_units": "default",
+    "lambda_dispersion": "default",
+    "log_every": "default",
+    "lr_d": "default",
+    "lr_g": "default",
+    "n_disc_steps": "default",
+    "n_epochs": "default",
+    "n_layers": "default",
+    "n_samples": "default",
+    "plots": "default",
+    "run_dir": "default",
+    "seed": "default",
+    "variable": "default"
+  }
+}

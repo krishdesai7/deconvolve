@@ -1,0 +1,538 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=18mm]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{adjustbox}
+\usepackage{pdflscape}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{etoolbox}
+\robustify\bfseries
+
+% Replacement contract:
+% Replace every <<...>> token before compilation. CONFIG_ROWS, TIMINGS_ROWS and the per-level metric bodies (<LEVEL>_WASSERSTEIN, _JS, _VLC and _SLICED) are complete LaTeX row bodies, including row terminators. Each metrics body also owns its first \midrule and provides data rows in physics display order; a _SLICED body is a single joint row. Numbers are inserted at full precision in plain decimal notation. All rounding policy lives here, not in the generator. Configuration KEYS passed to \ConfigPair or \ConfigWide are detokenized and may contain underscores; text VALUES are not, and must be wrapped in \ConfigVal or otherwise escaped by the generator.
+
+\newcommand{\RunName}{\detokenize{2026-10-04T041042Z}}
+
+\definecolor{ReportGray}{gray}{0.36}
+\definecolor{ReportLightGray}{gray}{0.94}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.10}
+\pagestyle{empty}
+
+\newcommand{\ReportTitle}{
+  {\bfseries\LARGE Run report\par}
+  \vspace{2pt}
+  {\large\color{ReportGray}\RunName\par}
+  \vspace{5pt}
+  {\color{ReportGray}\rule{\linewidth}{0.6pt}}
+}
+
+% Content flows from section to section rather than starting each on a fresh page, so a short run's report is not mostly white space. The \nopagebreak after every heading, label and section blurb is what keeps that safe: none of them can be left stranded at the foot of a page with its table on the next. The tables themselves are unbreakable boxes.
+\newcommand{\ReportSection}[1]{
+  \par\vspace{1.05em}
+  {\bfseries\large #1\par}
+  \nopagebreak
+  \vspace{0.35em}
+}
+
+\newcommand{\FigureLabel}[1]{{\bfseries\normalsize #1\par}\nopagebreak\vspace{0.35em}}
+
+% Numeric presentation
+\sisetup{
+  mode                 = match,
+  reset-math-version   = false,
+  reset-text-series    = false,
+  text-series-to-math  = true,
+  group-separator      = {,},
+  group-digits         = integer,
+  group-minimum-digits = 4,
+  exponent-product     = \times,
+  exponent-mode        = input,
+  round-half           = up,
+  round-pad            = true
+}
+
+% Use \Count for intrinsically integral quantities and \Raw for continuous quantities. \Percent is useful outside S columns; percentage columns in the metric tables apply the same three-significant-figure policy automatically.
+\newcommand{\Count}[1]{\num[round-mode=none]{#1}}
+% `exponent-thresholds` keeps the middle of the range in plain decimal and sends extremes to scientific notation
+\newcommand{\Raw}[1]{\num[
+  round-mode        = figures,
+  round-precision   = 4,
+  exponent-mode     = threshold,
+  exponent-thresholds = -3:5
+]{#1}}
+\newcommand{\Percent}[1]{\num[round-mode=places,round-precision=1]{#1}\,\%}
+
+% Scaled by 10^3
+\newcolumntype{D}{S[
+  round-mode=figures,
+  round-precision=4,
+  table-format=3.5
+]}
+\newcolumntype{P}{S[
+  round-mode=places,
+  round-precision=1,
+  table-format=+4.1
+]}
+
+\newcommand{\ConfigKey}[1]{\texttt{\detokenize{#1}}}
+% Text-valued entries go through \ConfigVal so that underscores and other
+% specials in a value cannot break the compile.
+\newcommand{\ConfigVal}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\ConfigPair}[4]{\ConfigKey{#1} & #2 & \ConfigKey{#3} & #4 \\}
+\newcommand{\ConfigWide}[2]{
+  \ConfigKey{#1} &
+  \multicolumn{3}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-0.20\linewidth-2\tabcolsep\relax}@{}}{#2} \\
+}
+% Metric tables run at LaTeX's own row height rather than the 1.10 the config and timing tables use: that 10%, over eight tables, is what lets both levels share a page for a few observables.
+\newcommand{\MetricRows}{\renewcommand{\arraystretch}{1.0}}
+\newcommand{\TimingSubphase}[1]{\hspace*{1.15em}#1}
+
+% One page of a multi-page figure.
+\newcommand{\ReportPage}[2]{\IfFileExists{#1}{
+    % Measured inside a `pdflscape` block under \newgeometry: \linewidth is 749.4pt and \textheight is 568.8pt.
+    % Capped in height as well as width: a figure with one column of panels is nearly square, and at the full 749.4pt width it would stand ~730pt tall, overflow the page and push itself onto the next one, leaving this one blank.
+    \null\vfill
+    {\centering\includegraphics[width=\linewidth,height=0.95\textheight,keepaspectratio,page=#2]{#1}\par}
+    \vfill
+}{
+    \fbox{\parbox[c][0.4\textheight][c]{0.94\linewidth}{
+        \centering\color{ReportGray}
+        Missing figure\par\medskip
+        \ttfamily\detokenize{#1}}}
+  }
+}
+
+\newcommand{\ReportGraphic}[2]{\IfFileExists{#1}{
+    \includegraphics[width=\linewidth,height=#2,keepaspectratio]{#1}
+}{
+    \fbox{\parbox[c][#2][c]{0.94\linewidth}{
+        \centering\color{ReportGray}
+        Missing figure\par\medskip
+        \ttfamily\detokenize{#1}}}
+  }
+}
+
+\begin{document}
+\thispagestyle{empty}
+
+\ReportTitle
+
+
+\ReportSection{Configuration}
+
+\begingroup
+\small
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabularx}{\linewidth}{
+  @{}
+  >{\raggedright\arraybackslash}p{0.20\linewidth}
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}p{0.20\linewidth}
+  >{\raggedright\arraybackslash}X
+  @{}
+}
+\toprule
+\multicolumn{1}{@{}l}{\bfseries Parameter} &
+\multicolumn{1}{l}{\bfseries Value} &
+\multicolumn{1}{l}{\bfseries Parameter} &
+\multicolumn{1}{l@{}}{\bfseries Value} \\
+\midrule
+% Example scalar row:
+% \ConfigPair{batch_size}{\Count{1024}}{n_samples}{\Count{1600000}}
+% Example full-width row:
+% \ConfigWide{mmd_sigmas_detector}{\Raw{1.553733}, \Raw{2.197311}, ...}
+\ConfigPair{batch_size}{\Count{1024}}{n_samples}{\Count{500000}}
+\ConfigPair{dim}{\Count{12}}{dataset}{\ConfigVal{jets}}
+\ConfigPair{seed}{\Count{2127985580}}{data_seed}{\Count{42}}
+\ConfigPair{hidden_units}{\Count{64}}{n_layers}{\Count{2}}
+\ConfigPair{n_epochs}{\Count{100}}{n_disc_steps}{\Count{5}}
+\ConfigPair{lr_g}{\Raw{0.00003}}{lr_d}{\Raw{0.0001}}
+\ConfigPair{lambda_dispersion}{\Raw{0.015}}{mmd_subsample}{\Count{16384}}
+\ConfigPair{mmd_test}{\Raw{0.0004043579}}{best_epoch}{\Count{87}}
+\ConfigPair{compile_cache_warm}{True}{}{}
+\ConfigWide{variables}{\textbf{Mass and hard scale (IRC-safe kinematics):} $m$ [GeV], $\ln\rho$ \newline\vspace{2pt} \textbf{Continuous angularities (IRC-safe jet shapes):} $\lambda^{1}_{0.5}$, $w$, $\lambda^{1}_{2}$ \newline\vspace{2pt} \textbf{Splitting and 2-prong substructure:} $z_g$, $\tau_{21}^{(\beta=1)}$ \newline\vspace{2pt} \textbf{Hadronization, multiplicity and fragmentation (IRC-unsafe):} $M$, $n_{ch}$, $f_{ch}$, $p_T^D$, $q$}
+\ConfigWide{mmd_sigmas_detector}{\Raw{3.11668396} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
+\ConfigWide{mmd_sigmas_particle}{\Raw{3.0258352757} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
+\bottomrule
+\end{tabularx}
+\endgroup
+
+
+\ReportSection{Timing}
+
+\begingroup
+\small
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabularx}{\linewidth}{
+  @{}
+  >{\raggedright\arraybackslash}p{0.24\linewidth}
+  % Fixed decimal places, not significant figures.
+  S[round-mode=places,round-precision=3,table-format=4.3]
+  S[round-mode=places,round-precision=1,table-format=3.1]
+  >{\raggedright\arraybackslash}X
+  @{}
+}
+\toprule
+{\bfseries Phase} &
+{\bfseries Seconds} &
+{\bfseries Share (\%)} &
+{\bfseries Detail} \\
+\midrule
+% A nested phase can be written as \TimingSubphase{transfer}.
+% Insert \midrule before the total row when generating TIMINGS_ROWS.
+\multicolumn{4}{@{}l}{\itshape RAN} \\
+data & 1.429107925 & 4.4967521114 & cache hit -- train \\
+train & 17.240051317 & 54.2465938387 & train \\
+\TimingSubphase{transfer} & 2.818335173 &  & train \\
+\TimingSubphase{compile} & 5.1770179881 &  & train \\
+\TimingSubphase{epochs} & 6.226216133 &  & train \\
+\TimingSubphase{select} & 2.644648675 &  & train \\
+particle\_mmd & 0.487746431 & 1.5347159967 & train \\
+save & 0.196311327 & 0.6177023855 & train \\
+plots & 6.72653786 & 21.1653527314 & train \\
+evaluate & 5.701136984 & 17.9388829363 & train \\
+\midrule
+\textbf{total} & 31.7808918442 & 100 & \\
+\midrule
+\multicolumn{4}{@{}l}{\itshape OmniFold baseline} \\
+parse\_config & 0.0011298831 & 0.000229262 & omnifold \\
+data & 0.8402273681 & 0.1704886131 & cache hit -- omnifold \\
+omnifold & 485.545670241 & 98.5209611737 & niter=3, epochs=50 -- omnifold \\
+\TimingSubphase{init} & 2.1841028561 &  & DataLoaders and the two MLPs -- omnifold \\
+\TimingSubphase{unfold} & 467.278193105 &  & MultiFold.Unfold -- omnifold \\
+\TimingSubphase{iter1\_step1} & 133.032917058 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter2\_step1} & 63.09639154 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter3\_step1} & 82.694026612 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter1\_step2} & 92.031213635 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{iter2\_step2} & 51.6772172761 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{iter3\_step2} & 44.7134507679 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{reweight} & 1.5286164121 &  & evaluating weights on z\_target -- omnifold \\
+evaluate & 6.4478621159 & 1.3083209513 & 12 variables -- omnifold \\
+\midrule
+\textbf{total} & 492.8348896081 & 100 & \\
+\bottomrule
+\end{tabularx}
+\endgroup
+\clearpage
+
+\ReportSection{Detector-level metrics}
+{Distance to Data. Improvements are relative to Simulation.\par}\nopagebreak
+\vspace{0.45em}
+
+\FigureLabel{Wasserstein Distance \([ \times \num{e3} ]\)}
+\begingroup
+\small
+% Eight columns. At the default 6pt inter-column padding the table overruns the text block by ~24pt.
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Sim.}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 201.9866555929 & 134.1125965118 & 33.6032343265 & \bfseries 9.2738782987 & \bfseries 95.4086678293 & 17.2575954348 & 91.4560714993 \\
+$\ln\rho$ & 230.1797121763 & 21.6944590211 & 90.5749908122 & \bfseries 17.8154986352 & \bfseries 92.2601790951 & 23.6222781241 & 89.737463002 \\
+$\lambda^{1}_{0.5}$ & 265.6137049198 & 16.021322459 & 93.9681868208 & \bfseries 15.9552861005 & \bfseries 93.9930486248 & 25.2369493246 & 90.4986268189 \\
+$w$ & 270.3773379326 & \bfseries 14.9852549657 & \bfseries 94.4576512661 & 15.7190747559 & 94.1862454612 & 26.5768375248 & 90.1704640899 \\
+$\lambda^{1}_{2}$ & 262.3870968819 & \bfseries 17.016094178 & \bfseries 93.5148891161 & 17.9536342621 & 93.1575773064 & 30.3189866245 & 88.4449399438 \\
+$z_g$\(^\dag\) & 59.4581179321 & 59.4581179321 & 0 & 24.978172034 & 57.9903082998 & \bfseries 21.8672417104 & \bfseries 63.2224455281 \\
+$\tau_{21}^{(\beta=1)}$ & 117.4214482307 & 68.35591048 & 41.7858356823 & 31.6843092442 & 73.0165913284 & \bfseries 22.0680870116 & \bfseries 81.2060851368 \\
+$M$ & 220.9628522396 & 173.8456785679 & 21.3235723535 & \bfseries 12.9421856254 & \bfseries 94.1428228798 & 21.508552134 & 90.2659872843 \\
+$n_{ch}$ & 218.4274196625 & 170.9311157465 & 21.7446565676 & \bfseries 17.1252936125 & \bfseries 92.1597321402 & 24.2515411228 & 88.8972084364 \\
+$f_{ch}$ & 51.7902597785 & 37.4881885946 & 27.6153738978 & \bfseries 4.3932837434 & \bfseries 91.5171627905 & 6.8015325814 & 86.8671587852 \\
+$p_T^D$ & 260.2628469467 & 29.8162419349 & 88.5437962872 & \bfseries 17.2884333879 & \bfseries 93.3573179612 & 28.3477939665 & 89.108013572 \\
+$q$ & 73.1325745583 & 13.603258878 & 81.3991795583 & 12.8967408091 & 82.3652580441 & \bfseries 7.232404314 & \bfseries 90.1105569472 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+\FigureLabel{JS divergence \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Sim.}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 6.6457657497 & 3.8686329631 & 41.7880029354 & \bfseries 0.213415629 & \bfseries 96.7886976909 & 0.2759922591 & 95.8470961892 \\
+$\ln\rho$ & 8.5500724907 & 0.5419470054 & 93.6614922739 & \bfseries 0.2983580279 & \bfseries 96.5104620082 & 0.3588258036 & 95.8032425577 \\
+$\lambda^{1}_{0.5}$ & 9.6359513195 & 0.6628977603 & 93.1205779452 & \bfseries 0.3211743912 & \bfseries 96.6669155896 & 0.3528860258 & 96.3378185075 \\
+$w$ & 9.4307566001 & 0.5788971594 & 93.8616042812 & \bfseries 0.4145167969 & \bfseries 95.6046284038 & 0.4477987021 & 95.2517202901 \\
+$\lambda^{1}_{2}$ & 8.2843389787 & 0.5851921009 & 92.9361642201 & \bfseries 0.5681724004 & \bfseries 93.1416084998 & 0.5963617314 & 92.8013359548 \\
+$z_g$\(^\dag\) & 0.7983676179 & 0.7983676179 & 0 & 0.2893722764 & 63.7545073375 & \bfseries 0.2673693608 & \bfseries 66.5104953182 \\
+$\tau_{21}^{(\beta=1)}$ & 3.412424164 & 2.0908632878 & 38.727919295 & 0.4674877383 & 86.3004211711 & \bfseries 0.3955872837 & \bfseries 88.4074410251 \\
+$M$ & 9.5588263187 & 7.5871868408 & 20.6263762114 & \bfseries 0.3861042102 & \bfseries 95.9607571334 & 0.4357951727 & 95.4409133699 \\
+$n_{ch}$ & 7.5004357296 & 6.5251066672 & 13.0036320237 & \bfseries 0.2579413975 & \bfseries 96.560981164 & 0.2731469069 & 96.358252817 \\
+$f_{ch}$ & 1.1148133557 & 0.8598249945 & 22.8727400826 & 0.251793176 & 77.4138715948 & \bfseries 0.2517637379 & \bfseries 77.4165122252 \\
+$p_T^D$ & 8.6331207902 & 1.5739683694 & 81.7682573007 & \bfseries 0.3783090841 & \bfseries 95.617933615 & 0.4595482129 & 94.6769166791 \\
+$q$ & 1.4763148274 & 0.2966625537 & 79.9051971691 & 0.1997975115 & 86.4664699015 & \bfseries 0.1892688583 & \bfseries 87.1796411733 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+\FigureLabel{VLC divergence \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Sim.}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 26.4352545773 & 15.3798634041 & 41.8206344141 & \bfseries 0.7976348368 & \bfseries 96.9826852453 & 1.0120677453 & 96.1715226068 \\
+$\ln\rho$ & 33.9211122533 & 2.1001198244 & 93.8088120202 & \bfseries 1.1487492156 & \bfseries 96.6134683113 & 1.3866981696 & 95.911990859 \\
+$\lambda^{1}_{0.5}$ & 38.2530816739 & 2.629409144 & 93.1262815206 & \bfseries 1.2664786612 & \bfseries 96.6892114156 & 1.3919455746 & 96.3612197668 \\
+$w$ & 37.425448432 & 2.2779153524 & 93.9134587617 & \bfseries 1.6094152325 & \bfseries 95.6996768245 & 1.7490786763 & 95.3264990812 \\
+$\lambda^{1}_{2}$ & 32.738524541 & 2.1502233177 & 93.4321312647 & \bfseries 2.0589687889 & \bfseries 93.7108687159 & 2.1834049267 & 93.3307778608 \\
+$z_g$\(^\dag\) & 3.185571186 & 3.185571186 & 0 & 1.1571184997 & 63.6762629965 & \bfseries 1.0691586324 & \bfseries 66.4374590951 \\
+$\tau_{21}^{(\beta=1)}$ & 13.5829401498 & 8.3238794223 & 38.7181322268 & 1.8489553247 & 86.3876649365 & \bfseries 1.5614923015 & \bfseries 88.504018392 \\
+$M$ & 37.8597099827 & 30.0595084108 & 20.6029089379 & \bfseries 1.4290354323 & \bfseries 96.2254453798 & 1.6348909402 & 95.6817129848 \\
+$n_{ch}$ & 29.7343408394 & 25.8821171335 & 12.9554703321 & \bfseries 0.9817258359 & \bfseries 96.6983433692 & 1.0408722468 & 96.4994272029 \\
+$f_{ch}$ & 4.4512745677 & 3.4308491701 & 22.9243418276 & 1.0067435842 & 77.3830266162 & \bfseries 1.0066522929 & \bfseries 77.3850775196 \\
+$p_T^D$ & 34.1921436561 & 6.2111102308 & 81.8346860809 & \bfseries 1.5010866234 & \bfseries 95.6098493312 & 1.8233789636 & 94.6672575375 \\
+$q$ & 5.8183992752 & 1.1402399554 & 80.4028582187 & 0.7551921372 & 87.0206202513 & \bfseries 0.7115871175 & \bfseries 87.7700535179 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+% One row: a single distance over every observable at once, the only number in the report that sees correlations.
+\FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Sim.}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+\textit{All} & 152.4823597356 & 465.6866850564 & -205.403650434 & \bfseries 16.9443001778 & \bfseries 88.8876978999 & 19.181702919 & 87.4203790181 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\par\nopagebreak\vspace{0.25em}
+% One line, attached to its table: as a trailing paragraph it was the piece that spilled alone onto an otherwise empty page.
+{\footnotesize\leavevmode\color{ReportGray} Mean 1D distance over random directions, in Data standard deviations. IBU: product of its per-observable weights.\par}
+\vspace{1.1em}
+
+% No \clearpage: for a handful of observables both levels fit on one page. With twelve, the particle section starts on the next page anyway, its heading kept with its first table.
+\ReportSection{Particle-level metrics}
+{Distance to Truth. Improvements are relative to Generation.\par}\nopagebreak
+\vspace{0.45em}
+
+\FigureLabel{Wasserstein \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Gen}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 110.9554618597 & 94.5706367493 & 14.7670288923 & 88.9492332935 & 19.8333891792 & \bfseries 85.5004936457 & \bfseries 22.941608991 \\
+$\ln\rho$ & 258.7738037109 & 29.5065678656 & 88.59754448 & \bfseries 8.7862946093 & \bfseries 96.6046429417 & 10.7445307076 & 95.8479063361 \\
+$\lambda^{1}_{0.5}$ & 309.2120289803 & 22.5368700922 & 92.7115157303 & \bfseries 11.7612881586 & \bfseries 96.1963678459 & 23.2992246747 & 92.4649682124 \\
+$w$ & 292.0078039169 & 16.7110301554 & 94.2771974135 & \bfseries 9.4964923337 & \bfseries 96.7478635138 & 22.6286388934 & 92.2506732389 \\
+$\lambda^{1}_{2}$ & 264.2787992954 & 18.0924758315 & 93.1540192101 & \bfseries 12.2915850952 & \bfseries 95.3490077471 & 25.7154162973 & 90.2695878875 \\
+$z_g$\(^\dag\) & 109.6068695188 & 109.6068695188 & 0 & 37.9699729383 & 65.3580353996 & \bfseries 27.8007630259 & \bfseries 74.6359300763 \\
+$\tau_{21}^{(\beta=1)}$ & 257.8129768372 & 146.4014053345 & 43.2141053835 & 37.8206782043 & 85.3301883139 & \bfseries 15.8181469887 & \bfseries 93.8644876675 \\
+$M$ & 255.6184828281 & 201.7751932144 & 21.0639266058 & 30.1906503737 & 88.1891755089 & \bfseries 25.4057981074 & \bfseries 90.0610480798 \\
+$n_{ch}$ & 234.1594398022 & 189.3911659718 & 19.1187089515 & 29.5905247331 & 87.363086177 & \bfseries 24.2752730846 & \bfseries 89.6330153911 \\
+$f_{ch}$ & 45.2697910368 & 42.3330776393 & 6.4871293784 & 8.6464099586 & 80.9002669351 & \bfseries 5.8362763375 & \bfseries 87.1077904187 \\
+$p_T^D$ & 238.0782663822 & 52.7326241136 & 77.8507190451 & \bfseries 16.9729404151 & \bfseries 92.8708568518 & 20.3059948981 & 91.4708741765 \\
+$q$ & 81.0443609953 & 15.6908035278 & 80.6392408613 & 15.8999059349 & 80.3812310447 & \bfseries 9.8119173199 & \bfseries 87.8931523435 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+\FigureLabel{JS divergence \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Gen}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 2.2074205129 & 11.8705699823 & -437.7575279763 & 1.8331854496 & 16.9535012094 & \bfseries 1.7742909772 & \bfseries 19.6215235462 \\
+$\ln\rho$ & 10.5193185468 & 1.6437808897 & 84.3736941481 & \bfseries 0.2467146522 & \bfseries 97.6546517619 & 0.2678013335 & 97.4541950383 \\
+$\lambda^{1}_{0.5}$ & 12.8072968848 & 2.316899448 & 81.9095358778 & \bfseries 0.4627536373 & \bfseries 96.3867969841 & 0.5086504489 & 96.0284324362 \\
+$w$ & 11.8218521664 & 1.621324161 & 86.2853625794 & \bfseries 0.3800327608 & \bfseries 96.7853365488 & 0.4440561957 & 96.2437679864 \\
+$\lambda^{1}_{2}$ & 9.3574016406 & 1.0595490827 & 88.6768878433 & \bfseries 0.4078036133 & \bfseries 95.6419139745 & 0.4500709747 & 95.1902142071 \\
+$z_g$\(^\dag\) & 2.0924971348 & 2.0924971348 & 0 & 0.4472515261 & 78.625943203 & \bfseries 0.3727766938 & \bfseries 82.1850798458 \\
+$\tau_{21}^{(\beta=1)}$ & 10.3223877955 & 6.3858387748 & 38.1360311074 & 0.5970605478 & 94.2158678819 & \bfseries 0.3437330001 & \bfseries 96.6700243497 \\
+$M$ & 7.8270221662 & 12.5207372981 & -59.9680827807 & 0.5070557834 & 93.5217280256 & \bfseries 0.4665924826 & \bfseries 94.0386973146 \\
+$n_{ch}$ & 6.5669773362 & 10.222070627 & -55.6586859308 & 0.4487022098 & 93.1672946806 & \bfseries 0.3801837027 & \bfseries 94.2106743597 \\
+$f_{ch}$ & 1.2140522396 & 1.0605069592 & 12.6473371898 & 0.3204670773 & 73.6035182997 & \bfseries 0.3194127863 & \bfseries 73.6903589543 \\
+$p_T^D$ & 8.8134026529 & 4.1825886534 & 52.5428620684 & \bfseries 0.5648638421 & \bfseries 93.5908540169 & 0.5907385753 & 93.2972700941 \\
+$q$ & 2.2600248854 & 0.8435895938 & 62.6734378347 & 0.2304684037 & 89.8023953108 & \bfseries 0.2153825309 & \bfseries 90.4699044535 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+\FigureLabel{VLC divergence \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Gen}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+$m$ [GeV] & 8.707306456 & 45.6773273173 & -424.5861914732 & 7.2163221362 & 17.1233702105 & \bfseries 6.9388749609 & \bfseries 20.3097422145 \\
+$\ln\rho$ & 41.7444028932 & 6.4964607836 & 84.4375285467 & \bfseries 0.9265622233 & \bfseries 97.7803917193 & 1.0110654049 & 97.5779617509 \\
+$\lambda^{1}_{0.5}$ & 50.7906740405 & 9.2259239847 & 81.8353976217 & \bfseries 1.8263859958 & \bfseries 96.4040918332 & 2.0071052713 & 96.0482799072 \\
+$w$ & 46.8709892097 & 6.4206779698 & 86.3013815624 & \bfseries 1.4682192141 & \bfseries 96.8675309847 & 1.724094318 & 96.3216173862 \\
+$\lambda^{1}_{2}$ & 37.0869445557 & 4.1730141387 & 88.7480238971 & \bfseries 1.5684177372 & \bfseries 95.7709707393 & 1.7402466777 & 95.3076569166 \\
+$z_g$\(^\dag\) & 8.2887142329 & 8.2887142329 & 0 & 1.7875446351 & 78.4339936829 & \bfseries 1.4900992243 & \bfseries 82.0225528052 \\
+$\tau_{21}^{(\beta=1)}$ & 41.0197164365 & 25.400856987 & 38.0764686019 & 2.3707364499 & 94.2204952743 & \bfseries 1.3598025513 & \bfseries 96.6850025563 \\
+$M$ & 30.9687963618 & 48.5986115111 & -56.927673079 & 1.9348024873 & 93.7524130267 & \bfseries 1.7740066681 & \bfseries 94.2716318472 \\
+$n_{ch}$ & 26.001470341 & 40.0425190507 & -54.0009796581 & 1.7080888121 & 93.4307991443 & \bfseries 1.4338094582 & \bfseries 94.4856600824 \\
+$f_{ch}$ & 4.8461983659 & 4.2287287464 & 12.7413195429 & 1.28044937 & 73.5782715992 & \bfseries 1.2762258669 & \bfseries 73.66542245 \\
+$p_T^D$ & 34.7694043373 & 16.5807944701 & 52.3121123697 & \bfseries 2.218533043 & \bfseries 93.6192952244 & 2.3128280771 & 93.3480940466 \\
+$q$ & 8.8353519376 & 3.2813732139 & 62.8608657914 & 0.8620870669 & 90.2427535091 & \bfseries 0.7853281276 & \bfseries 91.1115241002 \\
+\rowcolor{white}\multicolumn{8}{@{}l}{\footnotesize \(^\dag\) IBU's purity binning produced a single bin, so IBU failed to unfold.} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\vspace{0.5em}
+
+% One row: a single distance over every observable at once, the only number in the report that sees correlations.
+\FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\MetricRows
+\rowcolors{2}{ReportLightGray}{white}
+\begin{tabular}{@{}l D D P D P D P@{}}
+\toprule
+{\bfseries Observable}
+& \multicolumn{1}{c}{\bfseries Gen}
+& \multicolumn{1}{c}{\bfseries IBU}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries OmniFold}
+& \multicolumn{1}{c}{\bfseries impr. (\%)}
+& \multicolumn{1}{c}{\bfseries RAN}
+& \multicolumn{1}{c}{\bfseries impr. (\%)} \\
+\midrule
+\textit{All} & 175.8724566316 & 543.1613436667 & -208.8382119184 & 27.9504748942 & 84.107531235 & \bfseries 25.2455923765 & \bfseries 85.6455110368 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\par\nopagebreak\vspace{0.25em}
+% One line, attached to its table: as a trailing paragraph it was the piece that spilled alone onto an otherwise empty page.
+{\footnotesize\leavevmode\color{ReportGray} Mean 1D distance over random directions, in Truth standard deviations. IBU: product of its per-observable weights.\par}
+\vspace{1.1em}
+
+\clearpage
+
+
+% Landscape, because these figures are wide. A page of six panels is 21x12 inches.
+% No \ReportSection here: the figure fills 98% of the page, and a heading on top of it forces a break onto a near-empty next page.
+% Each page carries its own `<Level> Level (n of m)' suptitle.
+% Tighter margins here than the rest of the report: these pages carry a single figure and no running text, so an 18mm block is a margin around a margin.
+\newgeometry{margin=8mm}
+\begin{landscape}
+\thispagestyle{empty}
+\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/detector_level.pdf}{1}
+\clearpage
+\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/detector_level.pdf}{2}
+\end{landscape}
+\restoregeometry
+
+\newgeometry{margin=8mm}
+\begin{landscape}
+\thispagestyle{empty}
+\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/particle_level.pdf}{1}
+\clearpage
+\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/particle_level.pdf}{2}
+\end{landscape}
+\restoregeometry
+
+
+\ReportSection{Training diagnostics}
+\FigureLabel{Training losses}
+\begin{center}
+\ReportGraphic{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/losses.pdf}{0.355\textheight}
+\end{center}
+
+\vfill
+
+\FigureLabel{Selection criteria}
+\begin{center}
+\ReportGraphic{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T041042Z/artifacts/selection.pdf}{0.355\textheight}
+\end{center}
+
+\end{document}

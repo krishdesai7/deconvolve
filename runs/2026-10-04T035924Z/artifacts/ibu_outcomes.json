@@ -1,0 +1,38 @@
+[
+  {
+    "variable_name": "dim_0",
+    "status": "completed",
+    "n_bins": 7,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_1",
+    "status": "completed",
+    "n_bins": 7,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_2",
+    "status": "completed",
+    "n_bins": 4,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_3",
+    "status": "completed",
+    "n_bins": 9,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_4",
+    "status": "completed",
+    "n_bins": 10,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_5",
+    "status": "completed",
+    "n_bins": 11,
+    "skip_reason": null
+  }
+]
