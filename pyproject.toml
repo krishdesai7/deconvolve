@@ -65,10 +65,10 @@ email = "krish@desai.ml"
 dev = [
     {include-group = "test"},
     "complexipy>=8.0.0,<=8.0.1",
-    "ipykernel>=6.29.5,<=7.3.0",
-    "prek>=0.4.0,<=0.5.3",
-    "pyrefly>=1.3.0,<=1.3.1",
-    "ruff>=0.16.6,<=0.16.9",
+    "ipykernel>=6.29.5,<=7.4.0",
+    "prek>=0.4.0,<=0.5.4",
+    "pyrefly>=1.3.0,<=1.3.2",
+    "ruff>=0.16.6,<=0.16.10",
     "rust-just>=1.35.0,<=1.58.0",
     "tombi>=1.5.7",
     "types-pyyaml>=6.0.12,<=6.0.12.20260906",
@@ -91,7 +91,7 @@ docs = [
     "mkdocstrings-python==2.0.9",
     # Capped: Zensical is pre-1.0 and its MkDocs-plugin compatibility layer
     # (mkdocstrings, literate-nav) is still moving between releases.
-    "zensical==0.0.65",
+    "zensical>=0.0.65,<=0.0.67",
 ]
 
 
