@@ -69,11 +69,17 @@ doc-build:
     uv run --no-project python scripts/gen_api_docs.py
     uv run --group docs zensical build --strict
 
-# Serve the documentation locally with live-reload. The API pages are
-# generated once at startup; restart after adding or removing a module.
+# The API pages are generated once at startup; restart after adding or
+# removing a module. Output goes to doc.log; stop with `just doc-stop`.
+# Serve the documentation locally with live-reload, in the background.
 doc-serve:
     uv run --no-project python scripts/gen_api_docs.py
-    uv run --group docs zensical serve
+    nohup uv run --group docs zensical serve > doc.log 2>&1 < /dev/null &
+    @echo "zensical serving in the background; logs in doc.log (stop with: just doc-stop)"
+
+# Stop the background documentation server started by `doc-serve`.
+doc-stop:
+    -pkill -f 'zensical serve'
 
 
 # --- Mutable operations (writes) ---
