@@ -255,8 +255,11 @@ def config_rows(config: Mapping[str, Any], timings: Mapping[str, Any] | None, /)
 
     `compile_cache_warm` lives at the top level of `timings.json`, not in `config.json`.
     It is folded in as a config row because it makes the `compile` timing interpretable.
+
+    Keys starting with `_` are bookkeeping for tools, not settings -- `_origin`
+    records which config layer supplied each option -- and are left out.
     """
-    entries: dict[str, Any] = dict(config)
+    entries: dict[str, Any] = {k: v for k, v in config.items() if not k.startswith("_")}
     if timings is not None and "compile_cache_warm" in timings:
         entries["compile_cache_warm"] = timings["compile_cache_warm"]
 
@@ -283,12 +286,42 @@ def _phase_line(phase: Mapping[str, Any], total: float, /) -> str:
     return f"{name} & {decimal(seconds)} & {share} & {detail} \\\\"
 
 
-def timing_rows(timings: Mapping[str, Any], /) -> str:
-    """`<<TIMINGS_ROWS>>`: one row per phase, a rule, then the bold total."""
+def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> str:
+    """One pass's rows: an optional label row, one row per phase, a rule, the total.
+
+    Shares are of this pass's own total, so each block reads on its own.
+    """
     total: float = float(timings["total_seconds"])
-    lines: list[str] = [_phase_line(phase, total) for phase in timings["phases"]]
+    lines: list[str] = []
+    if label is not None:
+        lines.append(rf"\multicolumn{{4}}{{@{{}}l}}{{\itshape {latex_text(label)}}} \\")
+    lines.extend(_phase_line(phase, total) for phase in timings["phases"])
     lines.extend((r"\midrule", rf"\textbf{{total}} & {decimal(total)} & 100 & \\"))
     return "\n".join(lines)
+
+
+# Each command that times itself writes its own file (see `instrumentation.timing`):
+# `timing.write` merges by phase name, so a second pass sharing `timings.json`
+# would overwrite the training pass's `data` and `evaluate` rows. IBU is not
+# timed; it takes seconds.
+_TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
+    ("timings.json", "RAN"),
+    ("timings_omnifold.json", "OmniFold baseline"),
+)
+
+
+def timings_body(passes: Sequence[tuple[str, Mapping[str, Any]]], /) -> str:
+    """`<<TIMINGS_ROWS>>`: every timed pass, one block each.
+
+    A run with only its training timed renders exactly as it always has, with
+    no label; a label row heads each block only when there is more than one
+    to tell apart.
+    """
+    if len(passes) == 1:
+        return timing_rows(passes[0][1])
+    return "\n\\midrule\n".join(
+        timing_rows(timings, label=label) for label, timings in passes
+    )
 
 
 # Column groups, in the order the report presents them.
@@ -620,6 +653,11 @@ def render(run_dir: Path, /) -> str:
     ibu: dict[str, Any] | None = _read(artifacts / "metrics_ibu.json")
     omnifold: dict[str, Any] | None = _read(artifacts / "metrics_omnifold.json")
     timings: dict[str, Any] | None = _read(artifacts / "timings.json")
+    timed: list[tuple[str, dict[str, Any]]] = [
+        (label, recorded)
+        for filename, label in _TIMING_FILES
+        if (recorded := _read(artifacts / filename)) is not None
+    ]
     skipped: frozenset[str] = skipped_variables(run_dir, ibu)
     variables: tuple[str, ...] = _variables(config)
     has_particle: bool = bool(ran and any(k.startswith("particle_") for k in ran))
@@ -629,7 +667,7 @@ def render(run_dir: Path, /) -> str:
     for token, value in (
         ("<<RUN_NAME>>", run_dir.name),
         ("<<CONFIG_ROWS>>", config_rows(config, timings)),
-        ("<<TIMINGS_ROWS>>", timing_rows(timings) if timings else ""),
+        ("<<TIMINGS_ROWS>>", timings_body(timed) if timed else ""),
         *(
             (
                 f"<<{level.upper()}_{metric_tag}>>",
