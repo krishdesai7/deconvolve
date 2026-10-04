@@ -37,7 +37,7 @@ The two timing files are only written when the environment variable `DECONVOLVE_
 
 Training runs for a fixed number of epochs, and the saved networks are those from the single epoch with the lowest detector-level validation MMD. `selection.pdf` shows that choice.
 
-When the baselines have been run, `train --load-run RUN_DIR` reloads the saved generator and redraws the figures with IBU and OmniFold overlaid.
+The figures are drawn when training finishes, before any baseline exists. Once the baselines have been run, `deconvolve plot RUN_DIR` reloads the saved generator and redraws the figures with IBU and OmniFold overlaid. Nothing is retrained or rescored.
 
 ---
 
@@ -59,7 +59,7 @@ For the fullest report, run the baselines first:
 ```shell
 deconvolve baseline ibu runs/2026-09-19T164500Z
 deconvolve baseline omnifold runs/2026-09-19T164500Z
-deconvolve train --load-run runs/2026-09-19T164500Z   # redraw figures with the baselines
+deconvolve plot runs/2026-09-19T164500Z              # redraw figures with the baselines
 deconvolve report runs/2026-09-19T164500Z
 ```
 

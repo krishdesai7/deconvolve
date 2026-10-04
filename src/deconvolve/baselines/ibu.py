@@ -566,6 +566,14 @@ def evaluate_single(
         weights_path,
     )
     render_metrics(f"{run_dir.name} [IBU]", metrics, list(result.variable_names))
+    # The figures were drawn when training finished, before this baseline
+    # existed; nothing redraws them on its own.
+    logger.info(
+        "%s: run `deconvolve plot %s` to add the %s overlay to the figures",
+        run_dir.name,
+        run_dir,
+        "IBU",
+    )
     return metrics
 
 

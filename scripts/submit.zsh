@@ -75,7 +75,7 @@ RUN_DIR=$RUN_DIR[-1]
 echo "Run dir: ${RUN_DIR}"
 
 uv run deconvolve baseline ibu "${RUN_DIR}"
-uv run deconvolve train --load-run "${RUN_DIR}"
+uv run deconvolve plot "${RUN_DIR}"
 uv run deconvolve evaluate "${RUN_DIR}" --force
 
 if (( ! $+commands[pdflatex] )); then

@@ -340,7 +340,7 @@ def _draw_figures(
     Matplotlib is a large share of a short run's wall clock and none of it is
     needed to score one, so plots can be turned off for hyperparameter sweeps,
     bootstrapping, etc. The artifacts are already on disk by then, so
-    `--load-run` on the same directory draws them later.
+    `deconvolve plot` on the same directory draws them later.
 
     The guard lives here rather than at the call site because the baseline
     overlays are part of the same decision: `_load_baseline_weights` exists
@@ -381,9 +381,9 @@ def _load_baseline_weights(
     Presence is the whole mechanism, and it is deliberate: neither baseline
     runs on the `deconvolve train` path, so the figures a fresh run draws have no
     overlay, and re-drawing them after a baseline has run puts one there.
-    `deconvolve train --load-run <run_dir>` is that re-draw --- it reloads the
-    saved generator instead of training, and picks up whatever `*_weights.npz`
-    files exist by then.
+    `deconvolve plot <run_dir>` is that re-draw (as is `train --load-run`) ---
+    it reloads the saved generator instead of training, and picks up whatever
+    `*_weights.npz` files exist by then.
 
     The order is the drawing order, so the overlays are stacked
     least-to-most-recent rather than by which is expected to win.

@@ -8,9 +8,12 @@ completion comes from `deconvolve --install-completion` and needs the script nam
 it does not work through `python -m`.
 
 One Typer command tree. Flags are kebab-case; subcommands are
-`train`, `evaluate`, `report`, `leakage-check`, `baseline {ibu,omnifold}`,
+`train`, `evaluate`, `plot`, `report`, `leakage-check`, `baseline {ibu,omnifold}`,
 `uncertainty {freeze,run,collect}`, `config show`. `--log-level` is global and
-goes before the subcommand.
+goes before the subcommand. It governs the `deconvolve.*` loggers only; every
+other library is held at WARNING (matplotlib's PDF writer drives
+`fontTools.subset`, which logs hundreds of INFO lines per figure), except at
+`DEBUG`, which opens everything.
 
 Every layerable option above also resolves through the five-layer config
 stack — code default, global `deconvolve.toml`, project `deconvolve.toml`/`[tool.deconvolve]`,
@@ -39,8 +42,8 @@ compared against.
 Model selection is not a flag: it is fixed to the detector-level MMD argmin
 (see [training-loop.md](training-loop.md)). `--no-plots` skips the figures,
 which are a large share of a short run's wall clock and no part of scoring
-one; metrics still run, and `--load-run` on the same directory draws them
-afterwards.
+one; metrics still run, and `deconvolve plot` on the same directory draws
+them afterwards.
 
 `--run-dir` names where a run saves, and a sweep needs it. The default is a UTC
 timestamp at second resolution, which several runs of identical shape launched
@@ -58,6 +61,7 @@ deconvolve train --dataset jets --var m --var w                      # a subset 
 deconvolve train --dataset jets --lr-g 3e-4 -k 2 --no-plots          # tuning: see benchmarks/README.md
 deconvolve train --dataset jets --seed 3 --run-dir runs/hp_x/lrg1e-4_seed03  # one arm of a sweep
 deconvolve train --load-run runs/2026-03-14T061023Z                  # reload a saved run
+deconvolve plot runs/2026-...                                        # redraw figures, with any baselines
 deconvolve evaluate runs                                             # compute metrics for all runs
 deconvolve evaluate runs/2026-...                                    # single run
 deconvolve baseline ibu runs/2026-...                                # IBU comparison

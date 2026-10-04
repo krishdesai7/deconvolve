@@ -38,13 +38,15 @@
   {\color{ReportGray}\rule{\linewidth}{0.6pt}}
 }
 
+% Content flows from section to section rather than starting each on a fresh page, so a short run's report is not mostly white space. The \nopagebreak after every heading, label and section blurb is what keeps that safe: none of them can be left stranded at the foot of a page with its table on the next. The tables themselves are unbreakable boxes.
 \newcommand{\ReportSection}[1]{
   \par\vspace{1.05em}
   {\bfseries\large #1\par}
+  \nopagebreak
   \vspace{0.35em}
 }
 
-\newcommand{\FigureLabel}[1]{{\bfseries\normalsize #1\par}\vspace{0.35em}}
+\newcommand{\FigureLabel}[1]{{\bfseries\normalsize #1\par}\nopagebreak\vspace{0.35em}}
 
 % Numeric presentation
 \sisetup{
@@ -98,8 +100,9 @@
 % One page of a multi-page figure.
 \newcommand{\ReportPage}[2]{\IfFileExists{#1}{
     % Measured inside a `pdflscape` block under \newgeometry: \linewidth is 749.4pt and \textheight is 568.8pt.
+    % Capped in height as well as width: a figure with one column of panels is nearly square, and at the full 749.4pt width it would stand ~730pt tall, overflow the page and push itself onto the next one, leaving this one blank.
     \null\vfill
-    {\centering\includegraphics[width=\linewidth,page=#2]{#1}\par}
+    {\centering\includegraphics[width=\linewidth,height=0.95\textheight,keepaspectratio,page=#2]{#1}\par}
     \vfill
 }{
     \fbox{\parbox[c][0.4\textheight][c]{0.94\linewidth}{
@@ -183,7 +186,7 @@
 \clearpage
 
 \ReportSection{Detector-level metrics}
-{Distance to Data. Improvements are relative to Simulation.\par}
+{Distance to Data. Improvements are relative to Simulation.\par}\nopagebreak
 \vspace{0.45em}
 
 \FigureLabel{Wasserstein Distance \([ \times \num{e3} ]\)}
@@ -274,10 +277,9 @@
 {\footnotesize\color{ReportGray} Mean 1D Wasserstein distance over random directions, in units of Data's per-observable standard deviation. IBU is scored on the product of its per-observable weights.\par}
 \vspace{1.1em}
 
-\clearpage
-
+% No \clearpage: for a handful of observables both levels fit on one page. With twelve, the particle section starts on the next page anyway, its heading kept with its first table.
 \ReportSection{Particle-level metrics}
-{Distance to Truth. Improvements are relative to Generation.\par}
+{Distance to Truth. Improvements are relative to Generation.\par}\nopagebreak
 \vspace{0.45em}
 
 \FigureLabel{Wasserstein \([ \times \num{e3} ]\)}

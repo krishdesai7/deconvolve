@@ -35,7 +35,7 @@ canonical storage order and the cache key, and must not be reordered (see
 `report.py` emits that many `\includegraphics[page=k]` blocks without opening
 the file. A run whose figures were drawn before pagination has a one-page PDF
 and `pdflatex` fails with "required page does not exist" — redraw with
-`deconvolve train --load-run <run_dir>` first. `submit.zsh` keeps them in step.
+`deconvolve plot <run_dir>` first. `submit.zsh` keeps them in step.
 
 The figure pages are landscape with their own `\newgeometry{margin=8mm}`,
 and two independent knobs set how they read. A panel's width on the page is

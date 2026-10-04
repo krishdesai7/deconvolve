@@ -328,6 +328,14 @@ def evaluate_single(
         weights_path,
     )
     render_metrics(f"{run_dir.name} [OmniFold]", metrics, list(config.variable_names))
+    # The figures were drawn when training finished, before this baseline
+    # existed; nothing redraws them on its own.
+    logger.info(
+        "%s: run `deconvolve plot %s` to add the %s overlay to the figures",
+        run_dir.name,
+        run_dir,
+        "OmniFold",
+    )
 
     # Its own file, not `timings.json`: `timing.write` merges by phase name
     # alone, and this pass's `data`/`evaluate` phases would overwrite the

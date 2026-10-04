@@ -126,12 +126,14 @@ exists in `artifacts/` when the figures are drawn, so:
 
 ```zsh
 deconvolve baseline omnifold runs/<timestamp>Z   # writes omnifold_weights.npz
-deconvolve train --load-run runs/<timestamp>Z              # reloads, redraws with it
+deconvolve plot runs/<timestamp>Z                 # reloads, redraws with it
 ```
 
-`--load-run` reloads the saved generator rather than training, so the redraw is
-cheap and the run is untouched. There is no separate "add OmniFold to the plots"
-command because there is nothing for it to do that `--load-run` does not.
+`plot` reloads the saved generator rather than training, so the redraw is cheap
+and the run is untouched. `train --load-run` draws the same figures, and once
+was the only way to; it was not discoverable as "add the baselines to the
+plots", so `deconvolve plot` (`workflows/plot.py`) now names that step, and the
+baseline commands log a pointer to it when they finish.
 
 `evaluation.plotting.BaselineOverlay` is what made a second baseline cheap. The overlay
 used to be a bare `ibu_weights: list[EventArray] | None` threaded through six

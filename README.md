@@ -158,7 +158,7 @@ deconvolve evaluate runs/2026-03-14T061023Z
 deconvolve evaluate --force
 ```
 
-This computes per-dimension 1D Wasserstein distances, Jensen-Shannon divergences, and triangular discriminator (Vincze-LeCam divergence) \[$\times10^3$\] at both detector and particle level, before and after reweighting. Results are saved to `metrics.json` in each run directory.
+This computes per-dimension 1D Wasserstein distances, Jensen-Shannon divergences, and triangular discriminator (Vincze-LeCam divergence), plus one joint sliced Wasserstein distance over all dimensions \[$\times10^3$\], at both detector and particle level, before and after reweighting. Results are saved to `metrics.json` in each run directory.
 
 ### Reports
 
@@ -202,8 +202,8 @@ OmniFold is the second baseline this project implements. It runs in its own PEP 
 # OmniFold — single run (writes metrics_omnifold.json)
 deconvolve baseline omnifold runs/2026-03-14T061023Z
 
-# Reload to redraw the figures with the OmniFold overlay
-deconvolve train -r runs/2026-03-14T061023Z
+# Redraw the figures with the IBU and OmniFold overlays
+deconvolve plot runs/2026-03-14T061023Z
 ```
 
 `uv` must be on `PATH`, and its worker environment should be warmed on a login node before running on a cluster with no outbound network:

@@ -159,6 +159,7 @@ def test_the_spec_mirrors_the_command_tree() -> None:
     assert set(spec.children) == {
         "train",
         "evaluate",
+        "plot",
         "report",
         "baseline",
         "uncertainty",

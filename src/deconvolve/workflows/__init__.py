@@ -1,4 +1,4 @@
-"""The orchestration behind `deconvolve train` and `deconvolve leakage-check`.
+"""The orchestration behind `deconvolve train`, `plot` and `leakage-check`.
 
 These live apart from `training` and `evaluation` because they need both.
 Dependencies point one way: `workflows` imports `training`, `evaluation` and
@@ -6,7 +6,7 @@ Dependencies point one way: `workflows` imports `training`, `evaluation` and
 `training/` or `evaluation/` instead would make one of those packages import
 the other's sibling, closing a cycle.
 
-`run` and `run_leakage_check` are re-exported here, so
+`run`, `plot_runs` and `run_leakage_check` are re-exported here, so
 `from deconvolve.workflows import run` works without knowing which submodule
 it lives in.
 """
@@ -15,8 +15,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from . import leakage, train
+from . import leakage, plot, train
 from .leakage import run_leakage_check
+from .plot import plot_runs
 from .train import run
 
 if TYPE_CHECKING:
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 
 __all__: Final[Sequence[str]] = (
     "leakage",
+    "plot",
+    "plot_runs",
     "run",
     "run_leakage_check",
     "train",

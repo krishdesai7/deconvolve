@@ -69,7 +69,7 @@ Keep this file to roughly 100 lines. It is the index, not the encyclopedia: new 
 
 ## Running
 
-`uv run deconvolve <subcommand>` is the entry point (`train`, `evaluate`, `report`,
+`uv run deconvolve <subcommand>` is the entry point (`train`, `evaluate`, `plot`, `report`,
 `leakage-check`, `baseline {ibu,omnifold}`, `uncertainty {run,collect,freeze}`,
 `config show`); `--log-level` is global and goes before the subcommand. Dev
 recipes go through `just` (`just validate`, `just test-fast`). Everything else

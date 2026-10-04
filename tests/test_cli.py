@@ -26,6 +26,7 @@ def test_registered_command_trees_are_exact() -> None:
         "train",
         "evaluate",
         "report",
+        "plot",
         "baseline",
         "uncertainty",
         "leakage-check",
@@ -41,6 +42,7 @@ def test_registered_command_trees_are_exact() -> None:
         ("train",),
         ("evaluate",),
         ("report",),
+        ("plot",),
         ("baseline", "ibu"),
         ("baseline", "omnifold"),
         ("uncertainty", "run"),
@@ -199,3 +201,15 @@ def test_report_takes_the_run_directory_positionally(
 
     assert result.exit_code == 0
     assert seen == {"run_dir": tmp_path, "force": True, "compile_pdf": False}
+
+
+def test_plot_takes_the_run_directory_positionally(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: list[Path] = []
+    monkeypatch.setattr(cli, "plot_runs", seen.append)
+
+    result = runner.invoke(app, ["plot", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert seen == [tmp_path]
