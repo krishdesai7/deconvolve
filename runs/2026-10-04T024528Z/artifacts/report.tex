@@ -38,13 +38,15 @@
   {\color{ReportGray}\rule{\linewidth}{0.6pt}}
 }
 
+% Content flows from section to section rather than starting each on a fresh page, so a short run's report is not mostly white space. The \nopagebreak after every heading, label and section blurb is what keeps that safe: none of them can be left stranded at the foot of a page with its table on the next. The tables themselves are unbreakable boxes.
 \newcommand{\ReportSection}[1]{
   \par\vspace{1.05em}
   {\bfseries\large #1\par}
+  \nopagebreak
   \vspace{0.35em}
 }
 
-\newcommand{\FigureLabel}[1]{{\bfseries\normalsize #1\par}\vspace{0.35em}}
+\newcommand{\FigureLabel}[1]{{\bfseries\normalsize #1\par}\nopagebreak\vspace{0.35em}}
 
 % Numeric presentation
 \sisetup{
@@ -93,13 +95,16 @@
   \ConfigKey{#1} &
   \multicolumn{3}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-0.20\linewidth-2\tabcolsep\relax}@{}}{#2} \\
 }
+% Metric tables run at LaTeX's own row height rather than the 1.10 the config and timing tables use: that 10%, over eight tables, is what lets both levels share a page for a few observables.
+\newcommand{\MetricRows}{\renewcommand{\arraystretch}{1.0}}
 \newcommand{\TimingSubphase}[1]{\hspace*{1.15em}#1}
 
 % One page of a multi-page figure.
 \newcommand{\ReportPage}[2]{\IfFileExists{#1}{
     % Measured inside a `pdflscape` block under \newgeometry: \linewidth is 749.4pt and \textheight is 568.8pt.
+    % Capped in height as well as width: a figure with one column of panels is nearly square, and at the full 749.4pt width it would stand ~730pt tall, overflow the page and push itself onto the next one, leaving this one blank.
     \null\vfill
-    {\centering\includegraphics[width=\linewidth,page=#2]{#1}\par}
+    {\centering\includegraphics[width=\linewidth,height=0.95\textheight,keepaspectratio,page=#2]{#1}\par}
     \vfill
 }{
     \fbox{\parbox[c][0.4\textheight][c]{0.94\linewidth}{
@@ -156,7 +161,7 @@
 \ConfigPair{lr_g}{\Raw{0.00003}}{lr_d}{\Raw{0.0001}}
 \ConfigPair{lambda_dispersion}{\Raw{0.015}}{mmd_subsample}{\Count{16384}}
 \ConfigPair{mmd_test}{\Raw{0.0000076294}}{best_epoch}{\Count{60}}
-\ConfigPair{_origin}{\ConfigVal{{'batch_size': 'default', 'config': 'command-line', 'data_seed': 'default', 'dataset': 'default', 'hidden_units': 'default', 'lambda_dispersion': 'default', 'log_every': 'default', 'lr_d': 'default', 'lr_g': 'default', 'n_disc_steps': 'default', 'n_epochs': 'default', 'n_layers': 'default', 'n_samples': 'default', 'plots': 'default', 'run_dir': 'default', 'seed': 'default', 'variable': 'default'}}}{compile_cache_warm}{True}
+\ConfigPair{compile_cache_warm}{True}{}{}
 \ConfigWide{gaussian_params}{\ConfigVal{dim=2, mu_gen=[0, 1], mu_true=[0.2, 0.8], cov_gen=[[1, -0.9], [-0.9, 2.25]], cov_true=[[0.81, -0.702], [-0.702, 1.69]], cov_detector=[[0.25, 0], [0, 0.64]]}}
 \ConfigWide{mmd_sigmas_detector}{\Raw{1.4598785639} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
 \ConfigWide{mmd_sigmas_particle}{\Raw{1.2172533274} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
@@ -187,6 +192,7 @@
 \midrule
 % A nested phase can be written as \TimingSubphase{transfer}.
 % Insert \midrule before the total row when generating TIMINGS_ROWS.
+\multicolumn{4}{@{}l}{\itshape RAN} \\
 train & 14.6862458241 & 68.2718030978 & train \\
 \TimingSubphase{transfer} & 0.531050873 &  & train \\
 \TimingSubphase{compile} & 2.852256792 &  & train \\
@@ -200,13 +206,30 @@ plots & 4.715586451 & 21.9212992571 & load \\
 evaluate & 0.00276311 & 0.0128448415 & load \\
 \midrule
 \textbf{total} & 21.511436871 & 100 & \\
+\midrule
+\multicolumn{4}{@{}l}{\itshape OmniFold baseline} \\
+parse\_config & 0.002155501 & 0.0004829584 & omnifold \\
+data & 0.148499163 & 0.0332725068 & gaussian cache hit -- omnifold \\
+omnifold & 439.1555703711 & 98.3965594243 & niter=3, epochs=50 -- omnifold \\
+\TimingSubphase{init} & 1.2501741811 &  & DataLoaders and the two MLPs -- omnifold \\
+\TimingSubphase{unfold} & 419.915802696 &  & MultiFold.Unfold -- omnifold \\
+\TimingSubphase{iter1\_step1} & 60.954280628 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter2\_step1} & 59.558883934 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter3\_step1} & 65.063168949 &  & detector-level reweighting -- omnifold \\
+\TimingSubphase{iter1\_step2} & 52.1031253029 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{iter2\_step2} & 65.702927691 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{iter3\_step2} & 116.502532789 &  & particle-level reweighting -- omnifold \\
+\TimingSubphase{reweight} & 1.586813999 &  & evaluating weights on z\_target -- omnifold \\
+evaluate & 7.0056917029 & 1.5696851104 & 2 variables -- omnifold \\
+\midrule
+\textbf{total} & 446.3119167381 & 100 & \\
 \bottomrule
 \end{tabularx}
 \endgroup
 \clearpage
 
 \ReportSection{Detector-level metrics}
-{Distance to Data. Improvements are relative to Simulation.\par}
+{Distance to Data. Improvements are relative to Simulation.\par}\nopagebreak
 \vspace{0.45em}
 
 \FigureLabel{Wasserstein Distance \([ \times \num{e3} ]\)}
@@ -214,6 +237,7 @@ evaluate & 0.00276311 & 0.0128448415 & load \\
 \small
 % Eight columns. At the default 6pt inter-column padding the table overruns the text block by ~24pt.
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -231,12 +255,13 @@ dim\_1 & 230.0810813904 & 27.4530183524 & 88.0681113864 & \bfseries 10.776561684
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 \FigureLabel{JS divergence \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -254,12 +279,13 @@ dim\_1 & 5.197631462 & 0.6583904595 & 87.3328752851 & \bfseries 0.2630938804 & \
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 \FigureLabel{VLC divergence \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -277,13 +303,14 @@ dim\_1 & 20.2180094407 & 2.5063548169 & 87.6033551955 & \bfseries 1.010914246 & 
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 % One row: a single distance over every observable at once, the only number in the report that sees correlations.
 \FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -300,20 +327,21 @@ dim\_1 & 20.2180094407 & 2.5063548169 & 87.6033551955 & \bfseries 1.010914246 & 
 \bottomrule
 \end{tabular}
 \endgroup
-\par\vspace{0.25em}
-{\footnotesize\color{ReportGray} Mean 1D Wasserstein distance over random directions, in units of Data's per-observable standard deviation. IBU is scored on the product of its per-observable weights.\par}
+\par\nopagebreak\vspace{0.25em}
+% One line, attached to its table: as a trailing paragraph it was the piece that spilled alone onto an otherwise empty page.
+{\footnotesize\leavevmode\color{ReportGray} Mean 1D distance over random directions, in Data standard deviations. IBU: product of its per-observable weights.\par}
 \vspace{1.1em}
 
-\clearpage
-
+% No \clearpage: for a handful of observables both levels fit on one page. With twelve, the particle section starts on the next page anyway, its heading kept with its first table.
 \ReportSection{Particle-level metrics}
-{Distance to Truth. Improvements are relative to Generation.\par}
+{Distance to Truth. Improvements are relative to Generation.\par}\nopagebreak
 \vspace{0.45em}
 
 \FigureLabel{Wasserstein \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -331,12 +359,13 @@ dim\_1 & 241.9532984495 & 48.1685623527 & 80.0917946997 & \bfseries 12.444335036
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 \FigureLabel{JS divergence \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -354,12 +383,13 @@ dim\_1 & 8.1003795055 & 2.7457823069 & 66.1030411594 & \bfseries 0.2226167419 & 
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 \FigureLabel{VLC divergence \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -377,13 +407,14 @@ dim\_1 & 31.3465512837 & 10.7768082478 & 65.6204341259 & \bfseries 0.8743217429 
 \bottomrule
 \end{tabular}
 \endgroup
-\vspace{0.7em}
+\vspace{0.5em}
 
 % One row: a single distance over every observable at once, the only number in the report that sees correlations.
 \FigureLabel{Sliced Wasserstein, joint \([ \times \num{e3} ]\)}
 \begingroup
 \small
 \setlength{\tabcolsep}{4pt}
+\MetricRows
 \rowcolors{2}{ReportLightGray}{white}
 \begin{tabular}{@{}l D D P D P D P@{}}
 \toprule
@@ -400,8 +431,9 @@ dim\_1 & 31.3465512837 & 10.7768082478 & 65.6204341259 & \bfseries 0.8743217429 
 \bottomrule
 \end{tabular}
 \endgroup
-\par\vspace{0.25em}
-{\footnotesize\color{ReportGray} Mean 1D Wasserstein distance over random directions, in units of Truth's per-observable standard deviation. IBU is scored on the product of its per-observable weights.\par}
+\par\nopagebreak\vspace{0.25em}
+% One line, attached to its table: as a trailing paragraph it was the piece that spilled alone onto an otherwise empty page.
+{\footnotesize\leavevmode\color{ReportGray} Mean 1D distance over random directions, in Truth standard deviations. IBU: product of its per-observable weights.\par}
 \vspace{1.1em}
 
 \clearpage
@@ -414,14 +446,14 @@ dim\_1 & 31.3465512837 & 10.7768082478 & 65.6204341259 & \bfseries 0.8743217429 
 \newgeometry{margin=8mm}
 \begin{landscape}
 \thispagestyle{empty}
-\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T024528Z/artifacts/detector_level.pdf}{1}
+\ReportPage{/Users/krish/Developer/deconvolve/runs/2026-10-04T024528Z/artifacts/detector_level.pdf}{1}
 \end{landscape}
 \restoregeometry
 
 \newgeometry{margin=8mm}
 \begin{landscape}
 \thispagestyle{empty}
-\ReportPage{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T024528Z/artifacts/particle_level.pdf}{1}
+\ReportPage{/Users/krish/Developer/deconvolve/runs/2026-10-04T024528Z/artifacts/particle_level.pdf}{1}
 \end{landscape}
 \restoregeometry
 
@@ -429,14 +461,14 @@ dim\_1 & 31.3465512837 & 10.7768082478 & 65.6204341259 & \bfseries 0.8743217429 
 \ReportSection{Training diagnostics}
 \FigureLabel{Training losses}
 \begin{center}
-\ReportGraphic{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T024528Z/artifacts/losses.pdf}{0.355\textheight}
+\ReportGraphic{/Users/krish/Developer/deconvolve/runs/2026-10-04T024528Z/artifacts/losses.pdf}{0.355\textheight}
 \end{center}
 
 \vfill
 
 \FigureLabel{Selection criteria}
 \begin{center}
-\ReportGraphic{/global/u1/k/kdesai/deconvolve/runs/2026-10-04T024528Z/artifacts/selection.pdf}{0.355\textheight}
+\ReportGraphic{/Users/krish/Developer/deconvolve/runs/2026-10-04T024528Z/artifacts/selection.pdf}{0.355\textheight}
 \end{center}
 
 \end{document}

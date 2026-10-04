@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import shutil
@@ -216,6 +217,65 @@ def test_the_pass_is_folded_into_the_detail_cell() -> None:
         ],
     }
     assert "cache hit -- train" in report.timing_rows(payload)
+
+
+def test_underscore_bookkeeping_is_not_a_setting() -> None:
+    """`_origin` says which config layer set each option: for tools, not readers."""
+    rows: str = report.config_rows(
+        {"dim": 1, "seed": 3, "_origin": {"seed": "default"}}, None
+    )
+    assert "_origin" not in rows
+    assert "seed" in rows
+
+
+def _pass(name: str, seconds: float, pass_name: str) -> dict[str, Any]:
+    return {
+        "total_seconds": seconds,
+        "phases": [
+            {
+                "name": name,
+                "seconds": seconds,
+                "depth": 0,
+                "detail": None,
+                "failed": False,
+                "pass": pass_name,
+            }
+        ],
+    }
+
+
+def test_a_single_timed_pass_has_no_label_row() -> None:
+    """Only training timed: the table reads exactly as it did before OmniFold."""
+    timings = _pass("train", 2.0, "train")
+    assert report.timings_body([("RAN", timings)]) == report.timing_rows(timings)
+
+
+def test_each_timed_pass_gets_its_own_labelled_block_and_total() -> None:
+    body: str = report.timings_body(
+        [
+            ("RAN", _pass("train", 2.0, "train")),
+            ("OmniFold baseline", _pass("omnifold", 400.0, "omnifold")),
+        ]
+    )
+    assert body.index(r"\itshape RAN") < body.index(r"\itshape OmniFold baseline")
+    assert body.count(r"\textbf{total}") == 2
+    assert "400" in body
+
+
+def test_the_omnifold_timings_reach_the_report(reference_run: Path) -> None:
+    """`timings_omnifold.json` is its own file; the report has to look for it."""
+    _ = (reference_run / "artifacts" / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert "OmniFold baseline" in source
+    assert "omnifold & 400" in source
+
+
+def test_level_figures_are_capped_in_height_as_well_as_width() -> None:
+    """A one-panel figure is nearly square: width alone overflowed the page."""
+    template: str = report.load_template()
+    assert "height=0.95\\textheight,keepaspectratio,page=#2" in template
 
 
 _METRIC_KEYS = ("wasserstein", "jensenshannon", "triangular")

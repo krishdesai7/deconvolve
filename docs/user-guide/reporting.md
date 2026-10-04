@@ -66,7 +66,7 @@ deconvolve report runs/2026-09-19T164500Z
 ### Contents
 
 1. **Configuration.** Every setting in `config.json`.
-2. **Timing.** How long each phase of training took, from `timings.json`. The table is empty unless the run was trained with `DECONVOLVE_TIMING=1`.
+2. **Timing.** How long each phase of training took, from `timings.json`, followed by the OmniFold baseline's phases from `timings_omnifold.json` when that exists. Each block has its own total. The table is empty unless the run was trained with `DECONVOLVE_TIMING=1`.
 3. **Detector-level metrics.** Three tables (Wasserstein, JS divergence, VLC divergence) comparing each method's reweighted Simulation to Data, one row per observable, then a one-row table for the joint sliced Wasserstein distance over all observables (see [Sliced Wasserstein distance](evaluation.md#4-sliced-wasserstein-distance)). The columns are: unweighted Simulation (*Sim.*), IBU, <span style="font-variant: small-caps;">OmniFold</span> and <span style="font-variant: small-caps;">Deconvolve</span>, each method with its improvement over *Sim.* in percent.
 4. **Particle-level metrics.** The same four tables, comparing to Truth, with the unweighted Generation sample (*Gen.*) as the reference.
 5. **Detector- and particle-level figures.** One panel per observable. Each panel overlays the histograms of Nature, Unweighted MC and the Reweighted MC, with a Ratio panel underneath. IBU and <span style="font-variant: small-caps;">OmniFold</span> are overlaid as well, if their results are available.

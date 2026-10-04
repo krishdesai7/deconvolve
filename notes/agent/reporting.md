@@ -45,6 +45,25 @@ widening it grew the figure. What the inches DO set is the rendered text size,
 `font.size * linewidth_pt / (72 * figure_width_in)`. So `PANEL_COLUMNS` sizes
 the panels and `PANEL_WIDTH_INCHES` sizes their labels, downwards.
 
+That holds only for a page with all `PANEL_COLUMNS` columns. A figure with fewer
+(a 1D or 2D Gaussian run) is narrower in inches but scaled to the same full
+width, and a single panel is nearly square: at 749.4pt wide it stood ~730pt
+tall against a 568.8pt text height, overflowed, and pushed itself onto the next
+page, leaving a blank one before it. `\ReportPage` therefore also caps the
+height (`height=0.95\textheight,keepaspectratio`); a full-width multi-column
+page never reaches the cap, so the jet figures are unchanged.
+
+The portrait pages flow rather than breaking per section: config and timing on
+the first, `\clearpage`, then both metric levels, which share a page for a few
+observables. What keeps that from stranding a heading at the foot of a page is
+the `\nopagebreak` after every `\ReportSection`, `\FigureLabel` and section
+blurb. The sliced-Wasserstein note starts with `\leavevmode` before `\color`
+for the same reason: `\color` in vertical mode inserts a whatsit, which is a
+legal break point the `\nopagebreak` before it does not cover, and the note
+spilled alone onto an otherwise empty page. The metric tables run at
+`\arraystretch` 1.0 (`\MetricRows`) rather than 1.10; that 10% is what lets
+two observables' worth of both levels fit on one page.
+
 Figure defects do not fail tests. Clipped labels, missing titles, overlapping
 text, an occluded inset and a wrong panel aspect all passed a green suite here
 and were caught only by rendering the PDF and measuring artist bounding boxes.
