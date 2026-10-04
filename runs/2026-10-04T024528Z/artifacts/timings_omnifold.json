@@ -1,0 +1,110 @@
+{
+  "total_seconds": 446.31191673805006,
+  "compile_cache_warm": true,
+  "phases": [
+    {
+      "name": "parse_config",
+      "seconds": 0.002155501046217978,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "data",
+      "seconds": 0.1484991629840806,
+      "depth": 0,
+      "detail": "gaussian cache hit",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "omnifold",
+      "seconds": 439.15557037107646,
+      "depth": 0,
+      "detail": "niter=3, epochs=50",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "init",
+      "seconds": 1.2501741810701787,
+      "depth": 1,
+      "detail": "DataLoaders and the two MLPs",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "unfold",
+      "seconds": 419.9158026960213,
+      "depth": 1,
+      "detail": "MultiFold.Unfold",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter1_step1",
+      "seconds": 60.95428062800784,
+      "depth": 1,
+      "detail": "detector-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter2_step1",
+      "seconds": 59.558883934048936,
+      "depth": 1,
+      "detail": "detector-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter3_step1",
+      "seconds": 65.06316894898191,
+      "depth": 1,
+      "detail": "detector-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter1_step2",
+      "seconds": 52.10312530293595,
+      "depth": 1,
+      "detail": "particle-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter2_step2",
+      "seconds": 65.70292769104708,
+      "depth": 1,
+      "detail": "particle-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "iter3_step2",
+      "seconds": 116.502532789018,
+      "depth": 1,
+      "detail": "particle-level reweighting",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "reweight",
+      "seconds": 1.5868139989906922,
+      "depth": 1,
+      "detail": "evaluating weights on z_target",
+      "failed": false,
+      "pass": "omnifold"
+    },
+    {
+      "name": "evaluate",
+      "seconds": 7.005691702943295,
+      "depth": 0,
+      "detail": "2 variables",
+      "failed": false,
+      "pass": "omnifold"
+    }
+  ]
+}
