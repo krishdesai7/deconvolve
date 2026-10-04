@@ -156,7 +156,7 @@
 \ConfigPair{lr_g}{\Raw{0.00003}}{lr_d}{\Raw{0.0001}}
 \ConfigPair{lambda_dispersion}{\Raw{0.015}}{mmd_subsample}{\Count{16384}}
 \ConfigPair{mmd_test}{\Raw{0.0053787231}}{best_epoch}{\Count{98}}
-\ConfigPair{_origin}{\ConfigVal{{'batch_size': 'default', 'config': 'command-line', 'data_seed': 'default', 'dataset': 'default', 'hidden_units': 'default', 'lambda_dispersion': 'default', 'log_every': 'default', 'lr_d': 'default', 'lr_g': 'default', 'n_disc_steps': 'default', 'n_epochs': 'default', 'n_layers': 'default', 'n_samples': 'default', 'plots': 'default', 'run_dir': 'default', 'seed': 'default', 'variable': 'default'}}}{}{}
+\ConfigPair{_origin}{\ConfigVal{{'batch_size': 'default', 'config': 'command-line', 'data_seed': 'default', 'dataset': 'default', 'hidden_units': 'default', 'lambda_dispersion': 'default', 'log_every': 'default', 'lr_d': 'default', 'lr_g': 'default', 'n_disc_steps': 'default', 'n_epochs': 'default', 'n_layers': 'default', 'n_samples': 'default', 'plots': 'default', 'run_dir': 'default', 'seed': 'default', 'variable': 'default'}}}{compile_cache_warm}{True}
 \ConfigWide{gaussian_params}{\ConfigVal{dim=1, mu_gen=[0.5], mu_true=[0], cov_gen=[[0.81]], cov_true=[[1]], cov_detector=[[0.25]]}}
 \ConfigWide{mmd_sigmas_detector}{\Raw{0.7470129132} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
 \ConfigWide{mmd_sigmas_particle}{\Raw{0.6688066125} \( \times\ (\frac12,\ \frac1{\sqrt2},\ 1,\ \sqrt2,\ 2)\)}
@@ -187,7 +187,12 @@
 \midrule
 % A nested phase can be written as \TimingSubphase{transfer}.
 % Insert \midrule before the total row when generating TIMINGS_ROWS.
-
+data & 0.051234209 & 0.9936076223 & gaussian cache hit -- load \\
+load & 1.473574616 & 28.5776827571 & load \\
+plots & 3.626872101 & 70.337531046 & load \\
+evaluate & 0.004701516 & 0.0911785745 & load \\
+\midrule
+\textbf{total} & 5.156382442 & 100 & \\
 \bottomrule
 \end{tabularx}
 \endgroup
@@ -214,7 +219,7 @@
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 507.7967643738 & 18.4092223644 & 96.3746869504 & \bfseries 13.1285842508 & \bfseries 97.4145986797 & 97.7727323771 & 80.7456960665 \\
+dim\_0 & 507.7967643738 & 18.4092223644 & 96.3746869504 & \bfseries 13.1285842508 & \bfseries 97.4145986797 & 97.773000598 & 80.745643246 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -236,7 +241,7 @@ dim\_0 & 507.7967643738 & 18.4092223644 & 96.3746869504 & \bfseries 13.128584250
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 28.9109665877 & \bfseries 0.5955219134 & \bfseries 97.9401521857 & 0.7156649179 & 97.5245901387 & 1.7923325041 & 93.8005099252 \\
+dim\_0 & 28.9109665877 & \bfseries 0.5955219134 & \bfseries 97.9401521857 & 0.7156649179 & 97.5245901387 & 1.7923311015 & 93.8005147768 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -258,7 +263,7 @@ dim\_0 & 28.9109665877 & \bfseries 0.5955219134 & \bfseries 97.9401521857 & 0.71
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 111.5196336261 & \bfseries 2.1649557509 & \bfseries 98.0586774898 & 2.6244123458 & 97.6466813417 & 6.8780590041 & 93.832423242 \\
+dim\_0 & 111.5196336261 & \bfseries 2.1649557509 & \bfseries 98.0586774898 & 2.6244123458 & 97.6466813417 & 6.8780533964 & 93.8324282705 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -281,7 +286,7 @@ dim\_0 & 111.5196336261 & \bfseries 2.1649557509 & \bfseries 98.0586774898 & 2.6
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-\textit{All} & 454.9590025563 & 16.4937848313 & 96.3746658147 & \bfseries 11.7625308048 & \bfseries 97.4145955298 & 87.5993700465 & 80.7456562999 \\
+\textit{All} & 454.9590186216 & 16.4937848313 & 96.3746658147 & \bfseries 11.7625308048 & \bfseries 97.4145955298 & 87.5993240043 & 80.7456670999 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -311,7 +316,7 @@ dim\_0 & 111.5196336261 & \bfseries 2.1649557509 & \bfseries 98.0586774898 & 2.6
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 508.4526538849 & 42.2346182168 & 91.6935002907 & \bfseries 12.3450197279 & \bfseries 97.5720414411 & 97.443126142 & 80.8353589272 \\
+dim\_0 & 508.4526538849 & 42.2346182168 & 91.6935002907 & \bfseries 12.3450197279 & \bfseries 97.5720414411 & 97.4432379007 & 80.8353369471 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -333,7 +338,7 @@ dim\_0 & 508.4526538849 & 42.2346182168 & 91.6935002907 & \bfseries 12.345019727
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 37.0267809858 & 7.8279925424 & 78.8585657894 & \bfseries 0.7511174347 & \bfseries 97.9714211856 & 2.4315861807 & 93.4328987939 \\
+dim\_0 & 37.0267809858 & 7.8279925424 & 78.8585657894 & \bfseries 0.7511174347 & \bfseries 97.9714211856 & 2.431586781 & 93.4328971726 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -355,7 +360,7 @@ dim\_0 & 37.0267809858 & 7.8279925424 & 78.8585657894 & \bfseries 0.7511174347 &
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-dim\_0 & 141.3494413759 & 30.8799038618 & 78.1535013077 & \bfseries 2.7779405996 & \bfseries 98.03469998 & 9.3474568392 & 93.3869870668 \\
+dim\_0 & 141.3494413759 & 30.8799038618 & 78.1535013077 & \bfseries 2.7779405996 & \bfseries 98.03469998 & 9.3474591648 & 93.3869854215 \\
 \bottomrule
 \end{tabular}
 \endgroup
@@ -378,7 +383,7 @@ dim\_0 & 141.3494413759 & 30.8799038618 & 78.1535013077 & \bfseries 2.7779405996
 & \multicolumn{1}{c}{\bfseries RAN}
 & \multicolumn{1}{c}{\bfseries impr. (\%)} \\
 \midrule
-\textit{All} & 508.4257260896 & 42.2324599931 & 91.6934848443 & \bfseries 12.3443819612 & \bfseries 97.5720382884 & 97.4381357082 & 80.835325455 \\
+\textit{All} & 508.4257260896 & 42.2324599931 & 91.6934848443 & \bfseries 12.3443819612 & \bfseries 97.5720382884 & 97.4380248226 & 80.8353472646 \\
 \bottomrule
 \end{tabular}
 \endgroup

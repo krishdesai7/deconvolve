@@ -1,15 +1,7 @@
 {
-  "total_seconds": 27.345473956200294,
+  "total_seconds": 21.511436871020123,
   "compile_cache_warm": true,
   "phases": [
-    {
-      "name": "data",
-      "seconds": 3.296094820019789,
-      "depth": 0,
-      "detail": "gaussian generated",
-      "failed": false,
-      "pass": "train"
-    },
     {
       "name": "train",
       "seconds": 14.68624582409393,
@@ -67,20 +59,36 @@
       "pass": "train"
     },
     {
-      "name": "plots",
-      "seconds": 3.6846996360691264,
+      "name": "data",
+      "seconds": 0.1209104839945212,
+      "depth": 0,
+      "detail": "gaussian cache hit",
+      "failed": false,
+      "pass": "load"
+    },
+    {
+      "name": "load",
+      "seconds": 1.368744020932354,
       "depth": 0,
       "detail": null,
       "failed": false,
-      "pass": "train"
+      "pass": "load"
+    },
+    {
+      "name": "plots",
+      "seconds": 4.715586450998671,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "load"
     },
     {
       "name": "evaluate",
-      "seconds": 5.061246694996953,
+      "seconds": 0.0027631099801510572,
       "depth": 0,
       "detail": null,
       "failed": false,
-      "pass": "train"
+      "pass": "load"
     }
   ]
 }

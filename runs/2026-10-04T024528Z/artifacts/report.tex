@@ -187,18 +187,19 @@
 \midrule
 % A nested phase can be written as \TimingSubphase{transfer}.
 % Insert \midrule before the total row when generating TIMINGS_ROWS.
-data & 3.29609482 & 12.0535296821 & gaussian generated -- train \\
-train & 14.6862458241 & 53.7063129629 & train \\
+train & 14.6862458241 & 68.2718030978 & train \\
 \TimingSubphase{transfer} & 0.531050873 &  & train \\
 \TimingSubphase{compile} & 2.852256792 &  & train \\
 \TimingSubphase{epochs} & 6.490671686 &  & train \\
 \TimingSubphase{select} & 4.117874359 &  & train \\
-particle\_mmd & 0.489019973 & 1.788303153 & train \\
-save & 0.128167008 & 0.4686955079 & train \\
-plots & 3.6846996361 & 13.4746234129 & train \\
-evaluate & 5.061246695 & 18.5085352812 & train \\
+particle\_mmd & 0.489019973 & 2.2733022248 & train \\
+save & 0.128167008 & 0.5958086799 & train \\
+data & 0.120910484 & 0.5620753496 & gaussian cache hit -- load \\
+load & 1.3687440209 & 6.3628665493 & load \\
+plots & 4.715586451 & 21.9212992571 & load \\
+evaluate & 0.00276311 & 0.0128448415 & load \\
 \midrule
-\textbf{total} & 27.3454739562 & 100 & \\
+\textbf{total} & 21.511436871 & 100 & \\
 \bottomrule
 \end{tabularx}
 \endgroup

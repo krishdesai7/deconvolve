@@ -1,0 +1,38 @@
+{
+  "total_seconds": 5.156382441986352,
+  "compile_cache_warm": true,
+  "phases": [
+    {
+      "name": "data",
+      "seconds": 0.05123420897871256,
+      "depth": 0,
+      "detail": "gaussian cache hit",
+      "failed": false,
+      "pass": "load"
+    },
+    {
+      "name": "load",
+      "seconds": 1.4735746160149574,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "load"
+    },
+    {
+      "name": "plots",
+      "seconds": 3.6268721009837463,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "load"
+    },
+    {
+      "name": "evaluate",
+      "seconds": 0.004701516008935869,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "load"
+    }
+  ]
+}
