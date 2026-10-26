@@ -560,7 +560,7 @@ class TestEvaluationSet:
         evaluation: EvaluationSet = reserve_evaluation_set(pops, n_eval=100, seed=7)
 
         pool: set[bytes] = {row.tobytes() for row in evaluation.pool.mc.z}
-        assert all(row.tobytes() not in pool for row in evaluation.z)  # pyrefly: ignore[unknown-argument-type]
+        assert all(row.tobytes() not in pool for row in evaluation.z)
         assert len(evaluation.pool.mc) + evaluation.z.shape[0] == len(pops.mc)
 
     def test_nature_events_are_left_alone(self) -> None:

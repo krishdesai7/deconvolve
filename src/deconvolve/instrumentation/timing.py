@@ -1,6 +1,7 @@
 """Optional wall-clock instrumentation for a run's phases.
 
-On unless `DECONVOLVE_TIMING` is explicitly set to a falsey value (`0`, `false`, ...), and *off* means a shared no-op context manager:
+On unless `DECONVOLVE_TIMING` is explicitly set to a falsey value (`0`, `false`, ...),
+and *off* means a shared no-op context manager:
 no `perf_counter`, no allocation, nothing appended. That matters because the
 timers sit at phase boundaries inside `workflows.train.run` and `engine.train`, which a
 sweep crosses a few hundred times.

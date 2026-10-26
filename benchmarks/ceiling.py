@@ -426,7 +426,7 @@ def diagnostic_c(
     # difference between two generators as if it were a difference between two
     # discriminators, and can come out negative.
     curve: NDArray[np.double] = np.asarray(
-        a=np.load(file=artifacts_dir(run_dir) / "history.npz")["val_d"],  # pyrefly: ignore[unknown-argument-type]
+        a=np.load(file=artifacts_dir(run_dir) / "history.npz")["val_d"],
         dtype=np.double,
     )
     best_epoch: int = int(config["best_epoch"]) if epoch is None else epoch

@@ -300,8 +300,8 @@ def test_particle_curve_is_recorded_when_truth_exists(
     config: Any = json.loads(s=(run_dir / "config.json").read_text())
     assert config["best_epoch"] >= 0
     assert config["mmd_subsample"] == 16384
-    assert len(config["mmd_sigmas_detector"]) == 5  # pyrefly: ignore[unknown-argument-type] -- config["mmd_sigmas_*"] is a list
-    assert len(config["mmd_sigmas_particle"]) == 5  # pyrefly: ignore[unknown-argument-type]
+    assert len(config["mmd_sigmas_detector"]) == 5
+    assert len(config["mmd_sigmas_particle"]) == 5
     # The unsound knobs are gone from the record, not merely unused.
     assert "criterion" not in config
     assert "patience" not in config
