@@ -7,13 +7,13 @@
 
 ## Enabling timing
 
-Set `DECONVOLVE_TIMING` in the environment:
+Timing is on by default. To turn it off, set `DECONVOLVE_TIMING` in the environment:
 
 ```shell
-DECONVOLVE_TIMING=1 deconvolve train --dataset jets
+DECONVOLVE_TIMING=0 deconvolve train --dataset jets
 ```
 
-Any value other than `0`, `false`, `no`, `off` or the empty string enables it. The variable is read when <span style="font-variant: small-caps;">Deconvolve</span> is imported, so it cannot be set in a configuration file.
+`0`, `false`, `no`, `off` and the empty string disable it; any other value, or leaving it unset, enables it. The variable is read when <span style="font-variant: small-caps;">Deconvolve</span> is imported, so it cannot be set in a configuration file.
 
 With timing enabled, a command prints a table of its phases, with each phase's share of the total, and writes the same data to `artifacts/timings.json` in the run directory. The file is written even if the run fails, and the phase that raised the error is marked as failed.
 
@@ -45,7 +45,7 @@ Several commands can run over the same directory, for example `train`, then `tra
 
 ## The OmniFold baseline
 
-`DECONVOLVE_TIMING=1` also enables timing for `deconvolve baseline omnifold`, which writes to a separate file, `artifacts/timings_omnifold.json`. A separate file keeps the baseline's cost distinct from the method's, and prevents its `data` and `evaluate` phases from replacing those of the training run.
+Timing also covers `deconvolve baseline omnifold`, which writes to a separate file, `artifacts/timings_omnifold.json`. A separate file keeps the baseline's cost distinct from the method's, and prevents its `data` and `evaluate` phases from replacing those of the training run.
 
 Its phases are `parse_config`, `data`, `omnifold` and `evaluate`. Within `omnifold`, the time spent in the separate OmniFold process is broken down into `init`, `unfold`, one row for each step of each MultiFold iteration (`iter<n>_step1`, detector level, and `iter<n>_step2`, particle level), and `reweight`.
 

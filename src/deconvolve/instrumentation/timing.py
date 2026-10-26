@@ -1,6 +1,6 @@
 """Optional wall-clock instrumentation for a run's phases.
 
-Off unless `DECONVOLVE_TIMING` is set, and *off* means a shared no-op context manager:
+On unless `DECONVOLVE_TIMING` is explicitly set to a falsey value (`0`, `false`, ...), and *off* means a shared no-op context manager:
 no `perf_counter`, no allocation, nothing appended. That matters because the
 timers sit at phase boundaries inside `workflows.train.run` and `engine.train`, which a
 sweep crosses a few hundred times.
@@ -44,11 +44,12 @@ TIMING_ENV_VAR: Final[LiteralString] = "DECONVOLVE_TIMING"
 
 # Spelled out rather than `bool(value)`, because the string "0" is truthy and a
 # SLURM `--export` that forwards an unset variable delivers "" rather than absence.
+# Only a *present* variable can turn timing off; absence means on.
 _FALSEY: Final[frozenset[str]] = frozenset({"", "0", "false", "no", "off"})
 
 
 def _enabled_from_env(environ: Mapping[str, str], /) -> bool:
-    return environ.get(TIMING_ENV_VAR, "").strip().lower() not in _FALSEY
+    return environ.get(TIMING_ENV_VAR, "1").strip().lower() not in _FALSEY
 
 
 @dataclass(frozen=True, slots=True)

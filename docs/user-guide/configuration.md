@@ -421,7 +421,7 @@ Configuration files
 
       Environment-only (not layered)
  DECONVOLVE_CACHE_DIR  .cache
- DECONVOLVE_TIMING     off (unset)
+ DECONVOLVE_TIMING     on (unset)
 ```
 
 `deconvolve config show train` limits the listing to one command, and `--json` prints the same information as JSON. `config show` still runs when a configuration file is invalid, and reports the error.
@@ -435,4 +435,4 @@ The following settings can only be set through environment variables:
 | Variable | Default | Effect |
 | :--- | :--- | :--- |
 | `DECONVOLVE_CACHE_DIR` | `.cache` | Directory for downloaded datasets and the XLA compilation cache. |
-| `DECONVOLVE_TIMING` | off | Set to `1` to record per-phase timings to `timing.json`. `0`, `false`, `no`, `off` and the empty string all mean off. |
+| `DECONVOLVE_TIMING` | on | Per-phase timings are recorded to `timings.json` unless this is set to `0`, `false`, `no`, `off` or the empty string. |

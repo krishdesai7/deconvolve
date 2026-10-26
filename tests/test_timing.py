@@ -408,8 +408,8 @@ class TestEnvironment:
     def test_falsey_values_do_not(self, value: str) -> None:
         assert not timing._enabled_from_env({"DECONVOLVE_TIMING": value})
 
-    def test_absent_does_not(self) -> None:
-        assert not timing._enabled_from_env({})
+    def test_absent_enables(self) -> None:
+        assert timing._enabled_from_env({})
 
 
 @pytest.mark.slow

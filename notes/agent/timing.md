@@ -1,6 +1,7 @@
 # Timing
 
-`DECONVOLVE_TIMING=1` makes a run report where its wall clock went; unset, the layer
+Timing is on by default: a run reports where its wall clock went unless
+`DECONVOLVE_TIMING=0` (or `false`/`no`/`off`/empty) is exported, in which case the layer
 is a genuine no-op — `phase()` hands back one shared do-nothing context
 manager, so a boundary costs no `perf_counter` call and no allocation. That
 matters because the timers sit inside `workflows.train.run` and `engine.train`, which a
