@@ -362,7 +362,7 @@ def _normalize(counts: JaxArray) -> NDArray[np.double]:
     """
     dense: NDArray[np.double] = np.asarray(a=counts, dtype=np.double)
     total: NDArray[np.double] = dense.sum(axis=1, keepdims=True)
-    return cast(typ="NDArray[np.double]", val=dense / np.where(total > 0, total, 1.0))
+    return dense / np.where(total > 0, total, 1.0)
 
 
 def _wd_per_dim(
@@ -520,7 +520,7 @@ SLICED_PROJECTIONS: Final[int] = 128
 
 The estimate carries Monte-Carlo error from the finite set of directions, but
 every number in every metrics file is taken over the *same* directions -- one
-seed, one count -- so before/after and RAN/IBU/OmniFold differences are paired
+seed, one count -- so before/after and Deconvolve/IBU/OmniFold differences are paired
 comparisons and that error largely cancels out of them. `benchmarks/sliced.py`
 repeats over seeds when the spread itself is the question.
 """

@@ -55,7 +55,7 @@ TIME=${TIME:-01:00:00}
 GPUS_PER_NODE=4
 GPUS_TOTAL=$((NODES * GPUS_PER_NODE))
 
-# The design measures RAN as the paper ships it, so these are the paper's
+# The design measures Deconvolve as the paper ships it, so these are the paper's
 # values and not a cheaper stand-in. A design run at other settings is a
 # variance budget for a model nobody is publishing -- which is why this tracks
 # `scripts/submit.zsh` and why the two must be changed together. All twelve

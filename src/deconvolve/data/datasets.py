@@ -52,7 +52,7 @@ def _savez_atomic(path: Path, /, **arrays: NDArray[Any]) -> None:
     """Write an `.npz` that a concurrent reader either misses or sees whole.
 
     `np.savez` streams into the destination it is handed, so a reader that
-    arrives mid-write gets a truncated zip. RAN's cache is shared by
+    arrives mid-write gets a truncated zip. Deconvolve's cache is shared by
     construction (`submit_uncertainty.zsh` packs a grid of cells against one
     `DECONVOLVE_CACHE_DIR`, and `pytest -n16` does the same on a smaller scale), so
     two workers can race to write the same cache key.
@@ -176,7 +176,7 @@ class ArrayDataset:
 
 
 class DeconvolveDataset:
-    """Builds the train/val/test splits RAN trains on.
+    """Builds the train/val/test splits Deconvolve trains on.
 
     Attributes:
         dataset: The events in shuffled order, once built.

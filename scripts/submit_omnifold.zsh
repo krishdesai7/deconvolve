@@ -12,7 +12,7 @@
 # and still well inside what `shared` backfills.
 #SBATCH -t01:15:00
 
-#SBATCH -Jran_omnifold
+#SBATCH -Jdeconvolve_omnifold
 #SBATCH -oslurm-%j.log
 
 # OmniFold against an existing run directory.
@@ -20,7 +20,7 @@
 #     sbatch scripts/submit_omnifold.zsh runs/2026-09-06T203848Z
 #
 # The run directory is read for its `config.json` and written for the OmniFold
-# artifacts; the RAN training in it is neither repeated nor disturbed. This is a
+# artifacts; the Deconvolve training in it is neither repeated nor disturbed. This is a
 # separate job from `submit.zsh` rather than a step inside it because OmniFold
 # takes longer on its own than that job's entire wall clock.
 #
@@ -36,7 +36,7 @@
 #     CUDA wheels, which a compute node usually cannot do. Warm it on a login
 #     node first:
 #
-#         uv run --no-project src/ran/baselines/_omnifold_worker.py
+#         uv run --no-project src/deconvolve/baselines/_omnifold_worker.py
 
 set -euo pipefail
 

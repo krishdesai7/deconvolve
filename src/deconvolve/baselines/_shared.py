@@ -1,9 +1,9 @@
 """The part of a baseline that is not the unfolding method.
 
 Reading a run's config, rebuilding its populations, and scoring the resulting
-weights with the same metrics RAN is scored by.
+weights with the same metrics Deconvolve is scored by.
 
-A baseline attempts the same task RAN does -- generate weights that reweight
+A baseline attempts the same task Deconvolve does -- generate weights that reweight
 Generation, using only the relationship between Data and Simulation -- so it
 needs the same run config, the same event populations, and the same metric
 record. Keeping those here means a comparison is a comparison of unfolding
@@ -136,7 +136,7 @@ def prepare_populations(
 
     By construction, `fit` is `Split.TRAIN | Split.VAL`, not `Split.ALL`. A
     baseline fitted on every event and then scored on the test split would be
-    scored on data it had already used and would be handed information RAN is
+    scored on data it had already used and would be handed information Deconvolve is
     denied: `train` does read the test split, to compute a test-level MMD
     diagnostic, but nothing weight-bearing depends on that read, so the test
     split still cannot influence the returned model or its selection

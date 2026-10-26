@@ -1,9 +1,9 @@
-"""IBU (Iterative Bayesian Unfolding) baseline to compare with RAN.
+"""IBU (Iterative Bayesian Unfolding) baseline to compare with Deconvolve.
 
 It is a simple unfolding method that uses a Bayesian approach to unfold the
 data. IBU performs 1D per-variable unfolding with purity-based automatic
 binning. It builds the response matrix from MC, unfolds data, and converts the
-result to per-event weights for evaluation with the same metrics as RAN.
+result to per-event weights for evaluation with the same metrics as Deconvolve.
 
 ```shell
 deconvolve baseline ibu runs/2026-...
@@ -62,7 +62,7 @@ class _BinnedReweighting:
     Fitting the response and iterating the prior on every event, then quoting
     metrics on a subset of those same events, is conventional for both IBU and
     OmniFold -- and it scores an estimator on data it has already seen. It also
-    hands the baseline information RAN is denied: `deconvolve.training.engine`
+    hands the baseline information Deconvolve is denied: `deconvolve.training.engine`
     reads the test split only to compute a diagnostic that cannot influence the
     returned model, and never to fit or select. A comparison is only a
     comparison if both sides see the same events.
@@ -583,7 +583,7 @@ def evaluate_runs(
     n_iterations: int = 10,
     purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD,
 ) -> None:
-    """Run the IBU baseline on completed RAN runs.
+    """Run the IBU baseline on completed Deconvolve runs.
 
     Args:
         run_dir: A single run, or a directory of runs.

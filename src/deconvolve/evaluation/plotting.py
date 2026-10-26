@@ -63,24 +63,24 @@ mpl.rcParams["lines.markerfacecolor"] = "none"
 
 
 # One place for the figure's visual hierarchy, rather than seven literals
-# scattered through `_hist_ratio_panel`: RAN's curve must read as the method
+# scattered through `_hist_ratio_panel`: Deconvolve's curve must read as the method
 # under test, not a baseline drawn at equal or greater prominence.
 COLOR_NATURE: Final[str] = "C0"  # Data / Truth
 COLOR_MC: Final[str] = "C1"  # Sim / Gen
 COLOR_IBU: Final[str] = "green"
 COLOR_OMNIFOLD: Final[str] = "#E31A1C"  # crimson; the third baseline curve
-COLOR_RAN: Final[str] = "#6A3D9A"  # deep violet; greyscales to a dark mid-tone
+COLOR_DECONVOLVE: Final[str] = "#6A3D9A"  # deep violet; greyscales to a dark mid-tone
 
 ALPHA_FILL: Final[float] = 0.35  # the two filled background histograms
 ALPHA_IBU: Final[float] = 0.75
 ALPHA_OMNIFOLD: Final[float] = 0.75
-ALPHA_RAN: Final[float] = 0.90
+ALPHA_DECONVOLVE: Final[float] = 0.90
 
-# Paint order, which is not legend order: baselines are created after RAN so
+# Paint order, which is not legend order: baselines are created after Deconvolve so
 # they read last in the legend, but must not paint over it. Matplotlib's
 # default for lines is 2.
 Z_BASELINE: Final[int] = 2
-Z_RAN: Final[int] = 3
+Z_DECONVOLVE: Final[int] = 3
 
 
 # `weighted_mmd` is the unbiased U-statistic estimator, which is negative
@@ -151,7 +151,7 @@ class BaselineOverlay(NamedTuple):
     `weights` holds one full-length weight vector **per dimension**, because
     IBU unfolds each observable separately and its weights genuinely differ
     between them. A method producing one vector for every observable, as
-    OmniFold and RAN do, repeats it; `from_shared` is that, said once.
+    OmniFold and Deconvolve do, repeats it; `from_shared` is that, said once.
     """
 
     label: str
@@ -264,17 +264,17 @@ def _hist_ratio_panel(
             bins=cast(typ=Sequence[float], val=h_nature[1]),
             weights=w_ran,
             histtype="step",
-            color=COLOR_RAN,
+            color=COLOR_DECONVOLVE,
             linestyle="-",
             linewidth=4,
-            alpha=ALPHA_RAN,
-            label="RAN",
+            alpha=ALPHA_DECONVOLVE,
+            label=r"$\textsc{Deconvolve}$",
             # Above every baseline. Overlays draw after this call, putting
             # them last in the legend, but at linewidth 4 the last curve
-            # drawn would otherwise bury RAN wherever they agree -- which on
+            # drawn would otherwise bury Deconvolve wherever they agree -- which on
             # a converged run is everywhere. `zorder` keeps paint order
             # separate from legend order.
-            zorder=Z_RAN,
+            zorder=Z_DECONVOLVE,
         ),
     )
 
@@ -305,11 +305,11 @@ def _hist_ratio_panel(
     _ = ax_r.plot(
         centres,
         ratio_ran,
-        color=COLOR_RAN,
+        color=COLOR_DECONVOLVE,
         marker="o",
         linestyle="--",
-        alpha=ALPHA_RAN,
-        zorder=Z_RAN,
+        alpha=ALPHA_DECONVOLVE,
+        zorder=Z_DECONVOLVE,
     )
 
     for overlay in overlays:
@@ -384,7 +384,7 @@ def _save_pages(figures: Sequence[Figure], /, *, save_path: Path) -> None:
 
     One file rather than `detector_level_1.pdf`, `_2.pdf`, ...: the run
     directory keeps a single artifact per level, `\\includegraphics[page=k]`
-    selects a page, and `rantypes.figure_pages` tells the report how many
+    selects a page, and `coretypes.figure_pages` tells the report how many
     there are without opening the file. Each page is trimmed exactly as
     `_save_fig` trims a single figure -- see that docstring for why the tight
     bbox is not optional.

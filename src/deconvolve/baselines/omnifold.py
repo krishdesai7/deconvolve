@@ -3,7 +3,7 @@
 OmniFold needs TensorFlow, which this project cannot depend on directly.
 `_omnifold_worker.py` carries a PEP 723 header;
 `uv run --no-project` provisions Python 3.13 and TensorFlow for it in an
-interpreter that cannot import `ran`; the two halves exchange one `.npz` file.
+interpreter that cannot import `deconvolve`; the two halves exchange one `.npz` file.
 
 This half does what every other baseline does: read a run's `config.json`,
 rebuild its populations, score a weight vector against the same metrics

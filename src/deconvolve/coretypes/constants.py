@@ -34,7 +34,7 @@ CACHE_ENV_VAR: Final[LiteralString] = "DECONVOLVE_CACHE_DIR"
 CACHE_DIR: Final[Path] = Path(
     os.environ.get(key=CACHE_ENV_VAR) or ".cache"
 ).expanduser()
-"""The one root for everything RAN can regenerate.
+"""The one root for everything Deconvolve can regenerate.
 
 Generated Gaussian datasets, the per-variable jet caches pulled from Zenodo,
 and the XLA compilation cache under `jax/`. It is `.cache` unless

@@ -305,8 +305,8 @@ def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> s
 # would overwrite the training pass's `data` and `evaluate` rows. IBU is not
 # timed; it takes seconds.
 _TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
-    ("timings.json", "RAN"),
-    ("timings_omnifold.json", "OmniFold baseline"),
+    ("timings.json", r"$\textsc{Deconvolve}$"),
+    ("timings_omnifold.json", r"$\textsc{OmniFold}$ baseline"),
 )
 
 
@@ -331,8 +331,9 @@ _METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("VLC", "triangular"),
 )
 
-# Observable, Sim, then a (value, improvement) pair for each of IBU, OmniFold and RAN.
-# Three separate `\multicolumn` spans and the template's column spec have to agree.
+# Observable, Sim, then a (value, improvement) pair for each of IBU, OmniFold and
+# Deconvolve. Three separate `\multicolumn` spans and the template's column spec
+# have to agree.
 _TABLE_COLUMNS: Final[int] = 8
 
 
@@ -367,7 +368,7 @@ def _best_methods(
     variable: str | None,
     level: str,
     metric: str,
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     daggered: bool,
@@ -380,7 +381,7 @@ def _best_methods(
     """
     metric_key: str = f"{metric}_after"
     sources: tuple[tuple[str, Mapping[str, Any] | None], ...] = (
-        ("ran", ran),
+        ("deconvolve", deconvolve),
         ("ibu", None if daggered else ibu),
         ("omnifold", omnifold),
     )
@@ -436,7 +437,7 @@ def _row(
     variable: str | None,
     level: str,
     metric: str,
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     daggered: bool,
@@ -444,18 +445,18 @@ def _row(
 ) -> str:
     """One variable's eight cells: label, Sim, then a pair per method.
 
-    RAN goes last: the eye reads a row left to right and stops at the end, so the method
-    under test sits where a reader lands, with the baselines in front of it.
-    `variable=None` is the level's joint row, which RAN's file must carry.
+    Deconvolve goes last: the eye reads a row left to right and stops at the end,
+    so the method under test sits where a reader lands, with the baselines in front
+    of it. `variable=None` is the level's joint row, which Deconvolve's file must carry.
     """
     symbol: str = _JOINT_LABEL if variable is None else _symbol(variable)
     label: str = rf"{symbol}\(^\dag\)" if daggered else symbol
     ours: Mapping[str, Any] = cast(
-        typ="Mapping[str, Any]", val=_entry(ran, level, variable)
+        typ="Mapping[str, Any]", val=_entry(deconvolve, level, variable)
     )
 
     best: frozenset[str] = _best_methods(
-        variable, level, metric, ran, ibu, omnifold, daggered
+        variable, level, metric, deconvolve, ibu, omnifold, daggered
     )
 
     cells: list[str] = [
@@ -466,7 +467,9 @@ def _row(
     cells.extend(
         _method_cells(omnifold, level, variable, metric, is_best="omnifold" in best)
     )
-    cells.extend(_method_cells(ran, level, variable, metric, is_best="ran" in best))
+    cells.extend(
+        _method_cells(deconvolve, level, variable, metric, is_best="deconvolve" in best)
+    )
     return " & ".join(cells) + r" \\"
 
 
@@ -481,7 +484,7 @@ def metrics_table(
     level: str,
     metric: str,
     variables: Sequence[str],
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     skipped: frozenset[str],
@@ -497,7 +500,8 @@ def metrics_table(
     ordered: tuple[int, ...] = display_order(variables)
     ordered_vars: list[str] = [variables[i] for i in ordered]
     rows: list[str] = [
-        _row(v, level, metric, ran, ibu, omnifold, v in skipped) for v in ordered_vars
+        _row(v, level, metric, deconvolve, ibu, omnifold, v in skipped)
+        for v in ordered_vars
     ]
     lines: list[str] = [r"\midrule", *rows]
 
@@ -518,7 +522,7 @@ _NO_JOINT: Final[str] = (
 
 def joint_table(
     level: str,
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     /,
@@ -530,9 +534,9 @@ def joint_table(
     the product of its per-variable weights, in which a refused variable is
     simply a factor of one, so there is always a number to show.
     """
-    if _entry(ran, level, None) is None:
+    if _entry(deconvolve, level, None) is None:
         return _NO_JOINT
-    row: str = _row(None, level, "sliced_wasserstein", ran, ibu, omnifold, False)
+    row: str = _row(None, level, "sliced_wasserstein", deconvolve, ibu, omnifold, False)
     return f"\\midrule\n{row}"
 
 
@@ -562,7 +566,7 @@ _NO_METRICS: Final[str] = (
     r"\midrule"
     "\n"
     rf"\multicolumn{{{_TABLE_COLUMNS}}}{{@{{}}l}}{{\itshape metrics.json not "
-    r"found: run \texttt{ran evaluate} for this run.} \\"
+    r"found: run \texttt{deconvolve evaluate} for this run.} \\"
 )
 
 
@@ -588,7 +592,7 @@ def _table(
     level: str,
     metric: str,
     variables: Sequence[str],
-    ran: Mapping[str, Any] | None,
+    deconvolve: Mapping[str, Any] | None,
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     skipped: frozenset[str],
@@ -597,13 +601,13 @@ def _table(
     include_legend: bool = False,
 ) -> str:
     """A metrics body, or the not-found row when there are no metrics."""
-    if not ran:
+    if not deconvolve:
         return _NO_METRICS
     return metrics_table(
         level,
         metric,
         variables,
-        ran,
+        deconvolve,
         ibu,
         omnifold,
         skipped,
@@ -613,15 +617,15 @@ def _table(
 
 def _joint(
     level: str,
-    ran: Mapping[str, Any] | None,
+    deconvolve: Mapping[str, Any] | None,
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     /,
 ) -> str:
     """A joint body, or the not-found row when there are no metrics at all."""
-    if not ran:
+    if not deconvolve:
         return _NO_METRICS
-    return joint_table(level, ran, ibu, omnifold)
+    return joint_table(level, deconvolve, ibu, omnifold)
 
 
 def _figure_pages(artifacts: Path, stem: str, dim: int, /) -> str:
@@ -649,7 +653,7 @@ def render(run_dir: Path, /) -> str:
         raise FileNotFoundError(msg)
 
     artifacts: Path = run_dir / ARTIFACTS_DIR
-    ran: dict[str, Any] | None = _read(artifacts / "metrics.json")
+    deconvolve: dict[str, Any] | None = _read(artifacts / "metrics.json")
     ibu: dict[str, Any] | None = _read(artifacts / "metrics_ibu.json")
     omnifold: dict[str, Any] | None = _read(artifacts / "metrics_omnifold.json")
     timings: dict[str, Any] | None = _read(artifacts / "timings.json")
@@ -660,7 +664,9 @@ def render(run_dir: Path, /) -> str:
     ]
     skipped: frozenset[str] = skipped_variables(run_dir, ibu)
     variables: tuple[str, ...] = _variables(config)
-    has_particle: bool = bool(ran and any(k.startswith("particle_") for k in ran))
+    has_particle: bool = bool(
+        deconvolve and any(k.startswith("particle_") for k in deconvolve)
+    )
     legend_level: str = "particle" if has_particle else "detector"
 
     source: str = load_template()
@@ -675,7 +681,7 @@ def render(run_dir: Path, /) -> str:
                     level,
                     metric,
                     variables,
-                    ran,
+                    deconvolve,
                     ibu,
                     omnifold,
                     skipped,
@@ -686,7 +692,7 @@ def render(run_dir: Path, /) -> str:
             for metric_tag, metric in _METRICS
         ),
         *(
-            (f"<<{level.upper()}_SLICED>>", _joint(level, ran, ibu, omnifold))
+            (f"<<{level.upper()}_SLICED>>", _joint(level, deconvolve, ibu, omnifold))
             for level in ("detector", "particle")
         ),
         (

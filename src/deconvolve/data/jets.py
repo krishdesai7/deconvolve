@@ -1,4 +1,4 @@
-"""Load jet substructure data for RAN training.
+"""Load jet substructure data for Deconvolve training.
 
 Checks `CACHE_DIR` (`.cache/`, or wherever `DECONVOLVE_CACHE_DIR` points) for
 per-variable `.npz` files. If missing, invokes `download_jet_data` to fetch
