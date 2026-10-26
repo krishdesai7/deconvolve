@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, cast
 import keras
 
 if TYPE_CHECKING:
+    from os import PathLike
     from typing import Protocol
 
     from keras.src.backend.common.keras_tensor import KerasTensor
@@ -34,9 +35,33 @@ if TYPE_CHECKING:
         ) -> DeconvolveModel: ...
 
 
-_keras_input: _InputFactory = cast(typ="_InputFactory", val=keras.Input)
+# `keras_export` is untyped, so every public keras *function* reads as Unknown
+# (classes survive it). Each one this package calls is looked up here, once,
+# under the signature it is relied on for. The wrappers look the attribute up
+# per call rather than binding it at import, so a monkeypatch still lands.
+_keras_input: _InputFactory = cast(typ="_InputFactory", val=keras.Input)  # pyrefly: ignore[unknown-attribute-access]
 _keras_dense: _DenseFactory = cast(typ="_DenseFactory", val=keras.layers.Dense)
 _keras_model: _ModelFactory = cast(typ="_ModelFactory", val=keras.Model)
+
+
+def backend() -> str:
+    """The active keras backend, e.g. `"jax"`."""
+    return cast(typ=str, val=keras.backend.backend())  # pyrefly: ignore[unknown-attribute-access]
+
+
+def epsilon() -> float:
+    """keras's fuzz factor, `keras.config.epsilon()`."""
+    return cast(typ=float, val=keras.config.epsilon())  # pyrefly: ignore[unknown-attribute-access]
+
+
+def set_random_seed(seed: int, /) -> None:
+    """Seed Python, NumPy and the backend RNG in one call."""
+    keras.utils.set_random_seed(seed)  # pyrefly: ignore[unknown-attribute-access]
+
+
+def load_model(filepath: str | PathLike[str], /) -> DeconvolveModel:
+    """Reload a saved `.keras` model."""
+    return cast(typ="DeconvolveModel", val=keras.saving.load_model(filepath))  # pyrefly: ignore[unknown-attribute-access]
 
 
 def build_generator(

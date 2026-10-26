@@ -61,7 +61,7 @@ def _long_options(command: Command) -> set[str]:
     return {
         opt
         for param in command.params
-        for opt in getattr(param, "opts", ())
+        for opt in param.opts
         if opt.startswith("--") and opt != "--help"
     }
 
@@ -97,8 +97,6 @@ def test_every_documented_option_exists(path: str) -> None:
     assert command is not None, f"section for a command that does not exist: {path}"
     # Click adds `--help` itself, outside `params`.
     live: set[str] = {"--help"} | {
-        opt
-        for param in command.params
-        for opt in (*getattr(param, "opts", ()), *getattr(param, "secondary_opts", ()))
+        opt for param in command.params for opt in (*param.opts, *param.secondary_opts)
     }
     assert set(_OPTION.findall(SECTIONS[path])) - live == set()

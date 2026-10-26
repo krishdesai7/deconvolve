@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
-import keras
 import numpy as np
 
 from ..baselines._shared import parse_run_config
@@ -45,6 +44,7 @@ from ..training import (
     train,
 )
 from ..training.engine import _weights_per_epoch
+from ..training.models import load_model
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -301,7 +301,7 @@ def _write_run_dir(
 def _load_artifacts(run_dir: Path) -> tuple[DeconvolveModel, dict[str, list[float]]]:
     """Reload a finished run's generator and training history."""
     artifacts: Path = artifacts_dir(run_dir)
-    g: DeconvolveModel = keras.saving.load_model(artifacts / "generator.keras")
+    g: DeconvolveModel = load_model(artifacts / "generator.keras")
     history: dict[str, list[float]] = {
         k: v.tolist() for k, v in np.load(file=artifacts / "history.npz").items()
     }

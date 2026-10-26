@@ -64,11 +64,13 @@ def _parse_variable_names(
         return tuple(f"dim_{i}" for i in range(dim))
 
     variables: object = raw.get("variables")
-    if not isinstance(variables, (list, tuple)) or any(
-        not isinstance(name, str) or not name for name in variables
-    ):
+    # Spelled `object` because `isinstance` alone narrows to `list[Unknown]`.
+    items: tuple[object, ...] | None = (
+        tuple(variables) if isinstance(variables, (list, tuple)) else None
+    )
+    if items is None or any(not isinstance(name, str) or not name for name in items):
         raise ValueError("variables must be a sequence of nonempty strings")
-    variable_names: tuple[str, ...] = cast(typ=tuple[str, ...], val=tuple(variables))
+    variable_names: tuple[str, ...] = cast(typ=tuple[str, ...], val=items)
     if len(variable_names) != dim:
         raise ValueError(
             f"variables has length {len(variable_names)}, expected dim={dim}"
@@ -78,10 +80,11 @@ def _parse_variable_names(
 
 def parse_run_config(raw: object) -> RunConfig:
     """Validate a run's `config.json`, already parsed from JSON, into a `RunConfig`."""
-    if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
+    entries: dict[object, object] | None = raw if isinstance(raw, dict) else None
+    if entries is None or not all(isinstance(k, str) for k in entries):
         raise ValueError("run config must be a JSON object")
 
-    config: dict[str, Any] = cast(typ="dict[str, Any]", val=raw)
+    config: dict[str, Any] = cast(typ="dict[str, Any]", val=entries)
     dim: int = _positive_int(value=config.get("dim"), key="dim")
     n_samples: int = _positive_int(value=config.get("n_samples"), key="n_samples")
     batch_size: int = _positive_int(value=config.get("batch_size"), key="batch_size")

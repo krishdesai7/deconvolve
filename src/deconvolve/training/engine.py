@@ -47,7 +47,13 @@ from ..coretypes import COMPILE_CACHE_DIR, Variables, artifacts_dir
 from ..data import DeviceSplits, EvalSplit, gather, train_indices
 from ..instrumentation import is_enabled, phase
 from .mmd import bandwidths, build_cache, mmd_curve, subsample_indices, weighted_mmd
-from .models import build_discriminator, build_generator
+from .models import (
+    backend,
+    build_discriminator,
+    build_generator,
+    epsilon,
+    set_random_seed,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,17 +84,17 @@ if TYPE_CHECKING:
 
 logger: Logger = logging.getLogger(name=__name__)
 
-if keras.backend.backend() != "jax":
+if backend() != "jax":
     # Importing `keras` before `deconvolve` wins the race for the backend, and the
     # jitted steps below fail deep inside a trace.
     raise RuntimeError(
         "deconvolve.training.engine requires the JAX backend, got "
-        f"{keras.backend.backend()!r}. "
+        f"{backend()!r}. "
         "Import `deconvolve` (or any deconvolve.* module) before `keras`, or set "
         "KERAS_BACKEND=jax in the environment."
     )
 
-EPS: Final[float] = keras.config.epsilon()
+EPS: Final[float] = epsilon()
 _HISTORY_KEYS: Final[tuple[str, str, str]] = ("train_d", "train_g", "val_d")
 """The per-epoch history columns the scan records.
 
@@ -930,7 +936,7 @@ def train(
     if seed is None:
         # No-argument SeedSequence always fills `entropy` with int drawn from OS.
         seed = cast(typ=int, val=np.random.SeedSequence().entropy) % 2**31
-    keras.utils.set_random_seed(seed)
+    set_random_seed(seed)
 
     batch_size: int = splits.train.batch_size
     with phase("transfer") as timer:

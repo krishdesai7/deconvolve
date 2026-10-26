@@ -57,11 +57,11 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
-import keras
 import numpy as np
 from deconvolve.coretypes import SUBSTRUCTURE_VARIABLES, Split
 from deconvolve.data import load_jet_dataset
 from deconvolve.instrumentation.logging_config import configure_logging
+from deconvolve.training.models import set_random_seed
 from scipy.special import expit
 
 try:
@@ -70,6 +70,7 @@ except ModuleNotFoundError:  # Direct execution puts benchmarks/ on sys.path.
     from ceiling import _fit_classifier, _labelled  # pyrefly: ignore[missing-import]
 
 if TYPE_CHECKING:
+    import keras
     from deconvolve.coretypes import (
         DatasetSplits,
         DeconvolveModel,
@@ -293,7 +294,7 @@ def _measure(
     fit_kwargs: dict[str, Any],
 ) -> ResponseStatistic:
     """Fit both nested predictors and score their BCE gain on the same events."""
-    keras.utils.set_random_seed(seed)
+    set_random_seed(seed)
     d_z = _fit(
         train,
         val,

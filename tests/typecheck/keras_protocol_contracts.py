@@ -13,7 +13,14 @@ from deconvolve.evaluation.evaluate import _get_weights as evaluate_weights
 # Specifically what this test is checking
 from deconvolve.evaluation.plotting import _get_weights as plotting_weights  # pyrefly: ignore[implicit-reexport]
 from deconvolve.training.engine import TrainResult, _make_steps
-from deconvolve.training.models import build_discriminator, build_generator
+from deconvolve.training.models import (
+    backend,
+    build_discriminator,
+    build_generator,
+    epsilon,
+    load_model,
+    set_random_seed,
+)
 from deconvolve.workflows.train import _load_artifacts
 from jax._src.basearray import Array as JaxArray
 
@@ -54,6 +61,10 @@ def check_training_boundary(
 ) -> None:
     assert_type(build_generator(), DeconvolveModel)
     assert_type(build_discriminator(), DeconvolveModel)
+    assert_type(load_model(Path("generator.keras")), DeconvolveModel)
+    assert_type(backend(), str)
+    assert_type(epsilon(), float)
+    assert_type(set_random_seed(0), None)
     _: tuple[TrainStep, TrainStep, EvalStep] = _make_steps(
         g=model, d=model, opt_g=optimizer, opt_d=optimizer, lambda_dispersion=0.0
     )

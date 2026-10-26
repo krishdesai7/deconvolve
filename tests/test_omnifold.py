@@ -293,7 +293,7 @@ class TestEvaluateSingle:
         def _stub_unfold(**kwargs: object) -> EventArray:
             target = kwargs["z_target"]
             assert isinstance(target, np.ndarray)
-            return np.ones(target.shape[0], dtype=np.single)
+            return np.ones(len(target), dtype=np.single)
 
         monkeypatch.setattr(omnifold, "unfold", _stub_unfold)
         metrics = omnifold.evaluate_single(run_dir)

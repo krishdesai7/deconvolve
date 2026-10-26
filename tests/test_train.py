@@ -38,7 +38,12 @@ from deconvolve.training.engine import (
     weight_dispersion,
     weighted_bce,
 )
-from deconvolve.training.models import build_generator
+from deconvolve.training.models import (
+    backend,
+    build_generator,
+    load_model,
+    set_random_seed,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -49,6 +54,7 @@ if TYPE_CHECKING:
         DatasetSplits,
         DeconvolveModel,
         EvalStep,
+        StatelessOptimizer,
         TrainStep,
         Variables,
     )
@@ -66,7 +72,7 @@ def test_backend_is_jax_pinned_to_single_precision() -> None:
     """
     import jax.numpy as jnp
 
-    assert keras.backend.backend() == "jax"
+    assert backend() == "jax"
     assert jnp.zeros(shape=1).dtype == np.float32
     with pytest.warns(expected_warning=UserWarning, match="float64"):
         assert jnp.zeros(shape=1, dtype="float64").dtype == np.float32
@@ -328,13 +334,13 @@ class TestTrainSteps:
     ) -> tuple[tuple[TrainStep, TrainStep, EvalStep], TrainState, tuple[Array, ...]]:
         from deconvolve.training.models import build_discriminator, build_generator
 
-        keras.utils.set_random_seed(0)
+        set_random_seed(0)
         g: DeconvolveModel = build_generator(dim=dim, hidden_units=8, n_layers=1)
         d: DeconvolveModel = build_discriminator(dim=dim, hidden_units=8, n_layers=1)
-        opt_g = keras.optimizers.Adam(learning_rate=1e-2)
-        opt_d = keras.optimizers.Adam(learning_rate=1e-2)
-        opt_g.build(var_list=g.trainable_variables)
-        opt_d.build(var_list=d.trainable_variables)
+        opt_g: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-2)
+        opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-2)
+        opt_g.build(g.trainable_variables)
+        opt_d.build(d.trainable_variables)
         state = TrainState(
             g_trainable=[v.value for v in g.trainable_variables],
             g_non_trainable=[v.value for v in g.non_trainable_variables],
@@ -460,9 +466,7 @@ def test_train_runs_and_returns_usable_models(tmp_path: Path) -> None:
 
     # The trained values must have been written back out of the JAX pytree.
     g.save(filepath=tmp_path / "generator.keras")
-    reloaded: keras.Model = keras.saving.load_model(
-        filepath=tmp_path / "generator.keras"
-    )
+    reloaded: DeconvolveModel = load_model(tmp_path / "generator.keras")
     np.testing.assert_allclose(
         actual=np.asarray(a=reloaded(z_gen)), desired=w, rtol=1e-6
     )

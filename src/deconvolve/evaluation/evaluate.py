@@ -683,13 +683,11 @@ def evaluate_run(run_dir: Path, force: bool = False) -> dict[str, Any]:
 
     # Imported here, not at module scope, so this module stays keras-free on
     # import.
-    import keras
+    from ..training.models import load_model
 
     config: dict[str, Any] = json.loads((run_dir / "config.json").read_text())
     logger.info("%s: loading model and data...", run_dir.name)
-    g: DeconvolveModel = keras.saving.load_model(
-        artifacts_dir(run_dir) / "generator.keras"
-    )
+    g: DeconvolveModel = load_model(artifacts_dir(run_dir) / "generator.keras")
 
     splits: DatasetSplits = _load_splits(config)
     test: Populations = _collect_test_data(test_ds=splits.test).partition()

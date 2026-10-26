@@ -57,7 +57,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 import deconvolve  # ruff: ignore[unused-import]  -- pins the backend and the dtype
 import keras
@@ -66,6 +66,7 @@ from deconvolve.coretypes import Split, artifacts_dir
 from deconvolve.data import DeconvolveDataset, load_jet_dataset
 from deconvolve.data.config import gaussian_config_from_run_config
 from deconvolve.instrumentation.logging_config import configure_logging
+from deconvolve.training.models import load_model
 from rich.console import Console
 from rich.table import Table
 
@@ -324,8 +325,9 @@ def main() -> None:
     config: dict[str, Any] = json.loads((run_dir / "config.json").read_text())
     splits, variables = _load_splits(config)
     pop: Populations = splits.select(Split.TEST).partition()
-    generator: keras.Model = keras.saving.load_model(
-        artifacts_dir(run_dir) / "generator.keras"
+    # The `training=` keyword is `keras.Model`'s, not `DeconvolveModel`'s.
+    generator: keras.Model = cast(
+        typ=keras.Model, val=load_model(artifacts_dir(run_dir) / "generator.keras")
     )
 
     rng: np.random.Generator = np.random.default_rng(args.seed)
