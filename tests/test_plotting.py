@@ -105,7 +105,7 @@ def test_a_panel_is_labelled_even_without_a_baseline() -> None:
     assert ax.get_ylabel() == "Events"
     assert ax.get_title() == "Detector level"
     _, labels = ax.get_legend_handles_labels()
-    assert labels == ["Data", "Sim", "RAN"]
+    assert labels == ["Data", "Sim", "Deconvolve"]
 
 
 def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
@@ -135,16 +135,22 @@ def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
     )
 
     _, labels = ax.get_legend_handles_labels()
-    assert labels == ["Data", "Sim", "RAN", "IBU", "OmniFold"]
+    assert labels == [
+        "Data",
+        "Sim",
+        r"$\textsc{Deconvolve}$",
+        "IBU",
+        r"$\textsc{OmniFold}$",
+    ]
 
 
-def test_ran_is_drawn_more_prominently_than_the_baseline() -> None:
-    """RAN's step line was fainter than IBU's. On the same panel."""
-    assert plotting.ALPHA_RAN > plotting.ALPHA_IBU > plotting.ALPHA_FILL
+def test_deconvolve_is_drawn_more_prominently_than_the_baseline() -> None:
+    """Deconvolve's step line was fainter than IBU's. On the same panel."""
+    assert plotting.ALPHA_DECONVOLVE > plotting.ALPHA_IBU > plotting.ALPHA_FILL
 
 
-def test_ran_has_a_colour_of_its_own() -> None:
-    assert plotting.COLOR_RAN not in {
+def test_deconvolve_has_a_colour_of_its_own() -> None:
+    assert plotting.COLOR_DECONVOLVE not in {
         plotting.COLOR_NATURE,
         plotting.COLOR_MC,
         plotting.COLOR_IBU,
@@ -892,10 +898,10 @@ class TestBaselineOverlays:
         assert ibu.marker != omnifold.marker
 
     def test_ran_is_painted_above_every_baseline(self) -> None:
-        """RAN is the method being showcased; it must not sit under a baseline.
+        """Deconvolve is the method being showcased; it must not sit under a baseline.
 
-        The overlays are drawn *after* RAN so they read last in the legend, and
-        at linewidth 4 the last one drawn would otherwise bury RAN wherever the
+        The overlays are drawn *after* Deconvolve so they read last in the legend, and
+        at linewidth 4 the last one drawn would otherwise bury Deconvolve wherever the
         curves agree --- which on a converged run is everywhere. Caught by
         rendering the figure and looking at it, not by a green suite.
         """
@@ -927,9 +933,9 @@ class TestBaselineOverlays:
             label: artist
             for artist, label in zip(*ax.get_legend_handles_labels(), strict=True)
         }
-        ran_z = by_label["RAN"].get_zorder()
-        assert ran_z > by_label["IBU"].get_zorder()
-        assert ran_z > by_label["OmniFold"].get_zorder()
+        deconvolve_z = by_label[r"$\textsc{Deconvolve}$"].get_zorder()
+        assert deconvolve_z > by_label["IBU"].get_zorder()
+        assert deconvolve_z > by_label[r"$\textsc{OmniFold}$"].get_zorder()
 
     def test_every_panel_of_a_page_carries_both_baselines(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -959,4 +965,10 @@ class TestBaselineOverlays:
         assert len(panels) == dim
         for panel in panels:
             _, labels = panel.get_legend_handles_labels()
-            assert labels == ["Data", "Sim", "RAN", "IBU", "OmniFold"]
+            assert labels == [
+                "Data",
+                "Sim",
+                r"$\textsc{Deconvolve}$",
+                "IBU",
+                r"$\textsc{OmniFold}$",
+            ]

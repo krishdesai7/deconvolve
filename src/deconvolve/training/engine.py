@@ -1,4 +1,4 @@
-"""Adversarial training loop for RAN, as a single fused XLA program.
+"""Adversarial training loop for Deconvolve, as a single fused XLA program.
 
 Keras 3 with the JAX backend. The min-max game needs two optimizers driven at
 different cadences against a shared loss, which does not fit `Model.fit`, so
@@ -79,12 +79,12 @@ if TYPE_CHECKING:
 logger: Logger = logging.getLogger(name=__name__)
 
 if keras.backend.backend() != "jax":
-    # Importing `keras` before `ran` wins the race for the backend, and the
+    # Importing `keras` before `deconvolve` wins the race for the backend, and the
     # jitted steps below fail deep inside a trace.
     raise RuntimeError(
         "deconvolve.training.engine requires the JAX backend, got "
         f"{keras.backend.backend()!r}. "
-        "Import `ran` (or any deconvolve.* module) before `keras`, or set "
+        "Import `deconvolve` (or any deconvolve.* module) before `keras`, or set "
         "KERAS_BACKEND=jax in the environment."
     )
 
@@ -212,11 +212,11 @@ def load_params(run_dir: Path, /) -> EpochParams:
     silently wrong model rather than an error.
     """
     with np.load(file=artifacts_dir(run_dir) / PARAMS_FILE) as f:
-        keys: list[str] = list(f.keys())  # pyrefly: ignore[unknown-argument-type]
+        keys: list[str] = list(f.keys())
         return EpochParams(
             **{
                 field: [
-                    jnp.asarray(a=f[k])  # pyrefly: ignore[unknown-argument-type]
+                    jnp.asarray(a=f[k])
                     for k in sorted(
                         (k for k in keys if k.split(sep=":")[0] == field),
                         key=lambda k: int(k.split(sep=":")[1]),
@@ -286,10 +286,10 @@ def weight_dispersion(
 
     The variance of the normalised MC weights. It is the natural regulariser
     here because it has a **target** rather than being a free dial:
-    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against RAN's
-    73.3%, so RAN's weights are more dispersed than the truth's. For weights of
+    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against Deconvolve's
+    73.3%, so Deconvolve's weights are more dispersed than the truth's. For weights of
     mean 1 the identity is `ESS/n = 1 / (1 + Var(w))`, putting the oracle at
-    0.249 and RAN at 0.364 — a coefficient can be tuned to close that gap.
+    0.249 and Deconvolve at 0.364 — a coefficient can be tuned to close that gap.
 
     Nature's rows are excluded, not merely down-weighted: `normalize_weights`
     pins them to exactly 1 and no gradient reaches `g` through them, so
@@ -852,7 +852,7 @@ def _use_compilation_cache() -> None:
     N times.
 
     It sets `min_compile_time_secs` to zero rather than leaving JAX's default
-    of 1.0s, which would leave RAN's cache entirely empty: the run compiles a
+    of 1.0s, which would leave Deconvolve's cache entirely empty: the run compiles a
     few dozen executables that total 4.6s and no single one of them clears a
     second.
 

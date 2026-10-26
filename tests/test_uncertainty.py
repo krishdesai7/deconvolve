@@ -939,7 +939,7 @@ class TestCollect:
             # a working decomposition has to attribute most of the variance to
             # the bootstrap axis.
             weights: NDArray[np.single] = np.exp(
-                (alpha[b] + beta[s]) * tilt + 0.01 * rng.normal(size=n_eval),  # pyrefly: ignore[unknown-argument-type]
+                (alpha[b] + beta[s]) * tilt + 0.01 * rng.normal(size=n_eval),
                 dtype=np.single,
             )
             _write_cell(tmp_path, spec, index, weights)

@@ -421,7 +421,7 @@ def test_run_and_evaluate_returns_named_aligned_result(
     assert isinstance(result, ibu.IBUResult)
     assert result.variable_names == ("dim_0",)
     assert result.weights.shape == (1, 2)
-    # Cast at IBU's boundary: the splits above are the float64 RAN trains on.
+    # Cast at IBU's boundary: the splits above are the float64 Deconvolve trains on.
     assert result.weights.dtype == np.single
     assert len(result.outcomes) == 1
     assert result.outcomes[0].status == "skipped"

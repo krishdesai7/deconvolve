@@ -875,7 +875,7 @@ class TestCompilationCache:
         )
 
     def test_the_threshold_drops_to_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """JAX's 1.0s default leaves RAN's cache *empty*, not merely sparse.
+        """JAX's 1.0s default leaves Deconvolve's cache *empty*, not merely sparse.
 
         A run compiles a few dozen executables totalling ~4.6s and not one of
         them clears a second on its own, so the stock threshold caches nothing
@@ -1032,11 +1032,11 @@ class TestTrainingNeverSeesTheTestSplit:
 class TestWeightDispersion:
     """How far the generator has travelled from `w = 1`, as one number.
 
-    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against RAN's
-    73.3%: RAN's weights are *more* dispersed than the truth's, so dispersion is
+    `benchmarks/README.md` §2 measures the oracle's ESS at 80.1% against Deconvolve's
+    73.3%: Deconvolve's weights are *more* dispersed than the truth's, so dispersion is
     a knob with a target rather than a free parameter. For weights normalised to
     mean 1 the relation is `ESS/n = 1 / (1 + Var(w))`, which puts the oracle at
-    Var 0.249 and RAN at 0.364.
+    Var 0.249 and Deconvolve at 0.364.
 
     The variance is taken over the MC rows only. Nature's weights are pinned to
     1 by `normalize_weights` and carry no gradient, so including them would

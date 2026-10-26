@@ -19,7 +19,7 @@ from benchmarks.sliced import null_floors, sliced_wasserstein, w1_weighted
 
 
 class TestWeightedW1:
-    """RAN emits weights, not resampled events, so W1 has to be the weighted one.
+    """Deconvolve emits weights, not resampled events, so W1 has to be the weighted one.
 
     The textbook `mean(|sort(x) - sort(y)|)` is the equal-size, uniform-weight
     special case. Using it here would mean either discarding the weights --
@@ -101,7 +101,7 @@ class TestSlicedWasserstein:
         assert near < far
 
     def test_reweighting_reduces_the_distance(self) -> None:
-        """The use RAN puts it to: does `w` move `comp` toward `ref`?"""
+        """The use Deconvolve puts it to: does `w` move `comp` toward `ref`?"""
         rng = np.random.default_rng(3)
         ref = rng.normal(loc=0.4, size=(6_000, 2))
         comp = rng.normal(size=(6_000, 2))

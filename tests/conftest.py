@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 def _default_cache_is_writable() -> bool:
-    """Whether the process can write RAN's default (non-`tmp_path`) cache dir.
+    """Whether the process can write Deconvolve's default (non-`tmp_path`) cache dir.
 
     A few dataset/workflow tests build a `DeconvolveDataset` without an explicit
     `cache_dir`, so they generate into `constants.CACHE_DIR`. On a locked-down
