@@ -42,7 +42,7 @@
 #   ipykernel     6.29.5 no coupling to this code at all
 [dependency-groups]
   dev = [
-    "complexipy>=8.0.0,<=8.1.0",
+    "complexipy>=8.0.0,<=8.2.0",
     "ipykernel>=6.29.5,<=7.4.0",
     "prek>=0.4.0,<=0.5.7",
     "pyrefly>=1.3.0,<=1.4",

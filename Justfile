@@ -105,5 +105,4 @@ infer:
 
 # Upgrade all locked dependencies and synchronize the environment.
 upgrade:
-    uv lock --upgrade
-    uv sync
+    uv sync -U
