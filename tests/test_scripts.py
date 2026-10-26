@@ -42,13 +42,34 @@ _LMOD_FALLBACKS: tuple[str, ...] = (
 )
 
 
+# A call at the start of a line, not the word inside a comment.
+_MODULE_CALL: re.Pattern[str] = re.compile(r"\s*module\s+(load|unload|swap|purge)\b")
+
+
 def _scripts() -> Sequence[Path]:
     return sorted(SCRIPTS_DIR.glob("*.zsh"))
+
+
+def _module_lines(script: Path) -> list[int]:
+    return [
+        n
+        for n, line in enumerate(script.read_text().splitlines(), start=1)
+        if _MODULE_CALL.match(line)
+    ]
+
+
+def _scripts_using_module() -> Sequence[Path]:
+    return [p for p in _scripts() if p.name != LMOD_HELPER and _module_lines(p)]
 
 
 def test_there_are_scripts_to_check() -> None:
     """A glob that silently matches nothing would pass every test below."""
     assert _scripts()
+
+
+def test_some_script_uses_module() -> None:
+    """A pattern that silently matches nothing would leave the check below empty."""
+    assert _scripts_using_module()
 
 
 @pytest.mark.parametrize("script", _scripts(), ids=lambda p: p.name)
@@ -72,11 +93,7 @@ def test_the_script_parses(script: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize(
-    "script",
-    [p for p in _scripts() if p.name != LMOD_HELPER],
-    ids=lambda p: p.name,
-)
+@pytest.mark.parametrize("script", _scripts_using_module(), ids=lambda p: p.name)
 def test_a_script_using_module_initialises_it_first(script: Path) -> None:
     r"""`module` must be defined before it is called.
 
@@ -87,14 +104,7 @@ def test_a_script_using_module_initialises_it_first(script: Path) -> None:
     it, after the expensive part has already run.
     """
     text: str = script.read_text()
-    uses: list[int] = [
-        n
-        for n, line in enumerate(text.splitlines(), start=1)
-        # A call at the start of a line, not the word inside a comment.
-        if re.match(r"\s*module\s+(load|unload|swap|purge)\b", line)
-    ]
-    if not uses:
-        pytest.skip("does not use `module`")
+    uses: list[int] = _module_lines(script)
 
     sourced: int | None = next(
         (
