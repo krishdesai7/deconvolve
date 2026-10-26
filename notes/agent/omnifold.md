@@ -12,7 +12,7 @@ about the project floor, which is `>=3.12`.)
 `src/deconvolve/baselines/_omnifold_worker.py` carries a PEP 723 header pinning
 `requires-python = "==3.13.*"` plus `omnifold` and `tensorflow`, and
 `uv run --no-project` provisions exactly that, in an interpreter that cannot
-import `ran`. The two halves exchange one `.npz` file. `--no-project` is
+import `deconvolve`. The two halves exchange one `.npz` file. `--no-project` is
 load-bearing: without it uv resolves the script against this project and runs
 it in the project environment — the one environment that must never hold
 TensorFlow, and whose interpreter is whatever the checkout is pinned to
@@ -90,7 +90,7 @@ did not bind.
 `scripts/submit.zsh` does not run OmniFold. That job asks for
 `--time=00:15:00`, and OmniFold alone measured **~41 minutes** on the shipped
 configuration — 1.6M samples, twelve observables, `niter=3`, 50 epochs — so
-it would not fit in what is left after RAN trains. It gets
+it would not fit in what is left after Deconvolve trains. It gets
 `scripts/submit_omnifold.zsh` instead, which takes an existing run directory and
 asks for 75 minutes:
 
@@ -148,7 +148,7 @@ linestyle as well as colour so the panels survive greyscale printing.
 The report's tables carry the third arm too: `render` reads
 `metrics_omnifold.json` when it exists, and fills the two OmniFold columns with
 dashes when it does not, because the template fixes the column count. Columns
-run Sim, IBU, OmniFold, RAN — the method under test last, where the eye lands,
+run Sim, IBU, OmniFold, Deconvolve — the method under test last, where the eye lands,
 behind what it is being compared against.
 
 Eight columns do not fit at the default column padding. The six tables overran

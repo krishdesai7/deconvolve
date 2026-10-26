@@ -1,12 +1,12 @@
 # Project Structure
 
-The package lives under `src/` and is importable as `ran`.
+The package lives under `src/` and is importable as `deconvolve`.
 
 ```text
 src/deconvolve/                      Python package
 ├── __init__.py               Pins KERAS_BACKEND=jax, JAX_ENABLE_X64=0 (see tech-stack.md)
-├── __main__.py                Fallback entry point (python -m ran)
-├── cli.py                    Unified Typer command tree; `ran` script targets cli:app
+├── __main__.py                Fallback entry point (python -m deconvolve)
+├── cli.py                    Unified Typer command tree; `deconvolve` script targets cli:app
 ├── py.typed                  PEP 561 marker
 ├── config/                    Layered CLI configuration (see configuration.md)
 │   ├── layers.py               Discovery and merge of TOML layers; stdlib-only leaf
@@ -89,6 +89,6 @@ Module-level detail lives in docstrings, rendered under `docs/api/` by
 
 The cubic-response sweep (`deconvolve sweep`, `src/deconvolve/experiments/`,
 `scripts/submit_sweep.zsh`) has been retired and sits under `legacy/`, which is
-a holding pen and not a supported path: it is not importable as `ran`, not
+a holding pen and not a supported path: it is not importable as `deconvolve`, not
 covered by `just test`, and slated for deletion. Nothing in the package
 references it.

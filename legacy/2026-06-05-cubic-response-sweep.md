@@ -1,8 +1,8 @@
-# Cubic Response Sweep (RAN vs OmniFold) Implementation Plan
+# Cubic Response Sweep (Deconvolve vs OmniFold) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a SLURM-array sweep that, for each value of a cubic detector-distortion parameter `s ∈ linspace(0, 20, 25)`, trains both the real RAN and the real OmniFold to unfold `z_gen` back to `z_truth`, and plots Wasserstein(`z_truth`, `z_unfolded`) vs `s` for both methods.
+**Goal:** Build a SLURM-array sweep that, for each value of a cubic detector-distortion parameter `s ∈ linspace(0, 20, 25)`, trains both the real Deconvolve and the real OmniFold to unfold `z_gen` back to `z_truth`, and plots Wasserstein(`z_truth`, `z_unfolded`) vs `s` for both methods.
 
 **Architecture:** A new `ran/experiments/cubic_sweep.py` module reuses the existing `train()` (RAN) and a newly-extracted `omnifold_unfold()` (OmniFold). Each SLURM array task runs one `s` via `run_point` and writes one JSON; a dependent `collect` job concatenates the JSONs into `results.npz` + a PDF. Two small, behavior-preserving edits to existing code make the training entry points callable on in-memory arrays.
 

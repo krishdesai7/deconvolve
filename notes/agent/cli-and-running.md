@@ -1,9 +1,9 @@
 # Running
 
-The package installs a `ran` console script (`[project.scripts]` →
+The package installs a `deconvolve` console script (`[project.scripts]` →
 `deconvolve.cli:app`), which is the canonical entry point. In a checkout, prefix it
 with `uv run` to use the project environment without activating it
-(`uv run deconvolve train ...`); `python -m ran` still works via `__main__.py`. Shell
+(`uv run deconvolve train ...`); `python -m deconvolve` still works via `__main__.py`. Shell
 completion comes from `deconvolve --install-completion` and needs the script name, so
 it does not work through `python -m`.
 

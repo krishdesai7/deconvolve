@@ -69,7 +69,7 @@ from two recorded seeds rather than stored per cell.
 The bin-to-bin covariance is the other output, and the one the speed result
 pays for — ~100 retrainings is not an analysis anyone runs at OmniFold's
 cost. Two corrections keep it honest: the between-dataset covariance still
-carries `Cov_eps / S` and is corrected for it, and RAN's weights preserve the
+carries `Cov_eps / S` and is corrected for it, and Deconvolve's weights preserve the
 total count, so every covariance row sums to zero, which fixes only the *average*
 correlation (`-1 / (K - 1)` for equal-variance bins), not individual entries.
 `multinomial_off_diagonal` writes that reference next to the measurement. `B` must also exceed the bin count: a covariance from `B`
