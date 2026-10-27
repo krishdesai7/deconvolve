@@ -6,11 +6,23 @@
 #SBATCH -G1
 #SBATCH -c32
 
-# The run takes about 4 minutes in total. 10 gives ~2.5x margin.
-#SBATCH -t00:10:00
+# Deconvolve's own run is ~4 minutes; OmniFold alone measured ~41 for the
+# shipped configuration (1.6M samples, 12 jet observables, 3 iterations, 50
+# epochs); the redraw, metrics and report on top are a few more. ~50 in all, so
+# an hour is ~1.2x margin.
+#SBATCH -t01:00:00
 
-#SBATCH -Jran_e2e
+#SBATCH -Jdeconvolve_e2e
 #SBATCH -oslurm-%j.log
+
+# The whole pipeline in one job: train -> IBU -> OmniFold -> redraw with both
+# baselines -> metrics -> report.
+#
+# OmniFold's worker has its own uv environment (a PEP 723 script, not in
+# `uv.lock`), and first use downloads ~3.5GB of CUDA wheels, which a compute
+# node usually cannot do. Warm it on a login node once:
+#
+#     uv run --no-project src/deconvolve/baselines/_omnifold_worker.py
 
 set -euo pipefail
 
@@ -81,24 +93,52 @@ PY
   TRAIN_ARGS+=("-n${N_SAMPLES}" -l3 -u128)
 fi
 
-mkdir -p runs
-marker="$(mktemp)"
-trap 'rm -f "${marker}"' EXIT
+# `module` is a shell function that only a login shell has; see the comment in
+# `scripts/_lmod.zsh`. Sourced unconditionally: OmniFold needs `cudatoolkit`
+# whatever else is on PATH.
+source "${PROJECT_DIR}/scripts/_lmod.zsh"
 
 # the figures `train` and `plot` draw are typeset by LaTeX (`text.usetex`), and `plotting` asks `kpsewhich` at import whether `cochineal.sty` exists.
 if (( ! $+commands[pdflatex] )); then
-  source "${PROJECT_DIR}/scripts/_lmod.zsh"
   module load texlive
 fi
+
+mkdir -p runs
+marker="$(mktemp)"
+trap 'rm -f "${marker}"' EXIT
 
 uv run deconvolve train "${TRAIN_ARGS[@]}" "$@"
 
 RUN_DIR=( runs/*(/e:'[[ $REPLY -nt $marker ]]':) )
 RUN_DIR=$RUN_DIR[-1]
+# Done with it; the EXIT trap is needed below for the CUDA toolkit.
+rm -f "${marker}"
+trap - EXIT
 
 echo "Run dir: ${RUN_DIR}"
 
 uv run deconvolve baseline ibu "${RUN_DIR}"
+
+# Without `cudatoolkit/12.9`, TensorFlow cannot reach `libcusolver.so.11`,
+# registers no GPU, and runs on the CPU without raising -- correct weights, tens
+# of times slower. The package warns when the worker reports a CPU; watch for it
+# in the log.
+#
+# Held only for as long as the worker needs it, and released on the way out
+# however this script exits. Not `{ ... } always { ... }`: under `set -e`,
+# ERR_EXIT leaves the shell before the `always` block runs. An EXIT trap fires
+# on both paths.
+module load cudatoolkit/12.9
+trap 'module unload cudatoolkit/12.9' EXIT
+
+uv run deconvolve baseline omnifold "${RUN_DIR}"
+
+module unload cudatoolkit/12.9
+trap - EXIT
+
+# `plot` reloads the saved generator and redraws the figures with both
+# baselines on them: `_load_baseline_weights` picks up whichever
+# `*_weights.npz` exist at draw time.
 uv run deconvolve plot "${RUN_DIR}"
 uv run deconvolve evaluate "${RUN_DIR}" --force
 uv run deconvolve report "${RUN_DIR}"

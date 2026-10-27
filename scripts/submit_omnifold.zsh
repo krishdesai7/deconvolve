@@ -20,9 +20,9 @@
 #     sbatch scripts/submit_omnifold.zsh runs/2026-09-06T203848Z
 #
 # The run directory is read for its `config.json` and written for the OmniFold
-# artifacts; the Deconvolve training in it is neither repeated nor disturbed. This is a
-# separate job from `submit.zsh` rather than a step inside it because OmniFold
-# takes longer on its own than that job's entire wall clock.
+# artifacts; the Deconvolve training in it is neither repeated nor disturbed.
+# `submit.zsh` runs OmniFold as one of its own steps; this is for a run made
+# without it, or for rerunning the baseline with different flags.
 #
 # Two things must be true before this will work, and neither fails loudly on its
 # own:

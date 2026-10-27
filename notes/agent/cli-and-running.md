@@ -110,10 +110,11 @@ stub worker over the same `.npz` contract and tests the seam instead — see
 
 The full pipeline rather than a bare `deconvolve train`: it loads `texlive`
 first (the figures are typeset with `text.usetex`, so plotting needs LaTeX too, not
-just the report), trains, runs the IBU baseline on the same run directory, reloads
-once so the figures come back out with the baseline overlaid (`workflows.train.run`
-picks up `ibu_weights.npz` only if it exists when the plots are drawn), recomputes
-metrics, then runs `deconvolve report` to leave a PDF at the top of the run
+just the report), trains, runs the IBU and then the OmniFold baseline on the same
+run directory (the latter under `cudatoolkit/12.9`, unloaded straight after), reloads
+once so the figures come back out with both baselines overlaid
+(`_load_baseline_weights` picks up whichever `*_weights.npz` exist when the plots
+are drawn), recomputes metrics, then runs `deconvolve report` to leave a PDF at the top of the run
 directory. It defaults to the full **twelve**-observable jet run at
 `-n 1600000 -l 3 -u 128`, with `DECONVOLVE_TIMING=1` exported so the run reports
 where its wall clock went. Extra flags reach `deconvolve train`; those defaults are
@@ -144,7 +145,7 @@ At the shipped 1.6M samples and 100 epochs that is ~21.8k generator and ~109k
 discriminator updates (the train split is 70% of `n_samples`, batched at 1024
 and grouped by `-k`).
 
-The job asks for **`--qos=shared --time=00:15:00`** on a quarter node
+The job asks for **`--qos=shared --time=01:00:00`** on a quarter node
 (`--gpus=1 --cpus-per-task=32`, and deliberately no `--mem`): nothing shards
 across devices, so three of a node's four A100s would sit idle, and `shared`
 charges for the quarter actually used while backfilling into gaps a
@@ -158,12 +159,14 @@ against a run that needs ~105MB on device and under a gigabyte on host.
 `-C gpu` is the 40GB A100 (~1200 nodes). `-C gpu&hbm80g` gets the 80GB part
 from a pool of ~200 — more queue time for headroom this job does not use.
 
-The wall clock is sized from `benchmarks/boundary.py` on an A100 (4.6s
-compile, 0.034s per epoch at the same 500k x 6D shape): training is ~15s at
-the parameters above and the pipeline is minutes, dominated by npz loading
-and matplotlib. **Warm the jet cache on a login node first** — a cold cache
-pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) inside the job and
-will exceed the `debug` ceiling:
+The wall clock is sized by OmniFold, ~41 minutes of the ~50 (see
+[omnifold.md](omnifold.md)). Deconvolve's part comes from `benchmarks/boundary.py`
+on an A100 (4.6s compile, 0.034s per epoch at the same 500k x 6D shape): training
+is ~15s at the parameters above and the rest is minutes, dominated by npz loading
+and matplotlib. **Warm the jet cache and the OmniFold worker's environment on a
+login node first** (the worker's command is in omnifold.md) — a cold jet cache
+pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) inside the job and can
+push it past the hour:
 
 ```bash
 uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(n_samples=1000)"

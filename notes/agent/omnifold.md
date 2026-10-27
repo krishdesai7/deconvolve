@@ -85,21 +85,24 @@ with JAX's default 75% preallocation held by the parent**. The worker peaks at
 needed. That was the risk worth checking before any of this was written, and it
 did not bind.
 
-## Its own job, not a step in `submit.zsh`
+## A step in `submit.zsh`, and its own job for an existing run
 
-`scripts/submit.zsh` does not run OmniFold. That job asks for
-`--time=00:15:00`, and OmniFold alone measured **~41 minutes** on the shipped
-configuration — 1.6M samples, twelve observables, `niter=3`, 50 epochs — so
-it would not fit in what is left after Deconvolve trains. It gets
-`scripts/submit_omnifold.zsh` instead, which takes an existing run directory and
-asks for 75 minutes:
+`scripts/submit.zsh` runs OmniFold between IBU and the redraw. OmniFold alone
+measured **~41 minutes** on the shipped configuration — 1.6M samples, twelve
+observables, `niter=3`, 50 epochs — against ~4 for Deconvolve, so that job asks
+for an hour. It runs the baseline with its defaults, because the script's extra
+flags go to `deconvolve train`.
+
+`scripts/submit_omnifold.zsh` stays for a run made without OmniFold, or to rerun
+it with different flags. It takes an existing run directory and asks for 75
+minutes:
 
 ```zsh
 sbatch scripts/submit_omnifold.zsh runs/<timestamp>Z
 ```
 
-That script loads `cudatoolkit/12.9`, runs the baseline, unloads it, redraws the
-figures, re-scores and rebuilds the report. **The module unload is an EXIT trap,
+Both scripts load `cudatoolkit/12.9`, run the baseline, unload it, then redraw the
+figures, re-score and rebuild the report. **The module unload is an EXIT trap,
 not zsh's `{ } always { }`** — `always` does not run under `set -e`, which
 ERR_EXIT leaves before reaching, so a failed unfolding would have left the CUDA
 12 toolkit loaded over whatever deconvolve next in the allocation. Measured, not
