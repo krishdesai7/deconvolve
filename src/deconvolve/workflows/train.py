@@ -33,7 +33,7 @@ from ..evaluation import (
     plot_losses,
     plot_selection,
 )
-from ..instrumentation import phase, report, write
+from ..instrumentation import SHARED_PHASES, SHARED_TIMINGS_FILE, phase, report, write
 from ..training import (
     MMD_SUBSAMPLE,
     bandwidths,
@@ -530,7 +530,20 @@ def run(
     finally:
         report()
         if written_to is not None:
-            write(written_to, pass_name="load" if load_run is not None else "train")
+            pass_name: str = "load" if load_run is not None else "train"
+            # The figures overlay every method, so drawing them is not
+            # Deconvolve's cost; see `SHARED_TIMINGS_FILE`.
+            write(
+                written_to,
+                pass_name=pass_name,
+                keep=lambda name: name not in SHARED_PHASES,
+            )
+            write(
+                written_to,
+                pass_name=pass_name,
+                filename=SHARED_TIMINGS_FILE,
+                keep=lambda name: name in SHARED_PHASES,
+            )
 
 
 def _pipeline(

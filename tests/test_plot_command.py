@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from deconvolve.data import parse_gaussian_config
+from deconvolve.instrumentation import timing
 from deconvolve.workflows import plot as plot_workflow
 from deconvolve.workflows import train as train_workflow
 
@@ -130,3 +131,32 @@ def test_a_directory_of_runs_redraws_each(
     plot_workflow.plot_runs(tmp_path / "runs")
 
     assert drawn["loaded"] == [first, second]
+
+
+@pytest.mark.writes_default_cache
+@pytest.mark.usefixtures("drawn")
+def test_the_redraw_is_timed_as_shared_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The figures carry every method, so their cost is in no one method's file."""
+    monkeypatch.chdir(tmp_path)
+    run_dir: Path = _write_run(tmp_path)
+
+    timing.enable(True)
+    try:
+        plot_workflow.plot_run(run_dir)
+    finally:
+        timing.enable(False)
+
+    artifacts: Path = run_dir / "artifacts"
+    shared: dict[str, Any] = json.loads(
+        (artifacts / timing.SHARED_TIMINGS_FILE).read_text()
+    )
+    assert [p["name"] for p in shared["phases"]] == [
+        "parse_config",
+        "data",
+        "load",
+        "plots",
+    ]
+    assert {p["pass"] for p in shared["phases"]} == {"plot"}
+    assert not (artifacts / "timings.json").exists()

@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from . import logging_config, timing
 from .logging_config import configure_logging
 from .timing import (
+    SHARED_PHASES,
+    SHARED_TIMINGS_FILE,
     TIMING_ENV_VAR,
     Phase,
     enable,
@@ -23,6 +25,8 @@ if TYPE_CHECKING:
     from typing import Final
 
 __all__: Final[Sequence[str]] = (
+    "SHARED_PHASES",
+    "SHARED_TIMINGS_FILE",
     "TIMING_ENV_VAR",
     "Phase",
     "configure_logging",

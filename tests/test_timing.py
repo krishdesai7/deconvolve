@@ -571,3 +571,45 @@ class TestWriteFilename:
         timing.write(tmp_path, pass_name="train")
 
         assert (tmp_path / "artifacts" / "timings.json").is_file()
+
+
+class TestWriteKeep:
+    """One pass splitting its phases across two files."""
+
+    def test_keep_picks_top_level_phases_and_their_children(
+        self, tmp_path: Path
+    ) -> None:
+        timing.enable(True)
+        with timing.phase("train"), timing.phase("epochs"):
+            pass
+        with timing.phase("plots"):
+            pass
+
+        timing.write(tmp_path, pass_name="train", keep=lambda name: name != "plots")
+        timing.write(
+            tmp_path,
+            pass_name="train",
+            filename=timing.SHARED_TIMINGS_FILE,
+            keep=lambda name: name == "plots",
+        )
+
+        own = json.loads((tmp_path / "artifacts" / "timings.json").read_text())
+        shared = json.loads(
+            (tmp_path / "artifacts" / timing.SHARED_TIMINGS_FILE).read_text()
+        )
+        assert [p["name"] for p in own["phases"]] == ["train", "epochs"]
+        assert [p["name"] for p in shared["phases"]] == ["plots"]
+
+    def test_nothing_kept_writes_no_file(self, tmp_path: Path) -> None:
+        timing.enable(True)
+        with timing.phase("train"):
+            pass
+
+        timing.write(
+            tmp_path,
+            pass_name="train",
+            filename=timing.SHARED_TIMINGS_FILE,
+            keep=lambda name: name == "plots",
+        )
+
+        assert not (tmp_path / "artifacts" / timing.SHARED_TIMINGS_FILE).exists()

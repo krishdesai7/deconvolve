@@ -26,6 +26,7 @@ from ..baselines._shared import parse_run_config
 from ..coretypes import DatasetName
 from ..data import gaussian_config_from_run_config
 from ..evaluation import apply_to_runs
+from ..instrumentation import SHARED_TIMINGS_FILE, timing
 from .train import (
     _display_variables,
     _draw_figures,
@@ -44,41 +45,67 @@ logger: Logger = logging.getLogger(name=__name__)
 
 
 def plot_run(run_dir: Path, /) -> None:
-    """Redraw one run's figures, with whichever baselines have run by now."""
-    config: RunConfig = parse_run_config(
-        raw=json.loads(s=(run_dir / "config.json").read_text())
-    )
-    var_info: list[VarInfo] | None = None
-    if config.dataset == DatasetName.jets:
-        splits: DatasetSplits
-        splits, _, var_info = _prepare_jets(
-            config.n_samples, config.batch_size, config.variable_names, config.data_seed
-        )
-    else:
-        splits, _, _ = _prepare_gaussian(
-            None,
-            gaussian_config_from_run_config(
-                config.source["gaussian_params"], config.dim
-            ),
-            config.batch_size,
-            config.n_samples,
-            config.data_seed,
+    """Redraw one run's figures, with whichever baselines have run by now.
+
+    Timed into `SHARED_TIMINGS_FILE`, not `timings.json`: the figures carry
+    every method, so the redraw is no one method's cost. Each run starts its
+    recording clean, so a directory of runs does not pile one run's phases
+    into the next one's file.
+    """
+    timing.reset()
+    try:
+        _plot_run(run_dir)
+    finally:
+        timing.report()
+        timing.write(
+            run_dir,
+            pass_name="plot",  # ruff: ignore[hardcoded-password-func-arg]
+            filename=SHARED_TIMINGS_FILE,
         )
 
-    g, history = _load_artifacts(run_dir)
-    _draw_figures(
-        run_dir,
-        splits,
-        g,
-        history,
-        config.dim,
-        var_info,
-        # Absent on a run saved before selection was recorded: the same
-        # fallback `train --load-run` uses.
-        config.source.get("best_epoch", -1),
-        _display_variables(config.dataset, config.variable_names),
-        plots=True,
-    )
+
+def _plot_run(run_dir: Path, /) -> None:
+    with timing.phase("parse_config"):
+        config: RunConfig = parse_run_config(
+            raw=json.loads(s=(run_dir / "config.json").read_text())
+        )
+    var_info: list[VarInfo] | None = None
+    with timing.phase("data"):
+        if config.dataset == DatasetName.jets:
+            splits: DatasetSplits
+            splits, _, var_info = _prepare_jets(
+                config.n_samples,
+                config.batch_size,
+                config.variable_names,
+                config.data_seed,
+            )
+        else:
+            splits, _, _ = _prepare_gaussian(
+                None,
+                gaussian_config_from_run_config(
+                    config.source["gaussian_params"], config.dim
+                ),
+                config.batch_size,
+                config.n_samples,
+                config.data_seed,
+            )
+
+    with timing.phase("load"):
+        g, history = _load_artifacts(run_dir)
+    with timing.phase("plots"):
+        _draw_figures(
+            run_dir,
+            splits,
+            g,
+            history,
+            config.dim,
+            var_info,
+            # Absent on a run saved before selection was recorded: the same
+            # fallback `train --load-run` uses.
+            config.source.get("best_epoch", -1),
+            _display_variables(config.dataset, config.variable_names),
+            plots=True,
+        )
 
 
 def plot_runs(run_dir: Path, /) -> None:

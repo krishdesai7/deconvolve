@@ -34,7 +34,7 @@ from rich.table import Table
 from ..coretypes import COMPILE_CACHE_DIR, artifacts_dir
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Mapping
     from logging import Logger
     from pathlib import Path
     from typing import Any, LiteralString
@@ -42,6 +42,17 @@ if TYPE_CHECKING:
 logger: Logger = logging.getLogger(name=__name__)
 
 TIMING_ENV_VAR: Final[LiteralString] = "DECONVOLVE_TIMING"
+
+SHARED_TIMINGS_FILE: Final[LiteralString] = "timings_shared.json"
+"""Where work done for every method at once is recorded, not one method's file.
+
+Drawing the figures overlays all three methods, so its cost is no more
+Deconvolve's than IBU's or OmniFold's. `train`'s `plots` phase lands here
+rather than in `timings.json`, beside `deconvolve plot`'s redraw.
+"""
+
+SHARED_PHASES: Final[frozenset[str]] = frozenset({"plots"})
+"""Top-level phases `train` records that belong in `SHARED_TIMINGS_FILE`."""
 
 # Spelled out rather than `bool(value)`, because the string "0" is truthy and a
 # SLURM `--export` that forwards an unset variable delivers "" rather than absence.
@@ -328,6 +339,24 @@ def _is_valid_payload(payload: object, /) -> bool:
     return all(_is_valid_phase(p) for p in cast(typ="list[object]", val=phases))
 
 
+def _kept(ordered: list[Phase], keep: Callable[[str], bool] | None, /) -> list[Phase]:
+    """`ordered` (parents first) cut down to the top-level phases `keep` accepts.
+
+    A child goes wherever its parent does: it is decided by the nearest
+    top-level phase before it.
+    """
+    if keep is None:
+        return ordered
+    kept: list[Phase] = []
+    keeping: bool = False
+    for record in ordered:
+        if record.depth == 0:
+            keeping = keep(record.name)
+        if keeping:
+            kept.append(record)
+    return kept
+
+
 def _existing(path: Path, /) -> dict[str, Any]:
     """What is already on disk, or an empty payload.
 
@@ -355,7 +384,14 @@ def _merged_phases(
     return kept + fresh
 
 
-def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -> None:
+def write(
+    run_dir: Path,
+    /,
+    *,
+    pass_name: str,
+    filename: str = "timings.json",
+    keep: Callable[[str], bool] | None = None,
+) -> None:
     """Merge this pass's phases into `filename`. A no-op when timing is off
     or nothing was timed.
 
@@ -378,10 +414,19 @@ def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -
     `deconvolve baseline omnifold` also has phases called `data` and `evaluate`, and
     writing them here would silently destroy the training pass's --- the rows
     anyone actually wants. So it writes `timings_omnifold.json` instead (and
-    `deconvolve baseline ibu`, `timings_ibu.json`), and the baseline's cost stays separable from the method's, which is the
-    comparison the numbers are for.
+    `deconvolve baseline ibu`, `timings_ibu.json`), and the baseline's cost
+    stays separable from the method's, which is the comparison the numbers
+    are for.
+
+    `keep`, given a top-level phase's name, says whether that phase (with its
+    children) goes in this file, so one pass can split its phases across two:
+    `train` sends `SHARED_PHASES` to `SHARED_TIMINGS_FILE` and the rest here.
+    A pass with nothing kept writes nothing.
     """
     if _recorder is None or not _recorder.records:
+        return
+    kept: list[Phase] = _kept(_ordered(_recorder.records), keep)
+    if not kept:
         return
     try:
         path: Path = artifacts_dir(run_dir) / filename
@@ -400,7 +445,7 @@ def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -
             "failed": p.failed,
             "pass": pass_name,
         }
-        for p in _ordered(_recorder.records)
+        for p in kept
     ]
     phases: list[dict[str, Any]] = _merged_phases(previous, fresh)
     # `compile_cache_warm` is only meaningful for a pass that actually

@@ -772,13 +772,13 @@ def test_timing_writes_a_phase_breakdown_into_the_run_dir(
     payload: dict[str, Any] = json.loads(
         s=(run_dir / "artifacts" / "timings.json").read_text()
     )
-    assert {p["name"] for p in payload["phases"]} == {
-        "data",
-        "load",
-        "plots",
-        "evaluate",
-    }
+    assert {p["name"] for p in payload["phases"]} == {"data", "load", "evaluate"}
     assert payload["total_seconds"] > 0.0
+    # The figures carry every method, so drawing them is not Deconvolve's cost.
+    shared: dict[str, Any] = json.loads(
+        s=(run_dir / "artifacts" / timing.SHARED_TIMINGS_FILE).read_text()
+    )
+    assert [p["name"] for p in shared["phases"]] == ["plots"]
     # The reload path never trains, so nothing nested under `train` appears.
     assert all(p["depth"] == 0 for p in payload["phases"])
 

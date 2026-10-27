@@ -292,6 +292,22 @@ def test_the_ibu_timings_reach_the_report(reference_run: Path) -> None:
     )
 
 
+def test_the_shared_timings_close_the_table(reference_run: Path) -> None:
+    """Drawing the figures is every method's, so it gets its own last block."""
+    artifacts: Path = reference_run / "artifacts"
+    _ = (artifacts / "timings_shared.json").write_text(
+        json.dumps(_pass("plots", 7.0, "plot"))
+    )
+    _ = (artifacts / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert "plots & 7" in source
+    assert source.index(r"\textsc{OmniFold} baseline") < source.index(
+        "Shared by all methods"
+    )
+
+
 def test_level_figures_are_capped_in_height_as_well_as_width() -> None:
     """A one-panel figure is nearly square: width alone overflowed the page."""
     template: str = report.load_template()

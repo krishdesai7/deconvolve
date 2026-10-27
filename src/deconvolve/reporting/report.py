@@ -31,6 +31,7 @@ from ..coretypes import (
     display_order,
     figure_pages,
 )
+from ..instrumentation import SHARED_TIMINGS_FILE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -308,6 +309,8 @@ _TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
     ("timings.json", r"\textsc{Deconvolve}"),
     ("timings_ibu.json", r"\textsc{IBU} baseline"),
     ("timings_omnifold.json", r"\textsc{OmniFold} baseline"),
+    # Last: drawing the figures is done once for all three methods together.
+    (SHARED_TIMINGS_FILE, "Shared by all methods"),
 )
 
 
