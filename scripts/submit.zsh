@@ -112,8 +112,19 @@ trap 'rm -f "${marker}"' EXIT
 
 uv run deconvolve train "${TRAIN_ARGS[@]}" "$@"
 
-RUN_DIR=( runs/*(/e:'[[ $REPLY -nt $marker ]]':) )
-RUN_DIR=$RUN_DIR[-1]
+# A loop, not the `runs/*(/e:'[[ $REPLY -nt $marker ]]':)` glob qualifier:
+# under `set -e` the first older run directory fails that test and ERR_EXIT
+# ends the script there, silently. An `if` condition is exempt.
+RUN_DIR=""
+for run in runs/*(/N); do
+  if [[ "${run}" -nt "${marker}" ]]; then
+    RUN_DIR="${run}"
+  fi
+done
+if [[ -z "${RUN_DIR}" ]]; then
+  print -u2 "No run directory under runs/ is newer than the start of training."
+  exit 1
+fi
 # Done with it; the EXIT trap is needed below for the CUDA toolkit.
 rm -f "${marker}"
 trap - EXIT
