@@ -78,11 +78,11 @@ trap - EXIT
 # `plot` reloads the saved generator and redraws the figures, putting the
 # OmniFold curve on them: `_load_baseline_weights` picks up whichever
 # `*_weights.npz` exist at draw time. Then re-score, so `metrics.json` and the
-# report agree with the figures.
+# report agree with the figures. LaTeX is loaded first because the figures are
+# typeset by it (`text.usetex`), not just the report.
+module load texlive
 uv run deconvolve plot "${RUN_DIR}"
 uv run deconvolve evaluate "${RUN_DIR}" --force
-
-module load texlive
 uv run deconvolve report "${RUN_DIR}" --force
 
 echo "Artifacts in ${RUN_DIR}:"

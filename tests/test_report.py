@@ -272,7 +272,7 @@ def test_the_omnifold_timings_reach_the_report(reference_run: Path) -> None:
         json.dumps(_pass("omnifold", 400.0, "omnifold"))
     )
     source: str = report.render(reference_run)
-    assert "OmniFold baseline" in source
+    assert r"\textsc{OmniFold} baseline" in source
     assert "omnifold & 400" in source
 
 

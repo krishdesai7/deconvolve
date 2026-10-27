@@ -108,11 +108,12 @@ stub worker over the same `.npz` contract and tests the seam instead — see
 
 ## `scripts/submit.zsh`
 
-The full pipeline rather than a bare `deconvolve train`: it trains, runs the IBU
-baseline on the same run directory, reloads once so the figures come back out
-with the baseline overlaid (`workflows.train.run` picks up `ibu_weights.npz` only if
-it exists when the plots are drawn), recomputes metrics, then
-`module load texlive` and `deconvolve report` to leave a PDF at the top of the run
+The full pipeline rather than a bare `deconvolve train`: it loads `texlive`
+first (the figures are typeset with `text.usetex`, so plotting needs LaTeX too, not
+just the report), trains, runs the IBU baseline on the same run directory, reloads
+once so the figures come back out with the baseline overlaid (`workflows.train.run`
+picks up `ibu_weights.npz` only if it exists when the plots are drawn), recomputes
+metrics, then runs `deconvolve report` to leave a PDF at the top of the run
 directory. It defaults to the full **twelve**-observable jet run at
 `-n 1600000 -l 3 -u 128`, with `DECONVOLVE_TIMING=1` exported so the run reports
 where its wall clock went. Extra flags reach `deconvolve train`; those defaults are

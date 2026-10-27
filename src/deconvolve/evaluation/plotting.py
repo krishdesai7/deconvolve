@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, cast
@@ -9,7 +11,6 @@ import matplotlib as mpl
 import numpy as np
 from matplotlib.backends.backend_pdf import FigureCanvasPdf, PdfPages
 from matplotlib.figure import Figure
-from matplotlib.font_manager import fontManager
 from matplotlib.ticker import MaxNLocator
 
 from ..coretypes import (
@@ -42,12 +43,27 @@ type AxesHist = tuple[
 
 logger: Logger = logging.getLogger(name=__name__)
 
+
+def _has_latex_package(name: str, /) -> bool:
+    """Whether `kpsewhich` finds `name` on the TeX search path."""
+    kpsewhich: str | None = shutil.which("kpsewhich")
+    if kpsewhich is None:
+        return False
+    found: subprocess.CompletedProcess[str] = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+        [kpsewhich, name], capture_output=True, text=True, check=False
+    )
+    return bool(found.stdout.strip())
+
+
 mpl.rcParams["font.family"] = "serif"
-available_fonts: set[str] = {f.name for f in fontManager.ttflist}
-if "Cochineal" in available_fonts:
-    mpl.rcParams["font.serif"] = ["Cochineal"]
+# Real LaTeX rather than mathtext, which has no `\textsc` for the method names.
+# LaTeX then draws every glyph, tick labels included, so whether Cochineal is
+# installed as a system font is beside the point: what matters is whether TeX
+# has the package. (NERSC's texlive module has it; the system has no font.)
+mpl.rcParams["text.usetex"] = True
+if _has_latex_package("cochineal.sty"):
+    mpl.rcParams["text.latex.preamble"] = r"\usepackage{cochineal}"
 mpl.rcParams["font.size"] = 18
-mpl.rcParams["text.usetex"] = False
 # TrueType rather than matplotlib's default Type 3. Both are vector, but Type 3
 # embeds glyphs as bare charprocs with no dependable encoding, so text in the
 # saved PDF cannot be searched, copied or re-edited as text -- and arXiv and
@@ -207,7 +223,7 @@ def omnifold_overlay(weights: EventArray, dim: int) -> BaselineOverlay:
     panels survive being printed in greyscale.
     """
     return BaselineOverlay.from_shared(
-        label="OmniFold",
+        label=r"\textsc{OmniFold}",
         weights=weights,
         dim=dim,
         color=COLOR_OMNIFOLD,
@@ -268,7 +284,7 @@ def _hist_ratio_panel(
             linestyle="-",
             linewidth=4,
             alpha=ALPHA_DECONVOLVE,
-            label=r"$\textsc{Deconvolve}$",
+            label=r"\textsc{Deconvolve}",
             # Above every baseline. Overlays draw after this call, putting
             # them last in the legend, but at linewidth 4 the last curve
             # drawn would otherwise bury Deconvolve wherever they agree -- which on

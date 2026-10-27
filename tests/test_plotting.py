@@ -105,7 +105,7 @@ def test_a_panel_is_labelled_even_without_a_baseline() -> None:
     assert ax.get_ylabel() == "Events"
     assert ax.get_title() == "Detector level"
     _, labels = ax.get_legend_handles_labels()
-    assert labels == ["Data", "Sim", "Deconvolve"]
+    assert labels == ["Data", "Sim", r"\textsc{Deconvolve}"]
 
 
 def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
@@ -138,9 +138,9 @@ def test_the_legend_lists_every_baseline_that_is_drawn() -> None:
     assert labels == [
         "Data",
         "Sim",
-        r"$\textsc{Deconvolve}$",
+        r"\textsc{Deconvolve}",
         "IBU",
-        r"$\textsc{OmniFold}$",
+        r"\textsc{OmniFold}",
     ]
 
 
@@ -933,9 +933,9 @@ class TestBaselineOverlays:
             label: artist
             for artist, label in zip(*ax.get_legend_handles_labels(), strict=True)
         }
-        deconvolve_z = by_label[r"$\textsc{Deconvolve}$"].get_zorder()
+        deconvolve_z = by_label[r"\textsc{Deconvolve}"].get_zorder()
         assert deconvolve_z > by_label["IBU"].get_zorder()
-        assert deconvolve_z > by_label[r"$\textsc{OmniFold}$"].get_zorder()
+        assert deconvolve_z > by_label[r"\textsc{OmniFold}"].get_zorder()
 
     def test_every_panel_of_a_page_carries_both_baselines(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -968,7 +968,7 @@ class TestBaselineOverlays:
             assert labels == [
                 "Data",
                 "Sim",
-                r"$\textsc{Deconvolve}$",
+                r"\textsc{Deconvolve}",
                 "IBU",
-                r"$\textsc{OmniFold}$",
+                r"\textsc{OmniFold}",
             ]

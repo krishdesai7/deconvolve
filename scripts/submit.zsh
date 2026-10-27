@@ -67,6 +67,14 @@ mkdir -p runs
 marker="$(mktemp)"
 trap 'rm -f "${marker}"' EXIT
 
+# Before `train`, not just `report`: the figures `train` and `plot` draw are
+# typeset by LaTeX (`text.usetex`), and `plotting` asks `kpsewhich` at import
+# whether `cochineal.sty` exists.
+if (( ! $+commands[pdflatex] )); then
+  source "${PROJECT_DIR}/scripts/_lmod.zsh"
+  module load texlive
+fi
+
 uv run deconvolve train "${TRAIN_ARGS[@]}" "$@"
 
 RUN_DIR=( runs/*(/e:'[[ $REPLY -nt $marker ]]':) )
@@ -77,11 +85,6 @@ echo "Run dir: ${RUN_DIR}"
 uv run deconvolve baseline ibu "${RUN_DIR}"
 uv run deconvolve plot "${RUN_DIR}"
 uv run deconvolve evaluate "${RUN_DIR}" --force
-
-if (( ! $+commands[pdflatex] )); then
-  source "${PROJECT_DIR}/scripts/_lmod.zsh"
-  module load texlive
-fi
 uv run deconvolve report "${RUN_DIR}"
 
 echo "Artifacts in ${RUN_DIR}:"

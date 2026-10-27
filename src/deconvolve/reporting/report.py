@@ -287,14 +287,15 @@ def _phase_line(phase: Mapping[str, Any], total: float, /) -> str:
 
 
 def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> str:
-    """One pass's rows: an optional label row, one row per phase, a rule, the total.
+    r"""One pass's rows: an optional label row, one row per phase, a rule, the total.
 
     Shares are of this pass's own total, so each block reads on its own.
+    `label` is LaTeX markup (it carries `\textsc`), so it goes in unescaped.
     """
     total: float = float(timings["total_seconds"])
     lines: list[str] = []
     if label is not None:
-        lines.append(rf"\multicolumn{{4}}{{@{{}}l}}{{\itshape {latex_text(label)}}} \\")
+        lines.append(rf"\multicolumn{{4}}{{@{{}}l}}{{\itshape {label}}} \\")
     lines.extend(_phase_line(phase, total) for phase in timings["phases"])
     lines.extend((r"\midrule", rf"\textbf{{total}} & {decimal(total)} & 100 & \\"))
     return "\n".join(lines)
@@ -305,8 +306,8 @@ def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> s
 # would overwrite the training pass's `data` and `evaluate` rows. IBU is not
 # timed; it takes seconds.
 _TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
-    ("timings.json", r"$\textsc{Deconvolve}$"),
-    ("timings_omnifold.json", r"$\textsc{OmniFold}$ baseline"),
+    ("timings.json", r"\textsc{Deconvolve}"),
+    ("timings_omnifold.json", r"\textsc{OmniFold} baseline"),
 )
 
 

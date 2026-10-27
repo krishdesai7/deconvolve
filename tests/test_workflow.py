@@ -827,7 +827,7 @@ class TestBaselineDiscovery:
             run_dir=tmp_path, dim=2
         )
 
-        assert [o.label for o in overlays] == ["OmniFold"]
+        assert [o.label for o in overlays] == [r"\textsc{OmniFold}"]
         # One vector, repeated: OmniFold reweights events, not observables.
         assert len(overlays[0].weights) == 2
         assert np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])
@@ -848,6 +848,6 @@ class TestBaselineDiscovery:
             run_dir=tmp_path, dim=2
         )
 
-        assert [o.label for o in overlays] == ["IBU", "OmniFold"]
+        assert [o.label for o in overlays] == ["IBU", r"\textsc{OmniFold}"]
         # IBU's per-observable vectors must stay distinct, not be collapsed.
         assert not np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])
