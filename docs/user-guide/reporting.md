@@ -112,7 +112,5 @@ To read the per-epoch training history:
 import numpy as np
 
 history = np.load(run_dir / "artifacts" / "history.npz")
-print(
-    history.files
-)  # ['train_d', 'train_g', 'val_d', 'val_mmd', 'val_ess', 'val_mmd_particle']
+print(history.files)   # ['train_d', 'train_g', 'val_d', 'val_mmd', 'val_ess', 'val_mmd_particle']
 ```
