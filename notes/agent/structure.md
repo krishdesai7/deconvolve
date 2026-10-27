@@ -76,6 +76,7 @@ runs/<timestamp>Z/             One run. Two files at the top, the rest below:
     ├── metrics.json, metrics_ibu.json, ibu_outcomes.json, ibu_weights.npz, timings_ibu.json
     ├── metrics_omnifold.json, omnifold_weights.npz, timings_omnifold.json
     ├── timings.json            Merged across passes (see timing.md)
+    ├── timings_shared.json     Figure drawing, which belongs to every method (see timing.md)
     ├── detector_level.pdf, particle_level.pdf, losses.pdf, selection.pdf
     └── report.tex               The filled-in template, kept for debugging
 .cache/                        Regenerable cache; relocatable via DECONVOLVE_CACHE_DIR (see caching.md)

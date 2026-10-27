@@ -39,7 +39,7 @@ The phases, nested ones indented under their parent:
 | `particle_mmd` | The particle-level diagnostic curve in `_finish_run`                                                                                                                                                             |
 | `save`         | `_save_run`: two `.keras` files plus `EpochParams`                                                                                                                                                               |
 | `load`         | `_load_artifacts`, on the `--load-run` path instead of `train`/`save`                                                                                                                                            |
-| `plots`        | `_draw_figures`; near-zero under `--no-plots`                                                                                                                                                                    |
+| `plots`        | `_draw_figures`; near-zero under `--no-plots`. Written to `timings_shared.json`, not here: see below                                                                                                                                                                    |
 | `evaluate`     | `evaluate_run`                                                                                                                                                                                                   |
 
 `deconvolve baseline omnifold` writes its own `artifacts/timings_omnifold.json`
@@ -70,6 +70,20 @@ the same reason: it too has `data` and `evaluate` phases. Its phases are
 variable and then scores them in a second loop rather than interleaving the two,
 so `ibu` and `evaluate` are separable; one loop would have charged the scoring
 to the unfolding.
+
+**Figure drawing is nobody's in particular.** The figures overlay all three
+methods, so charging `plots` to Deconvolve's block overstated the method's
+cost. `timing.SHARED_PHASES` names the top-level phases that are shared
+(`plots`), and `train` writes twice from its `finally`: everything else to
+`timings.json`, `SHARED_PHASES` to `timing.SHARED_TIMINGS_FILE`
+(`timings_shared.json`), using `write`'s `keep` predicate. `deconvolve plot`
+(`workflows/plot.py`) writes all of its phases (`parse_config`, `data`, `load`,
+`plots`) to the shared file, and it is the pass that does the real drawing in
+`scripts/submit.zsh`, since `train` runs there under `--no-plots`. It
+`timing.reset()`s per run so a directory of runs does not pile up. The report
+renders the shared file as the last block, `Shared by all methods`.
+`deconvolve report` is not timed: it cannot put its own time into the PDF it is
+still making.
 
 The iteration rows sit at the same depth as `unfold` rather than under it.
 `_ordered` reconstructs a top-level phase's children by position and does not

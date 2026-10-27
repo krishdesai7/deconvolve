@@ -31,6 +31,7 @@ runs/2026-09-19T164500Z/
     ├── metrics_omnifold.json    # OmniFold baseline (deconvolve baseline omnifold)
     ├── omnifold_weights.npz
     ├── timings_omnifold.json
+    ├── timings_shared.json      # drawing the figures, for every method
     └── report.tex               # the report's LaTeX source
 ```
 
@@ -67,7 +68,7 @@ deconvolve report runs/2026-09-19T164500Z
 ### Contents
 
 1. **Configuration.** Every setting in `config.json`.
-2. **Timing.** How long each phase of training took, from `timings.json`, followed by the IBU and OmniFold baselines' phases from `timings_ibu.json` and `timings_omnifold.json` when those exist. Each block has its own total. The table is empty if the run was trained with `DECONVOLVE_TIMING=0`.
+2. **Timing.** How long each phase of training took, from `timings.json`, followed by the IBU and OmniFold baselines' phases from `timings_ibu.json` and `timings_omnifold.json`, then the work shared by all methods (drawing the figures) from `timings_shared.json`, each when it exists. Each block has its own total. The table is empty if the run was trained with `DECONVOLVE_TIMING=0`.
 3. **Detector-level metrics.** Three tables (Wasserstein, JS divergence, VLC divergence) comparing each method's reweighted Simulation to Data, one row per observable, then a one-row table for the joint sliced Wasserstein distance over all observables (see [Sliced Wasserstein distance](evaluation.md#4-sliced-wasserstein-distance)). The columns are: unweighted Simulation (*Sim.*), IBU, <span style="font-variant: small-caps;">OmniFold</span> and <span style="font-variant: small-caps;">Deconvolve</span>, each method with its improvement over *Sim.* in percent.
 4. **Particle-level metrics.** The same four tables, comparing to Truth, with the unweighted Generation sample (*Gen.*) as the reference.
 5. **Detector- and particle-level figures.** One panel per observable. Each panel overlays the histograms of Nature, Unweighted MC and the Reweighted MC, with a Ratio panel underneath. IBU and <span style="font-variant: small-caps;">OmniFold</span> are overlaid as well, if their results are available.
@@ -111,5 +112,7 @@ To read the per-epoch training history:
 import numpy as np
 
 history = np.load(run_dir / "artifacts" / "history.npz")
-print(history.files)   # ['train_d', 'train_g', 'val_d', 'val_mmd', 'val_ess', 'val_mmd_particle']
+print(
+    history.files
+)  # ['train_d', 'train_g', 'val_d', 'val_mmd', 'val_ess', 'val_mmd_particle']
 ```
