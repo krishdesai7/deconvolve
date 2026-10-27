@@ -29,6 +29,7 @@ from ..coretypes import (
     artifacts_dir,
 )
 from ..evaluation import apply_to_runs, render_metrics, warn_if_no_joint
+from ..instrumentation import timing
 from ..training import EPS
 from ._shared import (
     evaluate_dimension,
@@ -44,7 +45,13 @@ if TYPE_CHECKING:
     from numpy._typing import _DTypeLikeFloat
     from numpy.typing import NDArray
 
-    from ..coretypes import EventArray, MetricRecord, Populations, RunConfig
+    from ..coretypes import (
+        EventArray,
+        JointMetricRecord,
+        MetricRecord,
+        Populations,
+        RunConfig,
+    )
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -449,7 +456,9 @@ def _run_and_evaluate(
 
     fit: Populations
     test: Populations
-    fit, test = load_populations(config)
+    detail: str = f"{config.dataset.value} (n={config.n_samples}, dim={config.dim})"
+    with timing.phase("data", detail=detail):
+        fit, test = load_populations(config)
     test_truth: NDArray[np.single] = test.require_truth()
     weights: NDArray[np.single] = np.empty(
         shape=(config.dim, len(test.mc)), dtype=np.single
@@ -458,29 +467,35 @@ def _run_and_evaluate(
     particle: dict[str, MetricRecord] = {}
     outcomes: list[VariableOutcome] = []
 
-    for dimension, variable_name in enumerate(iterable=config.variable_names):
-        unfolding: VariableUnfolding = unfold_variable(
-            variable_name=variable_name,
-            mc_gen=fit.mc.z[:, dimension],
-            mc_sim=fit.mc.x[:, dimension],
-            observed=fit.data[:, dimension],
-            n_iterations=n_iterations,
-            purity_threshold=purity_threshold,
-        )
-        test_weights: NDArray[np.single] = unfolding.weights_for(
-            gen=test.mc.z[:, dimension]
-        )
-        weights[dimension] = test_weights
-        outcomes.append(unfolding.outcome)
-        detector[f"detector_{variable_name}"] = evaluate_dimension(
-            reference=test.data[:, dimension],
-            comparison=test.mc.x[:, dimension],
-            weights=test_weights,
-        )
-        particle[f"particle_{variable_name}"] = evaluate_dimension(
-            reference=test_truth[:, dimension],
-            comparison=test.mc.z[:, dimension],
-            weights=test_weights,
+    # Two loops rather than one, so the unfolding and the scoring are timed
+    # apart, as OmniFold's are.
+    with timing.phase("ibu", detail=f"niter={n_iterations}"):
+        for dimension, variable_name in enumerate(iterable=config.variable_names):
+            unfolding: VariableUnfolding = unfold_variable(
+                variable_name=variable_name,
+                mc_gen=fit.mc.z[:, dimension],
+                mc_sim=fit.mc.x[:, dimension],
+                observed=fit.data[:, dimension],
+                n_iterations=n_iterations,
+                purity_threshold=purity_threshold,
+            )
+            weights[dimension] = unfolding.weights_for(gen=test.mc.z[:, dimension])
+            outcomes.append(unfolding.outcome)
+
+    with timing.phase("evaluate", detail=f"{config.dim} variables"):
+        for dimension, variable_name in enumerate(iterable=config.variable_names):
+            detector[f"detector_{variable_name}"] = evaluate_dimension(
+                reference=test.data[:, dimension],
+                comparison=test.mc.x[:, dimension],
+                weights=weights[dimension],
+            )
+            particle[f"particle_{variable_name}"] = evaluate_dimension(
+                reference=test_truth[:, dimension],
+                comparison=test.mc.z[:, dimension],
+                weights=weights[dimension],
+            )
+        joint: dict[str, JointMetricRecord] = evaluate_joint(
+            test, joint_weights(weights)
         )
 
     # Every detector entry, then every particle entry, matching the key order
@@ -492,7 +507,7 @@ def _run_and_evaluate(
         variable_names=config.variable_names,
         weights=weights,
         outcomes=tuple(outcomes),
-        joint=evaluate_joint(test, joint_weights(weights)),
+        joint=joint,
     )
 
 
@@ -522,8 +537,9 @@ def evaluate_single(
         warn_if_no_joint(run_dir.name, out_path.name, existing)
         return existing
 
-    raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
-    config: RunConfig = parse_run_config(raw_config)
+    with timing.phase("parse_config"):
+        raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
+        config: RunConfig = parse_run_config(raw_config)
     if out_path.exists() and not outcomes_path.exists():
         logger.info(
             "%s: metrics_ibu.json exists but ibu_outcomes.json is missing, "
@@ -573,6 +589,15 @@ def evaluate_single(
         run_dir.name,
         run_dir,
         "IBU",
+    )
+
+    # Its own file, not `timings.json`, for the reason OmniFold's is: this
+    # pass's `data`/`evaluate` phases would overwrite the training pass's rows.
+    timing.report()
+    timing.write(
+        run_dir,
+        pass_name="ibu",  # ruff: ignore[hardcoded-password-func-arg]
+        filename="timings_ibu.json",
     )
     return metrics
 

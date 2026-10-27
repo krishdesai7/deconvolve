@@ -10,6 +10,7 @@ from deconvolve.baselines import ibu
 from deconvolve.coretypes import ZXY, DatasetSplits, Events, Populations, artifacts_dir
 from deconvolve.data import ArrayDataset, DeconvolveDataset
 from deconvolve.evaluation import evaluate
+from deconvolve.instrumentation import timing
 from deconvolve.training.models import build_generator
 
 if TYPE_CHECKING:
@@ -544,6 +545,30 @@ def _run_with_ibu(
     _ = evaluate.evaluate_run(run_dir)
     _ = ibu.evaluate_single(run_dir)
     return run_dir
+
+
+def test_ibu_writes_its_own_timings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`timings_ibu.json`, not `timings.json`: IBU's `data` and `evaluate`
+    phases would replace the training pass's rows of the same names.
+    """
+    timing.enable(True)
+    try:
+        run_dir: Path = _run_with_ibu(tmp_path, ("m", "w"), monkeypatch)
+    finally:
+        timing.enable(False)
+
+    artifacts: Path = run_dir / "artifacts"
+    payload: dict[str, Any] = json.loads((artifacts / "timings_ibu.json").read_text())
+    assert [p["name"] for p in payload["phases"]] == [
+        "parse_config",
+        "data",
+        "ibu",
+        "evaluate",
+    ]
+    assert {p["pass"] for p in payload["phases"]} == {"ibu"}
+    assert not (artifacts / "timings.json").exists()
 
 
 def test_ibu_and_ran_agree_on_metric_key_order(

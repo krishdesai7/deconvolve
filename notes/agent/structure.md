@@ -73,7 +73,7 @@ runs/<timestamp>Z/             One run. Two files at the top, the rest below:
 ├── report.pdf                  `deconvolve report` output; the thing a human reads
 └── artifacts/                  Everything else, flat -- see reporting.md
     ├── generator.keras, discriminator.keras, params.npz, history.npz
-    ├── metrics.json, metrics_ibu.json, ibu_outcomes.json, ibu_weights.npz
+    ├── metrics.json, metrics_ibu.json, ibu_outcomes.json, ibu_weights.npz, timings_ibu.json
     ├── metrics_omnifold.json, omnifold_weights.npz, timings_omnifold.json
     ├── timings.json            Merged across passes (see timing.md)
     ├── detector_level.pdf, particle_level.pdf, losses.pdf, selection.pdf

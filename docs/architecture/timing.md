@@ -43,6 +43,12 @@ Several commands can run over the same directory, for example `train`, then `tra
 
 ---
 
+## The IBU baseline
+
+`deconvolve baseline ibu` writes to its own file, `artifacts/timings_ibu.json`, for the same reasons as OmniFold below. Its phases are `parse_config`, `data`, `ibu` (unfolding every observable) and `evaluate` (scoring the weights on the test split).
+
+---
+
 ## The OmniFold baseline
 
 Timing also covers `deconvolve baseline omnifold`, which writes to a separate file, `artifacts/timings_omnifold.json`. A separate file keeps the baseline's cost distinct from the method's, and prevents its `data` and `evaluate` phases from replacing those of the training run.

@@ -276,6 +276,22 @@ def test_the_omnifold_timings_reach_the_report(reference_run: Path) -> None:
     assert "omnifold & 400" in source
 
 
+def test_the_ibu_timings_reach_the_report(reference_run: Path) -> None:
+    """`timings_ibu.json` is its own file too, and its block sits before OmniFold's."""
+    artifacts: Path = reference_run / "artifacts"
+    _ = (artifacts / "timings_ibu.json").write_text(
+        json.dumps(_pass("ibu", 3.0, "ibu"))
+    )
+    _ = (artifacts / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert "ibu & 3" in source
+    assert source.index(r"\textsc{IBU} baseline") < source.index(
+        r"\textsc{OmniFold} baseline"
+    )
+
+
 def test_level_figures_are_capped_in_height_as_well_as_width() -> None:
     """A one-panel figure is nearly square: width alone overflowed the page."""
     template: str = report.load_template()

@@ -377,8 +377,8 @@ def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -
     a different program over the same directory.
     `deconvolve baseline omnifold` also has phases called `data` and `evaluate`, and
     writing them here would silently destroy the training pass's --- the rows
-    anyone actually wants. So it writes `timings_omnifold.json` instead, and
-    the baseline's cost stays separable from the method's, which is the
+    anyone actually wants. So it writes `timings_omnifold.json` instead (and
+    `deconvolve baseline ibu`, `timings_ibu.json`), and the baseline's cost stays separable from the method's, which is the
     comparison the numbers are for.
     """
     if _recorder is None or not _recorder.records:

@@ -303,10 +303,10 @@ def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> s
 
 # Each command that times itself writes its own file (see `instrumentation.timing`):
 # `timing.write` merges by phase name, so a second pass sharing `timings.json`
-# would overwrite the training pass's `data` and `evaluate` rows. IBU is not
-# timed; it takes seconds.
+# would overwrite the training pass's `data` and `evaluate` rows.
 _TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
     ("timings.json", r"\textsc{Deconvolve}"),
+    ("timings_ibu.json", r"\textsc{IBU} baseline"),
     ("timings_omnifold.json", r"\textsc{OmniFold} baseline"),
 )
 

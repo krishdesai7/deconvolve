@@ -383,7 +383,7 @@ runs/<timestamp>/
 - **`metrics_ibu.json`**/**`ibu_weights.npz`** -- Same metrics and per-event weights from the IBU baseline (if run)
 - **`metrics_omnifold.json`**/**`omnifold_weights.npz`** -- Same, from the OmniFold baseline (if run)
 - **`timings.json`** -- Per-phase wall clock, when the run was made under `DECONVOLVE_TIMING=1`
-- **`timings_omnifold.json`** -- OmniFold's own per-phase wall clock (if run)
+- **`timings_ibu.json`**/**`timings_omnifold.json`** -- Each baseline's own per-phase wall clock (if run)
 - **`report.tex`** -- The LaTeX source `deconvolve report` compiles into the run root's `report.pdf`
 
 ## Training Hyperparameters

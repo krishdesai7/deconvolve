@@ -64,6 +64,13 @@ long run spent its time in. OmniFold exposes no timing of its own, so the
 worker wraps `RunStep1`/`RunStep2`; the wrapping is guarded, and a rename
 inside OmniFold costs the breakdown rather than the baseline.
 
+`deconvolve baseline ibu` does the same with `artifacts/timings_ibu.json`, for
+the same reason: it too has `data` and `evaluate` phases. Its phases are
+`parse_config`, `data`, `ibu` and `evaluate`. `_run_and_evaluate` unfolds every
+variable and then scores them in a second loop rather than interleaving the two,
+so `ibu` and `evaluate` are separable; one loop would have charged the scoring
+to the unfolding.
+
 The iteration rows sit at the same depth as `unfold` rather than under it.
 `_ordered` reconstructs a top-level phase's children by position and does not
 recurse, so a genuine grandchild renders under whichever sibling precedes it
