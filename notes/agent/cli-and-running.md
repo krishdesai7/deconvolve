@@ -118,7 +118,10 @@ directory. It defaults to the full **twelve**-observable jet run at
 `-n 1600000 -l 3 -u 128`, with `DECONVOLVE_TIMING=1` exported so the run reports
 where its wall clock went. Extra flags reach `deconvolve train`; those defaults are
 prepended, and click keeps the last occurrence of a scalar option, so
-anything on the command line still wins.
+anything on the command line still wins. The script reads the dataset off its
+arguments (the last `-D`/`--dataset`, jets if none) and prepends the jet sizes
+and the on-disk clamp only for jets, so a `-Dgaussian --config ...` run keeps
+`train`'s own defaults.
 
 The script does not name the twelve observables as `--var` flags, and instead
 lets `load_jet_dataset`'s own default stand: `--var` is repeatable, so click

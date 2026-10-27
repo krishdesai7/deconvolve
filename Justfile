@@ -81,7 +81,6 @@ doc-serve:
 doc-stop:
     -pkill -f 'zensical serve'
 
-
 # --- Mutable operations (writes) ---
 
 # Apply safe lint fixes, then format.

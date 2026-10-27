@@ -22,12 +22,29 @@ echo "DECONVOLVE_CACHE_DIR = ${DECONVOLVE_CACHE_DIR:-<unset: using ./.cache>}"
 # Report where the wall clock times.
 export DECONVOLVE_TIMING=1
 
-N_REQUESTED=1600000
+# Jets unless the arguments say otherwise. Click keeps the last occurrence of
+# an option, so the last dataset flag here is the one `train` will see.
+DATASET=jets
+for (( i = 1; i <= $#; i++ )); do
+  case "${@[i]}" in
+    -D|--dataset) DATASET="${@[i+1]:-}"; (( ++i )) ;;
+    --dataset=*)  DATASET="${@[i]#--dataset=}" ;;
+    -D*)          DATASET="${@[i]#-D}" ;;
+  esac
+done
+echo "dataset = ${DATASET}"
 
-# The Zenodo release holds ~1.6M jets per generator, and `load_jet_dataset`
-# raises rather than truncating when asked for more than is on disk. Read the real
-# count off the cache and clamp.
-N_SAMPLES="$(uv run python - "${N_REQUESTED}" <<'PY'
+TRAIN_ARGS=("-D${DATASET}")
+
+# The full twelve-observable jet run. A Gaussian run keeps `train`'s own
+# defaults (and whatever its --config and flags set): these are sized for jets.
+if [[ "${DATASET}" == jets ]]; then
+  N_REQUESTED=1600000
+
+  # The Zenodo release holds ~1.6M jets per generator, and `load_jet_dataset`
+  # raises rather than truncating when asked for more than is on disk. Read the real
+  # count off the cache and clamp.
+  N_SAMPLES="$(uv run python - "${N_REQUESTED}" <<'PY'
 import sys
 
 import numpy as np
@@ -54,22 +71,21 @@ with np.load(file=path) as f:
     available = min(len(f["z_true"]), len(f["z_gen"]))
 print(min(requested, available))
 PY
-)"
+  )"
 
-if [[ "${N_SAMPLES}" -lt "${N_REQUESTED}" ]]; then
-  echo "Clamped n_samples ${N_REQUESTED} -> ${N_SAMPLES} (all that is on disk)."
+  if [[ "${N_SAMPLES}" -lt "${N_REQUESTED}" ]]; then
+    echo "Clamped n_samples ${N_REQUESTED} -> ${N_SAMPLES} (all that is on disk)."
+  fi
+  echo "n_samples = ${N_SAMPLES}"
+
+  TRAIN_ARGS+=("-n${N_SAMPLES}" -l3 -u128)
 fi
-echo "n_samples = ${N_SAMPLES}"
-
-TRAIN_ARGS=(-Djets "-n${N_SAMPLES}" -l3 -u128)
 
 mkdir -p runs
 marker="$(mktemp)"
 trap 'rm -f "${marker}"' EXIT
 
-# Before `train`, not just `report`: the figures `train` and `plot` draw are
-# typeset by LaTeX (`text.usetex`), and `plotting` asks `kpsewhich` at import
-# whether `cochineal.sty` exists.
+# the figures `train` and `plot` draw are typeset by LaTeX (`text.usetex`), and `plotting` asks `kpsewhich` at import whether `cochineal.sty` exists.
 if (( ! $+commands[pdflatex] )); then
   source "${PROJECT_DIR}/scripts/_lmod.zsh"
   module load texlive

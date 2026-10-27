@@ -1,13 +1,14 @@
+<!-- markdownlint-disable single-h1 no-duplicate-heading -->
 # Slurm scripts
 
 ## submit.zsh
 
-End-to-end unfolding run: train -> IBU baseline -> replot with the baseline overlaid -> metrics. Defaults to all six jet observables; every stage runs in one sequential job on one GPU.
+End-to-end unfolding run: train -> IBU baseline -> replot with the baseline overlaid -> metrics. Defaults to all twelve jet observables at `-n1600000 -l3 -u128`; those sizes apply only to jet runs, so a Gaussian run keeps `deconvolve train`'s own defaults. Every stage runs in one sequential job on one GPU.
 
 ### Examples
 
 ```shell
-    sbatch scripts/submit.zsh                       # all 6 jet observables
+    sbatch scripts/submit.zsh                       # all 12 jet observables
     sbatch scripts/submit.zsh --seed 7              # extra flags reach `deconvolve train`
     sbatch scripts/submit.zsh --var m --var w       # a subset
     sbatch scripts/submit.zsh --dataset gaussian --config params/2d_correlated.yaml
