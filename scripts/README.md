@@ -3,7 +3,7 @@
 
 ## submit.zsh
 
-End-to-end unfolding run: train -> IBU baseline -> OmniFold baseline -> replot with both baselines overlaid -> metrics -> report. Defaults to all twelve jet observables at `-n1600000 -l3 -u128`; those sizes apply only to jet runs, so a Gaussian run keeps `deconvolve train`'s own defaults. Every stage runs in one sequential job on one GPU.
+End-to-end unfolding run: train -> IBU baseline -> OmniFold baseline -> replot with both baselines overlaid -> metrics -> report. Defaults to all twelve jet observables at `-n1600000 -l3 -u128`; those sizes apply only to jet runs, so a Gaussian run keeps `deconvolve train`'s own defaults. `train` runs with `--no-plots`, since `plot` redraws every figure once both baselines exist. Every stage runs in one sequential job on one GPU.
 
 ### Examples
 
@@ -22,7 +22,7 @@ _`-c32` is mandatory:_ the gpu_shared queue requires exactly 32 logical cores pe
 
 `-Cgpu` sets the device requested to an 40GB A100, of which Perlmutter has ~1200 nodes; `-Cgpu&hbm80g` may be chosen if more memory is needed. This requests the 80GB part but from a pool of ~200, so it will cost queue time.
 
-`-t01:00:00` sets the runtime to an hour. Deconvolve itself takes ~4 minutes end to end, dominated by npz loading and matplotlib rather than the GPU; OmniFold alone measured ~41 minutes on the shipped configuration (1.6M samples, twelve observables, 3 iterations, 50 epochs); the redraw, metrics and report add a few more. That is ~50 minutes, a ~1.2x margin. This assumes the jet cache and the OmniFold worker's environment are both already warm (see `submit_omnifold.zsh` below for the worker). A cold jet cache pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) and may push the job over the limit. Warm it on a login node first with `uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(1000)"`.
+`-t01:15:00` sets the runtime to 75 minutes. Deconvolve itself takes ~4 minutes end to end, dominated by npz loading and matplotlib rather than the GPU; OmniFold alone measured ~41 minutes on the shipped configuration (1.6M samples, twelve observables, 3 iterations, 50 epochs); the redraw, metrics and report add a few more. That is ~50 minutes, a ~1.5x margin. This assumes the jet cache and the OmniFold worker's environment are both already warm (see `submit_omnifold.zsh` below for the worker). A cold jet cache pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) and may push the job over the limit. Warm it on a login node first with `uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(1000)"`.
 
 ### Run script
 

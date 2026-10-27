@@ -90,7 +90,7 @@ did not bind.
 `scripts/submit.zsh` runs OmniFold between IBU and the redraw. OmniFold alone
 measured **~41 minutes** on the shipped configuration — 1.6M samples, twelve
 observables, `niter=3`, 50 epochs — against ~4 for Deconvolve, so that job asks
-for an hour. It runs the baseline with its defaults, because the script's extra
+for 75 minutes. It runs the baseline with its defaults, because the script's extra
 flags go to `deconvolve train`.
 
 `scripts/submit_omnifold.zsh` stays for a run made without OmniFold, or to rerun

@@ -110,7 +110,8 @@ stub worker over the same `.npz` contract and tests the seam instead — see
 
 The full pipeline rather than a bare `deconvolve train`: it loads `texlive`
 first (the figures are typeset with `text.usetex`, so plotting needs LaTeX too, not
-just the report), trains, runs the IBU and then the OmniFold baseline on the same
+just the report), trains with `--no-plots` (the redraw below would replace
+them), runs the IBU and then the OmniFold baseline on the same
 run directory (the latter under `cudatoolkit/12.9`, unloaded straight after), reloads
 once so the figures come back out with both baselines overlaid
 (`_load_baseline_weights` picks up whichever `*_weights.npz` exist when the plots
@@ -145,7 +146,7 @@ At the shipped 1.6M samples and 100 epochs that is ~21.8k generator and ~109k
 discriminator updates (the train split is 70% of `n_samples`, batched at 1024
 and grouped by `-k`).
 
-The job asks for **`--qos=shared --time=01:00:00`** on a quarter node
+The job asks for **`--qos=shared --time=01:15:00`** on a quarter node
 (`--gpus=1 --cpus-per-task=32`, and deliberately no `--mem`): nothing shards
 across devices, so three of a node's four A100s would sit idle, and `shared`
 charges for the quarter actually used while backfilling into gaps a
@@ -166,7 +167,7 @@ is ~15s at the parameters above and the rest is minutes, dominated by npz loadin
 and matplotlib. **Warm the jet cache and the OmniFold worker's environment on a
 login node first** (the worker's command is in omnifold.md) — a cold jet cache
 pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) inside the job and can
-push it past the hour:
+push it past the limit:
 
 ```bash
 uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(n_samples=1000)"

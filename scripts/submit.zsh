@@ -9,8 +9,8 @@
 # Deconvolve's own run is ~4 minutes; OmniFold alone measured ~41 for the
 # shipped configuration (1.6M samples, 12 jet observables, 3 iterations, 50
 # epochs); the redraw, metrics and report on top are a few more. ~50 in all, so
-# an hour is ~1.2x margin.
-#SBATCH -t01:00:00
+# 75 is ~1.5x margin, matching `submit_omnifold.zsh`.
+#SBATCH -t01:15:00
 
 #SBATCH -Jdeconvolve_e2e
 #SBATCH -oslurm-%j.log
@@ -46,7 +46,10 @@ for (( i = 1; i <= $#; i++ )); do
 done
 echo "dataset = ${DATASET}"
 
-TRAIN_ARGS=("-D${DATASET}")
+# `--no-plots`: `plot` redraws every figure once both baselines exist, so a
+# draw at the end of `train` would be thrown away. `--plots` on the command line
+# still wins.
+TRAIN_ARGS=("-D${DATASET}" --no-plots)
 
 # The full twelve-observable jet run. A Gaussian run keeps `train`'s own
 # defaults (and whatever its --config and flags set): these are sized for jets.
