@@ -1,0 +1,74 @@
+[
+  {
+    "variable_name": "m",
+    "status": "completed",
+    "n_bins": 2,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "M",
+    "status": "completed",
+    "n_bins": 3,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "w",
+    "status": "completed",
+    "n_bins": 6,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "tau21",
+    "status": "completed",
+    "n_bins": 2,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "zg",
+    "status": "skipped",
+    "n_bins": 1,
+    "skip_reason": "fewer than two purity bins"
+  },
+  {
+    "variable_name": "sdm",
+    "status": "completed",
+    "n_bins": 3,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "q",
+    "status": "completed",
+    "n_bins": 5,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "f_ch",
+    "status": "completed",
+    "n_bins": 5,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "lha",
+    "status": "completed",
+    "n_bins": 6,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "ang2",
+    "status": "completed",
+    "n_bins": 5,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "ptd",
+    "status": "completed",
+    "n_bins": 4,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "n_ch",
+    "status": "completed",
+    "n_bins": 3,
+    "skip_reason": null
+  }
+]
