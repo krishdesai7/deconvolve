@@ -1,14 +1,38 @@
 {
-  "total_seconds": 4.548986908048391e-06,
+  "total_seconds": 66.43282575698686,
   "compile_cache_warm": true,
   "phases": [
     {
-      "name": "plots",
-      "seconds": 4.548986908048391e-06,
+      "name": "parse_config",
+      "seconds": 0.001973478007130325,
       "depth": 0,
       "detail": null,
       "failed": false,
-      "pass": "train"
+      "pass": "plot"
+    },
+    {
+      "name": "data",
+      "seconds": 1.6005878029973246,
+      "depth": 0,
+      "detail": "cache hit",
+      "failed": false,
+      "pass": "plot"
+    },
+    {
+      "name": "load",
+      "seconds": 1.2767945379891898,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "plot"
+    },
+    {
+      "name": "plots",
+      "seconds": 63.55346993799321,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "plot"
     }
   ]
 }
