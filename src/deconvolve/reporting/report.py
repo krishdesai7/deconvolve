@@ -264,6 +264,11 @@ def config_rows(config: Mapping[str, Any], timings: Mapping[str, Any] | None, /)
     if timings is not None and "compile_cache_warm" in timings:
         entries["compile_cache_warm"] = timings["compile_cache_warm"]
 
+    # `best_epoch` is stored 0-indexed (it indexes the history arrays), but the
+    # training log and the selection plot both count epochs from 1.
+    if isinstance(entries.get("best_epoch"), int) and entries["best_epoch"] >= 0:
+        entries["best_epoch"] += 1
+
     scalars: list[tuple[str, Any]] = [
         (k, v) for k, v in entries.items() if k not in _WIDE_KEYS
     ]

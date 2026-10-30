@@ -918,13 +918,12 @@ def _ess_panel(ax: Axes, history: dict[str, list[float]]) -> None:
 
     _ = ax.plot(epochs, ess_pct, color=COLOR_MC, lw=1.5)
     _ = ax.set_xlabel(xlabel="Epoch")
-    # Rotated 90 deg, a two-line label's rendered height is set by its
-    # *longest line's width*, not by the font size alone -- at the module's
-    # default 18pt, "Effective sample size" alone is taller than this short
-    # (height-ratio 3) panel, and spills into the x-tick labels below it.
-    # Shrinking just this label keeps the panel proportions the brief calls
-    # for instead of stealing height from it.
-    _ = ax.set_ylabel(ylabel="Effective sample size\n(% of epoch 0)", fontsize=10)
+    # Rotated 90 deg, a label's rendered height is set by its *longest line's
+    # width*, not by the font size alone. This panel is short (height-ratio 3),
+    # so a second label line, "(% of epoch 0)", is
+    # clipped. The first line alone at 10pt fits without stealing height from
+    # the panel.
+    _ = ax.set_ylabel(ylabel="Effective sample size", fontsize=10)
     low: float = min(ess_pct.min(), 100.0)
     high: float = max(ess_pct.max(), 100.0)
     pad: float = 0.05 * (high - low if high > low else 1.0)
