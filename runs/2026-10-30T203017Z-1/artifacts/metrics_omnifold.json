@@ -1,0 +1,102 @@
+{
+  "detector_dim_0": {
+    "wasserstein_before": 0.23165498673915863,
+    "wasserstein_after": 0.016757283359766006,
+    "wasserstein_improvement_pct": 92.76627557401362,
+    "jensenshannon_before": 0.013832487821295345,
+    "jensenshannon_after": 0.0003932916188154954,
+    "jensenshannon_improvement_pct": 97.15675427373219,
+    "triangular_before": 0.052598847140438575,
+    "triangular_after": 0.001537644826341788,
+    "triangular_improvement_pct": 97.07665679014545
+  },
+  "particle_dim_0": {
+    "wasserstein_before": 0.2401694655418396,
+    "wasserstein_after": 0.017416400834918022,
+    "wasserstein_improvement_pct": 92.74828680006205,
+    "jensenshannon_before": 0.018411332574598708,
+    "jensenshannon_after": 0.00033688684135880343,
+    "jensenshannon_improvement_pct": 98.17022021630531,
+    "triangular_before": 0.06952644496309503,
+    "triangular_after": 0.0013220538329073172,
+    "triangular_improvement_pct": 98.0984878004203
+  },
+  "detector_dim_1": {
+    "wasserstein_before": 0.1076260507106781,
+    "wasserstein_after": 0.022983890026807785,
+    "wasserstein_improvement_pct": 78.64467768254973,
+    "jensenshannon_before": 0.00455238366679471,
+    "jensenshannon_after": 0.0005221245173939546,
+    "jensenshannon_improvement_pct": 88.5307444273128,
+    "triangular_before": 0.017799239452356765,
+    "triangular_after": 0.0020543378373627835,
+    "triangular_improvement_pct": 88.45828304708394
+  },
+  "particle_dim_1": {
+    "wasserstein_before": 0.11777649819850922,
+    "wasserstein_after": 0.029677614569664,
+    "wasserstein_improvement_pct": 74.8017516027322,
+    "jensenshannon_before": 0.009435560333829526,
+    "jensenshannon_after": 0.0010594057609652693,
+    "jensenshannon_improvement_pct": 88.77220087113471,
+    "triangular_before": 0.036248759819705476,
+    "triangular_after": 0.0041537211177337845,
+    "triangular_improvement_pct": 88.54106695403205
+  },
+  "detector_dim_2": {
+    "wasserstein_before": 0.11624644696712494,
+    "wasserstein_after": 0.06534822285175323,
+    "wasserstein_improvement_pct": 43.78475681907592,
+    "jensenshannon_before": 0.002293179685185552,
+    "jensenshannon_after": 0.0008504614733774605,
+    "jensenshannon_improvement_pct": 62.91343941028129,
+    "triangular_before": 0.0090233631539586,
+    "triangular_after": 0.003347293019603118,
+    "triangular_improvement_pct": 62.90415267023093
+  },
+  "particle_dim_2": {
+    "wasserstein_before": 0.12097909301519394,
+    "wasserstein_after": 0.06397752463817596,
+    "wasserstein_improvement_pct": 47.11687528510324,
+    "jensenshannon_before": 0.0035915534677669948,
+    "jensenshannon_after": 0.001144986190599262,
+    "jensenshannon_improvement_pct": 68.12002937238344,
+    "triangular_before": 0.01407087647629484,
+    "triangular_after": 0.004506158217535389,
+    "triangular_improvement_pct": 67.97528409032019
+  },
+  "detector_dim_3": {
+    "wasserstein_before": 0.21873325109481812,
+    "wasserstein_after": 0.02387223020195961,
+    "wasserstein_improvement_pct": 89.08614484424625,
+    "jensenshannon_before": 0.020874208847459698,
+    "jensenshannon_after": 0.0003887870982731335,
+    "jensenshannon_improvement_pct": 98.13747624585807,
+    "triangular_before": 0.07835782647283458,
+    "triangular_after": 0.0015363677964343933,
+    "triangular_improvement_pct": 98.03929247965164
+  },
+  "particle_dim_3": {
+    "wasserstein_before": 0.22648105025291443,
+    "wasserstein_after": 0.0197393000125885,
+    "wasserstein_improvement_pct": 91.28434807656298,
+    "jensenshannon_before": 0.027104467662256645,
+    "jensenshannon_after": 0.00031685362381609055,
+    "jensenshannon_improvement_pct": 98.8309911570139,
+    "triangular_before": 0.10061070751348965,
+    "triangular_after": 0.0012466737771700672,
+    "triangular_improvement_pct": 98.76089353908687
+  },
+  "joint": {
+    "detector": {
+      "sliced_wasserstein_before": 0.2274505194509402,
+      "sliced_wasserstein_after": 0.03321493509429274,
+      "sliced_wasserstein_improvement_pct": 85.39685239036923
+    },
+    "particle": {
+      "sliced_wasserstein_before": 0.2725570308684837,
+      "sliced_wasserstein_after": 0.03847948465954687,
+      "sliced_wasserstein_improvement_pct": 85.882042911557
+    }
+  }
+}
