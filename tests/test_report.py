@@ -303,9 +303,7 @@ def test_the_shared_timings_close_the_table(reference_run: Path) -> None:
     )
     source: str = report.render(reference_run)
     assert "plots & 7" in source
-    assert source.index(r"\textsc{OmniFold} baseline") < source.index(
-        "Shared by all methods"
-    )
+    assert source.index(r"\textsc{OmniFold} baseline") < source.index("Common")
 
 
 def test_level_figures_are_capped_in_height_as_well_as_width() -> None:

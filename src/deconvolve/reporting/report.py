@@ -310,7 +310,7 @@ _TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
     ("timings_ibu.json", r"\textsc{IBU} baseline"),
     ("timings_omnifold.json", r"\textsc{OmniFold} baseline"),
     # Last: drawing the figures is done once for all three methods together.
-    (SHARED_TIMINGS_FILE, "Shared by all methods"),
+    (SHARED_TIMINGS_FILE, "Common"),
 )
 
 
