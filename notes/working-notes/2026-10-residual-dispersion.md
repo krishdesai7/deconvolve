@@ -3,7 +3,7 @@
 Plan: `notes/superpowers/plans/2026-10-30-residual-dispersion-penalty.md`.
 Split script: `benchmarks/dispersion_split.py`.
 
-**Status: Gaussian and jets (one seed) done. Seed check pending (HPC).**
+**Status: done. Verdict: don't ship residual mode (see the end).**
 
 ## 1D Gaussian (`params/1d_default.yaml`, seed 446727034)
 
@@ -46,9 +46,18 @@ It still unfolds better at particle level. So on jets, λ works as ordinary shri
 - Each arm is one seed.
 - The split references are classifier estimates and move between runs: the oracle residual was 0.166 in `jets_split.json` and 0.114 here. Compare the variance columns only within a single file.
 
-## Seed check (pending, HPC)
+## Seed check (jets, three seeds per arm)
 
-Two more seeds each for total λ=0.015 and residual λ=0.05. With the seed-337443673 runs above, that makes three per arm:
+Joint particle-level sliced-Wasserstein improvement:
+
+| arm | 337443673 | 20261031 | 20261101 | mean ± sd |
+| --- | ---: | ---: | ---: | ---: |
+| total, λ=0.015 | 87.80% | 87.89% | 86.07% | **87.25 ± 1.03** |
+| residual, λ=0.05 | 83.96% | 83.68% | 83.70% | 83.78 ± 0.16 |
+
+The seed-337443673 runs are 2026-10-30T203443Z and 2026-10-31T175423Z. The others are 2026-10-31T185607Z and 2026-10-31T185832Z (total), and 2026-10-31T185737Z and 2026-10-31T185936Z (residual). Total mode wins by 3.5 points, more than three times the larger seed spread. Its worst seed beats residual's best by 2.1 points. Residual mode is also much less seed-sensitive (sd 0.16 against 1.03). That fits it being the more constrained arm, but nothing here tests that.
+
+The runs were generated with:
 
 ```sh
 for seed in 20261031 20261101; do
@@ -59,9 +68,13 @@ for seed in 20261031 20261101; do
 done
 ```
 
-## Verdict (provisional)
+## Verdict
 
-Residual mode wins neither benchmark: λ=0 wins the Gaussian and total λ=0.015 wins jets.
+**Don't ship residual mode.** It wins neither benchmark: λ=0 wins the Gaussian, and total λ=0.015 wins jets beyond seed noise. The code stays on `feat/residual-dispersion`, unmerged, as the record. Only this note lands.
 
-- **If the seed check finds no residual-mode advantage beyond the seed spread:** leave `feat/residual-dispersion` unmerged as the record, and land only this note.
-- **Next open question either way:** choosing λ without truth. If λ is a bias–variance knob, held-out reco-level MMD (already computed for checkpoint selection) is the natural criterion to test.
+What we learned:
+- On jets, the dispersion penalty works as shrinkage against generator estimation noise.
+- Shrinking the visible part of Var(w) helps there. Preserving it, which is what residual mode does, costs about 3.5 points.
+- So "λ should track response non-universality" is not what sets the best λ here.
+
+**Next open question:** choosing λ without truth. If λ is a bias–variance knob, the natural criterion to test is held-out reco-level MMD, already computed for checkpoint selection. One caveat: total λ=0.015 raised the reco-level SW slightly over λ=0 (91.3% vs 93.2% improvement) while improving particle level. So the criterion may not be monotone in the right direction, and that's the first thing to check.
