@@ -5,6 +5,7 @@ The `deconvolve` CLI is a single Typer command tree with the following subcomman
 
 - `train`
 - `evaluate`
+- `plot`
 - `report`
 - `leakage-check`
 - `baseline`
@@ -24,7 +25,7 @@ Most options can also be set in a `deconvolve.toml`, a `[tool.deconvolve]` table
 
 | Long option | Short option | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `--log-level` | `-L` | `LogLevel` | `info` | Application log level. Options: `debug`, `info`, `warning`, `error`, `critical`. |
+| `--log-level` | `-L` | `LogLevel` | `info` | Application log level. Options: `debug`, `info`, `warning`, `error`, `critical`. Libraries (JAX, matplotlib, fontTools, ...) only log warnings and above, except at `debug`, which shows everything. |
 | `--install-completion` | | `bool` | | Install shell autocompletion. |
 | `--show-completion` | | `bool` | | Print the completion script. |
 | `--help` | | `bool` | | |
@@ -92,7 +93,7 @@ deconvolve train [-D{gaussian|jets}]
 | Long option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--run-dir` | `Path` | `None` | Where to save this run. Defaults to UTC timestamp under `runs/` |
-| `--plots` / `--no-plots` | `bool` | `True` | Draw diagnostic figures. Metrics are computed either way. |
+| `--plots` / `--no-plots` | `bool` | `True` | Draw diagnostic figures. Metrics are computed either way; `deconvolve plot` draws them later. |
 | `--log-every` | `int` | `1` | Log every N epochs. |
 
 ---
@@ -114,6 +115,22 @@ deconvolve evaluate RUN_DIR [--force]
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--force` | `bool` | `False` | Recompute even if `metrics.json` already exists. |
+
+---
+
+## `deconvolve plot`
+
+Redraw a run's figures, or those of every run under a parent directory, overlaying whichever baselines have been run (see [Reporting & Artifacts](reporting.md)). Nothing is retrained or rescored. Run it after `deconvolve baseline ibu` or `omnifold`, then rebuild the report with [`deconvolve report`](#deconvolve-report) to carry the new figures into the PDF.
+
+Usage:
+
+```shell
+deconvolve plot RUN_DIR
+```
+
+| Argument | Type | Description |
+| :--- | :--- | :--- |
+| `RUN_DIR` | `Path` | Run, or directory of runs, to redraw the figures of. |
 
 ---
 

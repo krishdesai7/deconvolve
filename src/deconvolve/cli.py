@@ -26,7 +26,7 @@ from .evaluation import evaluate_runs
 from .instrumentation import configure_logging
 from .reporting import build_report
 from .uncertainty import DesignSpec, collect, freeze_design, load_frozen, run_cell
-from .workflows import run, run_leakage_check
+from .workflows import plot_runs, run, run_leakage_check
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -273,6 +273,22 @@ def evaluate_command(
     force: bool = False,
 ) -> None:
     evaluate_runs(run_dir, force)
+
+
+@app.command(name="plot")
+def plot_command(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(help="Run, or directory of runs, to redraw the figures of."),
+    ],
+) -> None:
+    """Redraw a run's figures, overlaying whichever baselines have run.
+
+    Run it after `deconvolve baseline ibu` / `omnifold` to add their curves,
+    then `deconvolve report RUN_DIR --force` to carry them into the PDF.
+    Nothing is retrained or rescored.
+    """
+    plot_runs(run_dir)
 
 
 @app.command(name="report")

@@ -1,4 +1,4 @@
-"""The variance budget for a RAN measurement, and its bin-to-bin covariance.
+"""The variance budget for a Deconvolve measurement, and its bin-to-bin covariance.
 
 A `B x S` grid of bootstrap replicates crossed with initialization seeds,
 trained one cell per invocation (`design`), decomposed into its data,

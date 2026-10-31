@@ -67,7 +67,7 @@ class StatelessOptimizer(Protocol):
     @property
     def variables(self) -> list[KerasVariable]: ...
 
-    def build(self, variables: list[KerasVariable]) -> None: ...
+    def build(self, variables: list[KerasVariable], /) -> None: ...
 
     def stateless_apply(
         self,
@@ -165,6 +165,14 @@ class MetricRecord(TypedDict):
     triangular_before: float
     triangular_after: float
     triangular_improvement_pct: float
+
+
+class JointMetricRecord(TypedDict):
+    """Before/after sliced Wasserstein distance over every variable at one level."""
+
+    sliced_wasserstein_before: float
+    sliced_wasserstein_after: float
+    sliced_wasserstein_improvement_pct: float
 
 
 # ---------------------------------

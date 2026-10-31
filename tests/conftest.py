@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
 import deconvolve  # ruff: ignore[unused-import]  -- imported for its backend bootstrap
+import matplotlib as mpl
 import pytest
 from deconvolve.coretypes import constants
 
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def _default_cache_is_writable() -> bool:
-    """Whether the process can write RAN's default (non-`tmp_path`) cache dir.
+    """Whether the process can write Deconvolve's default (non-`tmp_path`) cache dir.
 
     A few dataset/workflow tests build a `DeconvolveDataset` without an explicit
     `cache_dir`, so they generate into `constants.CACHE_DIR`. On a locked-down
@@ -91,6 +93,20 @@ def _no_global_config_layer(
     )
 
 
+@pytest.fixture(autouse=True)
+def _mathtext_without_tex(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fall back to mathtext where there is no `latex` binary to shell out to.
+
+    `deconvolve.evaluation.plotting` sets `text.usetex` at import, so every
+    figure draw needs TeX -- which CI deliberately does not install (see the
+    comment above `_NO_TEX` in `tests/test_report.py`). Almost none of these
+    tests are about glyph rendering, so mathtext is a faithful stand-in for
+    them; the ones that do need real TeX are skipped on `_NO_TEX`.
+    """
+    if shutil.which("latex") is None:
+        monkeypatch.setitem(mpl.rcParams, "text.usetex", False)
+
+
 _METRIC_NAMES = ("wasserstein", "jensenshannon", "triangular")
 _REFERENCE_VARIABLES = ("m", "M")
 _FIGURES = ("detector_level", "particle_level", "losses", "selection")
@@ -109,11 +125,20 @@ def _metric_entry(before: float, after: float) -> dict[str, float]:
 
 
 def _metrics(variables: Sequence[str], before: float, after: float) -> dict[str, Any]:
-    return {
+    per_variable: dict[str, Any] = {
         f"{level}_{variable}": _metric_entry(before, after)
         for level in ("detector", "particle")
         for variable in variables
     }
+    joint: dict[str, dict[str, float]] = {
+        level: {
+            "sliced_wasserstein_before": before,
+            "sliced_wasserstein_after": after,
+            "sliced_wasserstein_improvement_pct": (1.0 - after / before) * 100.0,
+        }
+        for level in ("detector", "particle")
+    }
+    return per_variable | {"joint": joint}
 
 
 def _write_figures(artifacts: Path) -> None:

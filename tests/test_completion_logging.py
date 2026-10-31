@@ -158,6 +158,7 @@ def test_ibu_records_metric_and_weight_artifact_completion(
                     n_bins=2,
                 ),
             ),
+            joint={},
         )
 
     monkeypatch.setattr(
@@ -178,7 +179,10 @@ def test_ibu_records_metric_and_weight_artifact_completion(
     ]
     assert metrics_path.exists()
     assert weights_path.exists()
-    assert json.loads(metrics_path.read_text()) == {"detector_mass": metric_record}
+    assert json.loads(metrics_path.read_text()) == {
+        "detector_mass": metric_record,
+        "joint": {},
+    }
     with np.load(weights_path) as weights:
         stored: dict[str, object] = {k: weights[k] for k in weights.files}
     assert set(stored) == {"weights_0", "weights_1"}

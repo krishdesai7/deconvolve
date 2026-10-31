@@ -1,6 +1,7 @@
 """Optional wall-clock instrumentation for a run's phases.
 
-Off unless `DECONVOLVE_TIMING` is set, and *off* means a shared no-op context manager:
+On unless `DECONVOLVE_TIMING` is explicitly set to a falsey value (`0`, `false`, ...),
+and *off* means a shared no-op context manager:
 no `perf_counter`, no allocation, nothing appended. That matters because the
 timers sit at phase boundaries inside `workflows.train.run` and `engine.train`, which a
 sweep crosses a few hundred times.
@@ -33,7 +34,7 @@ from rich.table import Table
 from ..coretypes import COMPILE_CACHE_DIR, artifacts_dir
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Mapping
     from logging import Logger
     from pathlib import Path
     from typing import Any, LiteralString
@@ -42,13 +43,25 @@ logger: Logger = logging.getLogger(name=__name__)
 
 TIMING_ENV_VAR: Final[LiteralString] = "DECONVOLVE_TIMING"
 
+SHARED_TIMINGS_FILE: Final[LiteralString] = "timings_shared.json"
+"""Where work done for every method at once is recorded, not one method's file.
+
+Drawing the figures overlays all three methods, so its cost is no more
+Deconvolve's than IBU's or OmniFold's. `train`'s `plots` phase lands here
+rather than in `timings.json`, beside `deconvolve plot`'s redraw.
+"""
+
+SHARED_PHASES: Final[frozenset[str]] = frozenset({"plots"})
+"""Top-level phases `train` records that belong in `SHARED_TIMINGS_FILE`."""
+
 # Spelled out rather than `bool(value)`, because the string "0" is truthy and a
 # SLURM `--export` that forwards an unset variable delivers "" rather than absence.
+# Only a *present* variable can turn timing off; absence means on.
 _FALSEY: Final[frozenset[str]] = frozenset({"", "0", "false", "no", "off"})
 
 
 def _enabled_from_env(environ: Mapping[str, str], /) -> bool:
-    return environ.get(TIMING_ENV_VAR, "").strip().lower() not in _FALSEY
+    return environ.get(TIMING_ENV_VAR, "1").strip().lower() not in _FALSEY
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,8 +195,18 @@ def note(detail: str, /, *, to: str | None = None) -> None:
 
 
 @contextmanager
-def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
-    """Time the block, unless timing is off -- in which case do nothing at all."""
+def phase(
+    name: str,
+    /,
+    *,
+    detail: str | None = None,
+    clock: Callable[[], float] = time.perf_counter,
+) -> Generator[_Open]:
+    """Time the block, unless timing is off -- in which case do nothing at all.
+
+    `clock` returns seconds and is called once on entry and once on exit; it is a
+    parameter so a test can pin the durations instead of racing a real clock.
+    """
     recorder: _Recorder | None = _recorder
     if recorder is None:
         yield _NOOP
@@ -195,7 +218,7 @@ def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
     recorder.open.append(handle)
     recorder.names.append(name)
     recorder.depth = depth + 1
-    start: float = time.perf_counter()
+    start: float = clock()
     failed = False
     try:
         yield handle
@@ -205,7 +228,7 @@ def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
         failed = True
         raise
     finally:
-        elapsed: float = time.perf_counter() - start
+        elapsed: float = clock() - start
         recorder.depth = depth
         _ = recorder.open.pop()
         _ = recorder.names.pop()
@@ -326,6 +349,24 @@ def _is_valid_payload(payload: object, /) -> bool:
     return all(_is_valid_phase(p) for p in cast(typ="list[object]", val=phases))
 
 
+def _kept(ordered: list[Phase], keep: Callable[[str], bool] | None, /) -> list[Phase]:
+    """`ordered` (parents first) cut down to the top-level phases `keep` accepts.
+
+    A child goes wherever its parent does: it is decided by the nearest
+    top-level phase before it.
+    """
+    if keep is None:
+        return ordered
+    kept: list[Phase] = []
+    keeping: bool = False
+    for record in ordered:
+        if record.depth == 0:
+            keeping = keep(record.name)
+        if keeping:
+            kept.append(record)
+    return kept
+
+
 def _existing(path: Path, /) -> dict[str, Any]:
     """What is already on disk, or an empty payload.
 
@@ -353,7 +394,30 @@ def _merged_phases(
     return kept + fresh
 
 
-def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -> None:
+def _compile_cache_warm(recorder: _Recorder, previous: dict[str, Any], /) -> bool:
+    """This pass's `compile_cache_warm` reading, or the earlier pass's if it is moot.
+
+    The flag is only meaningful for a pass that actually compiled something --
+    a reload pass samples it anyway (every `_Recorder` does, unconditionally),
+    but that reading says nothing about whether *this* pass's compile was warm
+    or cold, because it never had a `compile` phase to begin with. Keep the
+    training pass's reading in that case rather than overwrite it with an
+    irrelevant one.
+    """
+    compiled_this_pass: bool = any(p.name == "compile" for p in recorder.records)
+    if compiled_this_pass or "compile_cache_warm" not in previous:
+        return recorder.compile_cache_warm
+    return cast(typ="bool", val=previous["compile_cache_warm"])
+
+
+def write(
+    run_dir: Path,
+    /,
+    *,
+    pass_name: str,
+    filename: str = "timings.json",
+    keep: Callable[[str], bool] | None = None,
+) -> None:
     """Merge this pass's phases into `filename`. A no-op when timing is off
     or nothing was timed.
 
@@ -375,11 +439,20 @@ def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -
     a different program over the same directory.
     `deconvolve baseline omnifold` also has phases called `data` and `evaluate`, and
     writing them here would silently destroy the training pass's --- the rows
-    anyone actually wants. So it writes `timings_omnifold.json` instead, and
-    the baseline's cost stays separable from the method's, which is the
-    comparison the numbers are for.
+    anyone actually wants. So it writes `timings_omnifold.json` instead (and
+    `deconvolve baseline ibu`, `timings_ibu.json`), and the baseline's cost
+    stays separable from the method's, which is the comparison the numbers
+    are for.
+
+    `keep`, given a top-level phase's name, says whether that phase (with its
+    children) goes in this file, so one pass can split its phases across two:
+    `train` sends `SHARED_PHASES` to `SHARED_TIMINGS_FILE` and the rest here.
+    A pass with nothing kept writes nothing.
     """
     if _recorder is None or not _recorder.records:
+        return
+    kept: list[Phase] = _kept(_ordered(_recorder.records), keep)
+    if not kept:
         return
     try:
         path: Path = artifacts_dir(run_dir) / filename
@@ -398,21 +471,10 @@ def write(run_dir: Path, /, *, pass_name: str, filename: str = "timings.json") -
             "failed": p.failed,
             "pass": pass_name,
         }
-        for p in _ordered(_recorder.records)
+        for p in kept
     ]
     phases: list[dict[str, Any]] = _merged_phases(previous, fresh)
-    # `compile_cache_warm` is only meaningful for a pass that actually
-    # compiled something -- a reload pass samples it anyway (every
-    # `_Recorder` does, unconditionally), but that reading says nothing
-    # about whether *this* pass's compile deconvolve warm or cold, because it never
-    # had a `compile` phase to begin with. Keep the training pass's reading
-    # in that case rather than overwrite it with an irrelevant one.
-    compiled_this_pass: bool = any(p.name == "compile" for p in _recorder.records)
-    warm: bool = (
-        _recorder.compile_cache_warm
-        if compiled_this_pass or "compile_cache_warm" not in previous
-        else previous["compile_cache_warm"]
-    )
+    warm: bool = _compile_cache_warm(_recorder, previous)
     payload: dict[str, Any] = {
         "total_seconds": sum(p["seconds"] for p in phases if p["depth"] == 0),
         "compile_cache_warm": warm,

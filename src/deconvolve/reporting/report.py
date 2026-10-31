@@ -25,11 +25,13 @@ from ..coretypes import (
     ARTIFACTS_DIR,
     JET_OBS,
     JET_VARIABLE_GROUPS,
+    JOINT_METRICS_KEY,
     METRIC_DISPLAY_SCALE,
     artifacts_dir,
     display_order,
     figure_pages,
 )
+from ..instrumentation import SHARED_TIMINGS_FILE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -254,10 +256,18 @@ def config_rows(config: Mapping[str, Any], timings: Mapping[str, Any] | None, /)
 
     `compile_cache_warm` lives at the top level of `timings.json`, not in `config.json`.
     It is folded in as a config row because it makes the `compile` timing interpretable.
+
+    Keys starting with `_` are bookkeeping for tools, not settings -- `_origin`
+    records which config layer supplied each option -- and are left out.
     """
-    entries: dict[str, Any] = dict(config)
+    entries: dict[str, Any] = {k: v for k, v in config.items() if not k.startswith("_")}
     if timings is not None and "compile_cache_warm" in timings:
         entries["compile_cache_warm"] = timings["compile_cache_warm"]
+
+    # `best_epoch` is stored 0-indexed (it indexes the history arrays), but the
+    # training log and the selection plot both count epochs from 1.
+    if isinstance(entries.get("best_epoch"), int) and entries["best_epoch"] >= 0:
+        entries["best_epoch"] += 1
 
     scalars: list[tuple[str, Any]] = [
         (k, v) for k, v in entries.items() if k not in _WIDE_KEYS
@@ -282,12 +292,45 @@ def _phase_line(phase: Mapping[str, Any], total: float, /) -> str:
     return f"{name} & {decimal(seconds)} & {share} & {detail} \\\\"
 
 
-def timing_rows(timings: Mapping[str, Any], /) -> str:
-    """`<<TIMINGS_ROWS>>`: one row per phase, a rule, then the bold total."""
+def timing_rows(timings: Mapping[str, Any], /, *, label: str | None = None) -> str:
+    r"""One pass's rows: an optional label row, one row per phase, a rule, the total.
+
+    Shares are of this pass's own total, so each block reads on its own.
+    `label` is LaTeX markup (it carries `\textsc`), so it goes in unescaped.
+    """
     total: float = float(timings["total_seconds"])
-    lines: list[str] = [_phase_line(phase, total) for phase in timings["phases"]]
+    lines: list[str] = []
+    if label is not None:
+        lines.append(rf"\multicolumn{{4}}{{@{{}}l}}{{\itshape {label}}} \\")
+    lines.extend(_phase_line(phase, total) for phase in timings["phases"])
     lines.extend((r"\midrule", rf"\textbf{{total}} & {decimal(total)} & 100 & \\"))
     return "\n".join(lines)
+
+
+# Each command that times itself writes its own file (see `instrumentation.timing`):
+# `timing.write` merges by phase name, so a second pass sharing `timings.json`
+# would overwrite the training pass's `data` and `evaluate` rows.
+_TIMING_FILES: Final[tuple[tuple[str, str], ...]] = (
+    ("timings.json", r"\textsc{Deconvolve}"),
+    ("timings_ibu.json", r"\textsc{IBU} baseline"),
+    ("timings_omnifold.json", r"\textsc{OmniFold} baseline"),
+    # Last: drawing the figures is done once for all three methods together.
+    (SHARED_TIMINGS_FILE, "Common"),
+)
+
+
+def timings_body(passes: Sequence[tuple[str, Mapping[str, Any]]], /) -> str:
+    """`<<TIMINGS_ROWS>>`: every timed pass, one block each.
+
+    A run with only its training timed renders exactly as it always has, with
+    no label; a label row heads each block only when there is more than one
+    to tell apart.
+    """
+    if len(passes) == 1:
+        return timing_rows(passes[0][1])
+    return "\n\\midrule\n".join(
+        timing_rows(timings, label=label) for label, timings in passes
+    )
 
 
 # Column groups, in the order the report presents them.
@@ -297,18 +340,31 @@ _METRICS: Final[tuple[tuple[str, str], ...]] = (
     ("VLC", "triangular"),
 )
 
-# Observable, Sim, then a (value, improvement) pair for each of IBU, OmniFold and RAN.
-# Three separate `\multicolumn` spans and the template's column spec have to agree.
+# Observable, Sim, then a (value, improvement) pair for each of IBU, OmniFold and
+# Deconvolve. Three separate `\multicolumn` spans and the template's column spec
+# have to agree.
 _TABLE_COLUMNS: Final[int] = 8
 
 
-def _metric_value(
-    source: Mapping[str, Any] | None, key: str, metric_key: str, /
-) -> float | None:
-    """Extract a finite metric value from a source mapping, or `None`."""
+def _entry(
+    source: Mapping[str, Any] | None, level: str, variable: str | None, /
+) -> Mapping[str, Any] | None:
+    """One method's record for a variable at a level, or `None` where it has none.
+
+    `variable=None` is the level's joint record, which lives one level down
+    under `JOINT_METRICS_KEY` rather than at `<level>_<variable>`. A metrics
+    file written before the joint metrics existed simply has none.
+    """
     if source is None:
         return None
-    entry: Mapping[str, Any] | None = source.get(key)
+    if variable is None:
+        joint: Mapping[str, Any] = source.get(JOINT_METRICS_KEY) or {}
+        return joint.get(level)
+    return source.get(f"{level}_{variable}")
+
+
+def _metric_value(entry: Mapping[str, Any] | None, metric_key: str, /) -> float | None:
+    """Extract a finite metric value from one record, or `None`."""
     if entry is None:
         return None
     val: object = entry.get(metric_key)
@@ -318,10 +374,10 @@ def _metric_value(
 
 
 def _best_methods(
-    variable: str,
+    variable: str | None,
     level: str,
     metric: str,
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     daggered: bool,
@@ -332,17 +388,16 @@ def _best_methods(
     IBU is excluded if purity binning failed (`daggered`). Only evaluated when at least
     two methods are competing.
     """
-    key: str = f"{level}_{variable}"
     metric_key: str = f"{metric}_after"
     sources: tuple[tuple[str, Mapping[str, Any] | None], ...] = (
-        ("ran", ran),
+        ("deconvolve", deconvolve),
         ("ibu", None if daggered else ibu),
         ("omnifold", omnifold),
     )
     candidates: dict[str, float] = {
         name: val
         for name, src in sources
-        if (val := _metric_value(src, key, metric_key)) is not None
+        if (val := _metric_value(_entry(src, level, variable), metric_key)) is not None
     }
     if len(candidates) < 2:
         return frozenset()
@@ -358,7 +413,7 @@ def _best_methods(
 def _method_cells(
     source: Mapping[str, Any] | None,
     level: str,
-    variable: str,
+    variable: str | None,
     metric: str,
     /,
     *,
@@ -369,12 +424,10 @@ def _method_cells(
     A baseline that has not been run on a directory has no entry, and the template fixes
     the column count, so the pair has to be *filled* rather than omitted.
     """
-    entry: Mapping[str, float] | None = (
-        source.get(f"{level}_{variable}") if source is not None else None
-    )
+    entry: Mapping[str, Any] | None = _entry(source, level, variable)
     if entry is None:
         return (_DASH, _DASH)
-    val: str = decimal(entry[f"{metric}_after"] * METRIC_DISPLAY_SCALE)
+    val: str = decimal(float(entry[f"{metric}_after"]) * METRIC_DISPLAY_SCALE)
     impr: str = decimal(entry[f"{metric}_improvement_pct"])
     if is_best:
         if val != _DASH:
@@ -384,11 +437,16 @@ def _method_cells(
     return (val, impr)
 
 
+# The joint table's single row stands for every observable at once; kept no wider
+# than the "Observable" header, so its columns line up with the tables above it.
+_JOINT_LABEL: Final[str] = r"\textit{All}"
+
+
 def _row(
-    variable: str,
+    variable: str | None,
     level: str,
     metric: str,
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     daggered: bool,
@@ -396,28 +454,31 @@ def _row(
 ) -> str:
     """One variable's eight cells: label, Sim, then a pair per method.
 
-    RAN goes last: the eye reads a row left to right and stops at the end, so the method
-    under test sits where a reader lands, with the baselines in front of it.
+    Deconvolve goes last: the eye reads a row left to right and stops at the end,
+    so the method under test sits where a reader lands, with the baselines in front
+    of it. `variable=None` is the level's joint row, which Deconvolve's file must carry.
     """
-    symbol: str = (
-        JET_OBS[variable].symbol if variable in JET_OBS else latex_text(variable)
-    )
+    symbol: str = _JOINT_LABEL if variable is None else _symbol(variable)
     label: str = rf"{symbol}\(^\dag\)" if daggered else symbol
-    ours: Mapping[str, float] = ran[f"{level}_{variable}"]
+    ours: Mapping[str, Any] = cast(
+        typ="Mapping[str, Any]", val=_entry(deconvolve, level, variable)
+    )
 
     best: frozenset[str] = _best_methods(
-        variable, level, metric, ran, ibu, omnifold, daggered
+        variable, level, metric, deconvolve, ibu, omnifold, daggered
     )
 
     cells: list[str] = [
         label,
-        decimal(ours[f"{metric}_before"] * METRIC_DISPLAY_SCALE),
+        decimal(float(ours[f"{metric}_before"]) * METRIC_DISPLAY_SCALE),
     ]
     cells.extend(_method_cells(ibu, level, variable, metric, is_best="ibu" in best))
     cells.extend(
         _method_cells(omnifold, level, variable, metric, is_best="omnifold" in best)
     )
-    cells.extend(_method_cells(ran, level, variable, metric, is_best="ran" in best))
+    cells.extend(
+        _method_cells(deconvolve, level, variable, metric, is_best="deconvolve" in best)
+    )
     return " & ".join(cells) + r" \\"
 
 
@@ -432,7 +493,7 @@ def metrics_table(
     level: str,
     metric: str,
     variables: Sequence[str],
-    ran: Mapping[str, Any],
+    deconvolve: Mapping[str, Any],
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     skipped: frozenset[str],
@@ -448,13 +509,44 @@ def metrics_table(
     ordered: tuple[int, ...] = display_order(variables)
     ordered_vars: list[str] = [variables[i] for i in ordered]
     rows: list[str] = [
-        _row(v, level, metric, ran, ibu, omnifold, v in skipped) for v in ordered_vars
+        _row(v, level, metric, deconvolve, ibu, omnifold, v in skipped)
+        for v in ordered_vars
     ]
     lines: list[str] = [r"\midrule", *rows]
 
     if include_legend and any(v in skipped for v in ordered_vars):
         lines.append(_DAGGER_LEGEND)
     return "\n".join(lines)
+
+
+# A `metrics.json` from before the joint metrics: one spanning row naming the
+# fix, rather than a row of dashes that reads as "every method failed".
+_NO_JOINT: Final[str] = (
+    r"\midrule"
+    "\n"
+    rf"\multicolumn{{{_TABLE_COLUMNS}}}{{@{{}}l}}{{\itshape No joint metrics in "
+    r"metrics.json: rerun \texttt{deconvolve evaluate --force}.} \\"
+)
+
+
+def joint_table(
+    level: str,
+    deconvolve: Mapping[str, Any],
+    ibu: Mapping[str, Any] | None,
+    omnifold: Mapping[str, Any] | None,
+    /,
+) -> str:
+    """One level's sliced Wasserstein body: a single row over every observable.
+
+    Same eight columns as the per-variable tables, so the template reuses their
+    spec and header. IBU is never daggered here: its joint score is taken on
+    the product of its per-variable weights, in which a refused variable is
+    simply a factor of one, so there is always a number to show.
+    """
+    if _entry(deconvolve, level, None) is None:
+        return _NO_JOINT
+    row: str = _row(None, level, "sliced_wasserstein", deconvolve, ibu, omnifold, False)
+    return f"\\midrule\n{row}"
 
 
 def skipped_variables(
@@ -470,7 +562,8 @@ def skipped_variables(
         return frozenset(
             key.split(sep="_", maxsplit=1)[1]
             for key, entry in ibu.items()
-            if entry["wasserstein_after"] == entry["wasserstein_before"]
+            if key != JOINT_METRICS_KEY
+            and entry["wasserstein_after"] == entry["wasserstein_before"]
         )
     return frozenset(o["variable_name"] for o in outcomes if o["status"] == "skipped")
 
@@ -482,7 +575,7 @@ _NO_METRICS: Final[str] = (
     r"\midrule"
     "\n"
     rf"\multicolumn{{{_TABLE_COLUMNS}}}{{@{{}}l}}{{\itshape metrics.json not "
-    r"found: run \texttt{ran evaluate} for this run.} \\"
+    r"found: run \texttt{deconvolve evaluate} for this run.} \\"
 )
 
 
@@ -508,7 +601,7 @@ def _table(
     level: str,
     metric: str,
     variables: Sequence[str],
-    ran: Mapping[str, Any] | None,
+    deconvolve: Mapping[str, Any] | None,
     ibu: Mapping[str, Any] | None,
     omnifold: Mapping[str, Any] | None,
     skipped: frozenset[str],
@@ -517,18 +610,31 @@ def _table(
     include_legend: bool = False,
 ) -> str:
     """A metrics body, or the not-found row when there are no metrics."""
-    if not ran:
+    if not deconvolve:
         return _NO_METRICS
     return metrics_table(
         level,
         metric,
         variables,
-        ran,
+        deconvolve,
         ibu,
         omnifold,
         skipped,
         include_legend=include_legend,
     )
+
+
+def _joint(
+    level: str,
+    deconvolve: Mapping[str, Any] | None,
+    ibu: Mapping[str, Any] | None,
+    omnifold: Mapping[str, Any] | None,
+    /,
+) -> str:
+    """A joint body, or the not-found row when there are no metrics at all."""
+    if not deconvolve:
+        return _NO_METRICS
+    return joint_table(level, deconvolve, ibu, omnifold)
 
 
 def _figure_pages(artifacts: Path, stem: str, dim: int, /) -> str:
@@ -556,20 +662,27 @@ def render(run_dir: Path, /) -> str:
         raise FileNotFoundError(msg)
 
     artifacts: Path = run_dir / ARTIFACTS_DIR
-    ran: dict[str, Any] | None = _read(artifacts / "metrics.json")
+    deconvolve: dict[str, Any] | None = _read(artifacts / "metrics.json")
     ibu: dict[str, Any] | None = _read(artifacts / "metrics_ibu.json")
     omnifold: dict[str, Any] | None = _read(artifacts / "metrics_omnifold.json")
     timings: dict[str, Any] | None = _read(artifacts / "timings.json")
+    timed: list[tuple[str, dict[str, Any]]] = [
+        (label, recorded)
+        for filename, label in _TIMING_FILES
+        if (recorded := _read(artifacts / filename)) is not None
+    ]
     skipped: frozenset[str] = skipped_variables(run_dir, ibu)
     variables: tuple[str, ...] = _variables(config)
-    has_particle: bool = bool(ran and any(k.startswith("particle_") for k in ran))
+    has_particle: bool = bool(
+        deconvolve and any(k.startswith("particle_") for k in deconvolve)
+    )
     legend_level: str = "particle" if has_particle else "detector"
 
     source: str = load_template()
     for token, value in (
         ("<<RUN_NAME>>", run_dir.name),
         ("<<CONFIG_ROWS>>", config_rows(config, timings)),
-        ("<<TIMINGS_ROWS>>", timing_rows(timings) if timings else ""),
+        ("<<TIMINGS_ROWS>>", timings_body(timed) if timed else ""),
         *(
             (
                 f"<<{level.upper()}_{metric_tag}>>",
@@ -577,7 +690,7 @@ def render(run_dir: Path, /) -> str:
                     level,
                     metric,
                     variables,
-                    ran,
+                    deconvolve,
                     ibu,
                     omnifold,
                     skipped,
@@ -586,6 +699,10 @@ def render(run_dir: Path, /) -> str:
             )
             for level in ("detector", "particle")
             for metric_tag, metric in _METRICS
+        ),
+        *(
+            (f"<<{level.upper()}_SLICED>>", _joint(level, deconvolve, ibu, omnifold))
+            for level in ("detector", "particle")
         ),
         (
             "<<DETECTOR_FIGURES>>",

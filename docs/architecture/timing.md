@@ -7,13 +7,13 @@
 
 ## Enabling timing
 
-Set `DECONVOLVE_TIMING` in the environment:
+Timing is on by default. To turn it off, set `DECONVOLVE_TIMING` in the environment:
 
 ```shell
-DECONVOLVE_TIMING=1 deconvolve train --dataset jets
+DECONVOLVE_TIMING=0 deconvolve train --dataset jets
 ```
 
-Any value other than `0`, `false`, `no`, `off` or the empty string enables it. The variable is read when <span style="font-variant: small-caps;">Deconvolve</span> is imported, so it cannot be set in a configuration file.
+`0`, `false`, `no`, `off` and the empty string disable it; any other value, or leaving it unset, enables it. The variable is read when <span style="font-variant: small-caps;">Deconvolve</span> is imported, so it cannot be set in a configuration file.
 
 With timing enabled, a command prints a table of its phases, with each phase's share of the total, and writes the same data to `artifacts/timings.json` in the run directory. The file is written even if the run fails, and the phase that raised the error is marked as failed.
 
@@ -34,7 +34,7 @@ Indented phases are nested within the phase above them.
 | `particle_mmd` | The particle-level MMD diagnostic, when the dataset has a known truth. |
 | `save` | Saving the networks. |
 | `load` | Reloading a saved run (`--load-run`), in place of `train` and `save`. |
-| `plots` | Drawing the figures. |
+| `plots` | Drawing the figures. Recorded in `timings_shared.json`, not `timings.json` (see below). |
 | `evaluate` | Computing the [distance metrics](../user-guide/evaluation.md). |
 
 Several commands can run over the same directory, for example `train`, then `train --load-run` to redraw the figures. Each command replaces its own phases in `timings.json` and leaves the others, and every row records which command (`train` or `load`) produced it.
@@ -43,9 +43,21 @@ Several commands can run over the same directory, for example `train`, then `tra
 
 ---
 
+## Work shared by all methods
+
+The figures overlay <span style="font-variant: small-caps;">Deconvolve</span>, IBU and <span style="font-variant: small-caps;">OmniFold</span> together, so the time spent drawing them is not charged to any one method. `train`'s `plots` phase is written to `artifacts/timings_shared.json`, and so is `deconvolve plot`, which redraws the figures once the baselines have run. Its phases are `parse_config`, `data`, `load` and `plots`. The report shows this file as its own block, after the methods' blocks.
+
+---
+
+## The IBU baseline
+
+`deconvolve baseline ibu` writes to its own file, `artifacts/timings_ibu.json`, for the same reasons as OmniFold below. Its phases are `parse_config`, `data`, `ibu` (unfolding every observable) and `evaluate` (scoring the weights on the test split).
+
+---
+
 ## The OmniFold baseline
 
-`DECONVOLVE_TIMING=1` also enables timing for `deconvolve baseline omnifold`, which writes to a separate file, `artifacts/timings_omnifold.json`. A separate file keeps the baseline's cost distinct from the method's, and prevents its `data` and `evaluate` phases from replacing those of the training run.
+Timing also covers `deconvolve baseline omnifold`, which writes to a separate file, `artifacts/timings_omnifold.json`. A separate file keeps the baseline's cost distinct from the method's, and prevents its `data` and `evaluate` phases from replacing those of the training run.
 
 Its phases are `parse_config`, `data`, `omnifold` and `evaluate`. Within `omnifold`, the time spent in the separate OmniFold process is broken down into `init`, `unfold`, one row for each step of each MultiFold iteration (`iter<n>_step1`, detector level, and `iter<n>_step2`, particle level), and `reweight`.
 

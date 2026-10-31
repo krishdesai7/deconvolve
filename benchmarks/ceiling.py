@@ -29,7 +29,12 @@ from deconvolve.training.mmd import (
     subsample_indices,
     weighted_mmd,
 )
-from deconvolve.training.models import build_discriminator, build_generator
+from deconvolve.training.models import (
+    build_discriminator,
+    build_generator,
+    load_model,
+    set_random_seed,
+)
 from jax import Array
 
 if TYPE_CHECKING:
@@ -291,7 +296,7 @@ def _generator_at(
     equivalent at detector level or merely unresolved.
     """
     if epoch is None:
-        return keras.saving.load_model(artifacts_dir(run_dir) / "generator.keras")  # pyrefly: ignore[no-any-return-implicit]
+        return load_model(artifacts_dir(run_dir) / "generator.keras")
     if not (artifacts_dir(run_dir) / PARAMS_FILE).exists():
         typer.echo(
             message=f"{run_dir} predates per-epoch parameter saving, so only its"
@@ -426,7 +431,7 @@ def diagnostic_c(
     # difference between two generators as if it were a difference between two
     # discriminators, and can come out negative.
     curve: NDArray[np.double] = np.asarray(
-        a=np.load(file=artifacts_dir(run_dir) / "history.npz")["val_d"],  # pyrefly: ignore[unknown-argument-type]
+        a=np.load(file=artifacts_dir(run_dir) / "history.npz")["val_d"],
         dtype=np.double,
     )
     best_epoch: int = int(config["best_epoch"]) if epoch is None else epoch
@@ -584,7 +589,7 @@ def main(
 ) -> None:
 
     configure_logging(level="info")
-    keras.utils.set_random_seed(seed)
+    set_random_seed(seed)
 
     # Canonical order, exactly as `cli._canonical_variables` fixes it: these
     # names index columns, so a permutation is a different dataset.

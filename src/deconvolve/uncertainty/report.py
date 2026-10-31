@@ -10,11 +10,11 @@ The **covariance** is the other half, and the one the speed argument pays for.
 Unbinned unfolding weights are routinely propagated as if their bin-to-bin
 correlations were zero. They are not, and measuring them takes a hundred
 retrainings --- which at OmniFold's cost is not an analysis anyone runs, and
-at RAN's is twenty minutes on a node. `variance.npz` carries the full `K x K`
+at Deconvolve's is twenty minutes on a node. `variance.npz` carries the full `K x K`
 matrix for every observable.
 
 One caveat is stated rather than buried, because a referee will raise it:
-RAN's weights preserve the total count by construction, so a spectrum's bins
+Deconvolve's weights preserve the total count by construction, so a spectrum's bins
 sum to a fixed number and its covariance is singular with rank `K - 1`: every
 row sums to zero. For bins of equal variance that fixes the *average*
 correlation of a bin with the others at `-1 / (K - 1)`, the multinomial value

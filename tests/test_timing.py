@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import math
-import time
 from io import StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -20,7 +19,7 @@ from deconvolve.instrumentation import timing
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from pathlib import Path
     from typing import Any
 
@@ -264,9 +263,7 @@ class TestMerge:
         assert by_name["train"]["pass"] == "train"
         assert by_name["plots"]["pass"] == "load"
 
-    def test_a_rerun_phase_replaces_its_earlier_record(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_rerun_phase_replaces_its_earlier_record(self, tmp_path: Path) -> None:
         """The two durations are pinned rather than raced.
 
         Two empty `with timing.phase(...)` blocks can land inside one
@@ -275,10 +272,11 @@ class TestMerge:
         intermittently for a reason that has nothing to do with merging.
         """
         ticks: Iterator[float] = iter([0.0, 1.0, 10.0, 12.0])
-        real: Callable[[], float] = time.perf_counter
-        monkeypatch.setattr(timing.time, "perf_counter", lambda: next(ticks, real()))
 
-        with timing.phase("plots"):
+        def clock() -> float:
+            return next(ticks)
+
+        with timing.phase("plots", clock=clock):
             pass
         timing.write(tmp_path, pass_name="train")
         first: dict[str, Any] = json.loads(
@@ -286,7 +284,7 @@ class TestMerge:
         )
         timing.reset()
 
-        with timing.phase("plots"):
+        with timing.phase("plots", clock=clock):
             pass
         timing.write(tmp_path, pass_name="load")
         second: dict[str, Any] = json.loads(
@@ -408,8 +406,8 @@ class TestEnvironment:
     def test_falsey_values_do_not(self, value: str) -> None:
         assert not timing._enabled_from_env({"DECONVOLVE_TIMING": value})
 
-    def test_absent_does_not(self) -> None:
-        assert not timing._enabled_from_env({})
+    def test_absent_enables(self) -> None:
+        assert timing._enabled_from_env({})
 
 
 @pytest.mark.slow
@@ -571,3 +569,45 @@ class TestWriteFilename:
         timing.write(tmp_path, pass_name="train")
 
         assert (tmp_path / "artifacts" / "timings.json").is_file()
+
+
+class TestWriteKeep:
+    """One pass splitting its phases across two files."""
+
+    def test_keep_picks_top_level_phases_and_their_children(
+        self, tmp_path: Path
+    ) -> None:
+        timing.enable(True)
+        with timing.phase("train"), timing.phase("epochs"):
+            pass
+        with timing.phase("plots"):
+            pass
+
+        timing.write(tmp_path, pass_name="train", keep=lambda name: name != "plots")
+        timing.write(
+            tmp_path,
+            pass_name="train",
+            filename=timing.SHARED_TIMINGS_FILE,
+            keep=lambda name: name == "plots",
+        )
+
+        own = json.loads((tmp_path / "artifacts" / "timings.json").read_text())
+        shared = json.loads(
+            (tmp_path / "artifacts" / timing.SHARED_TIMINGS_FILE).read_text()
+        )
+        assert [p["name"] for p in own["phases"]] == ["train", "epochs"]
+        assert [p["name"] for p in shared["phases"]] == ["plots"]
+
+    def test_nothing_kept_writes_no_file(self, tmp_path: Path) -> None:
+        timing.enable(True)
+        with timing.phase("train"):
+            pass
+
+        timing.write(
+            tmp_path,
+            pass_name="train",
+            filename=timing.SHARED_TIMINGS_FILE,
+            keep=lambda name: name == "plots",
+        )
+
+        assert not (tmp_path / "artifacts" / timing.SHARED_TIMINGS_FILE).exists()

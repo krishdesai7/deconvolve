@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
-import keras
 import numpy as np
 
 from ..baselines._shared import parse_run_config
@@ -34,7 +33,7 @@ from ..evaluation import (
     plot_losses,
     plot_selection,
 )
-from ..instrumentation import phase, report, write
+from ..instrumentation import SHARED_PHASES, SHARED_TIMINGS_FILE, phase, report, write
 from ..training import (
     MMD_SUBSAMPLE,
     bandwidths,
@@ -45,6 +44,7 @@ from ..training import (
     train,
 )
 from ..training.engine import _weights_per_epoch
+from ..training.models import load_model
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -301,7 +301,7 @@ def _write_run_dir(
 def _load_artifacts(run_dir: Path) -> tuple[DeconvolveModel, dict[str, list[float]]]:
     """Reload a finished run's generator and training history."""
     artifacts: Path = artifacts_dir(run_dir)
-    g: DeconvolveModel = keras.saving.load_model(artifacts / "generator.keras")
+    g: DeconvolveModel = load_model(artifacts / "generator.keras")
     history: dict[str, list[float]] = {
         k: v.tolist() for k, v in np.load(file=artifacts / "history.npz").items()
     }
@@ -340,7 +340,7 @@ def _draw_figures(
     Matplotlib is a large share of a short run's wall clock and none of it is
     needed to score one, so plots can be turned off for hyperparameter sweeps,
     bootstrapping, etc. The artifacts are already on disk by then, so
-    `--load-run` on the same directory draws them later.
+    `deconvolve plot` on the same directory draws them later.
 
     The guard lives here rather than at the call site because the baseline
     overlays are part of the same decision: `_load_baseline_weights` exists
@@ -381,9 +381,9 @@ def _load_baseline_weights(
     Presence is the whole mechanism, and it is deliberate: neither baseline
     runs on the `deconvolve train` path, so the figures a fresh run draws have no
     overlay, and re-drawing them after a baseline has run puts one there.
-    `deconvolve train --load-run <run_dir>` is that re-draw --- it reloads the
-    saved generator instead of training, and picks up whatever `*_weights.npz`
-    files exist by then.
+    `deconvolve plot <run_dir>` is that re-draw (as is `train --load-run`) ---
+    it reloads the saved generator instead of training, and picks up whatever
+    `*_weights.npz` files exist by then.
 
     The order is the drawing order, so the overlays are stacked
     least-to-most-recent rather than by which is expected to win.
@@ -530,7 +530,20 @@ def run(
     finally:
         report()
         if written_to is not None:
-            write(written_to, pass_name="load" if load_run is not None else "train")
+            pass_name: str = "load" if load_run is not None else "train"
+            # The figures overlay every method, so drawing them is not
+            # Deconvolve's cost; see `SHARED_TIMINGS_FILE`.
+            write(
+                written_to,
+                pass_name=pass_name,
+                keep=lambda name: name not in SHARED_PHASES,
+            )
+            write(
+                written_to,
+                pass_name=pass_name,
+                filename=SHARED_TIMINGS_FILE,
+                keep=lambda name: name in SHARED_PHASES,
+            )
 
 
 def _pipeline(

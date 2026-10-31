@@ -10,6 +10,7 @@ from deconvolve.baselines import ibu
 from deconvolve.coretypes import ZXY, DatasetSplits, Events, Populations, artifacts_dir
 from deconvolve.data import ArrayDataset, DeconvolveDataset
 from deconvolve.evaluation import evaluate
+from deconvolve.instrumentation import timing
 from deconvolve.training.models import build_generator
 
 if TYPE_CHECKING:
@@ -421,7 +422,7 @@ def test_run_and_evaluate_returns_named_aligned_result(
     assert isinstance(result, ibu.IBUResult)
     assert result.variable_names == ("dim_0",)
     assert result.weights.shape == (1, 2)
-    # Cast at IBU's boundary: the splits above are the float64 RAN trains on.
+    # Cast at IBU's boundary: the splits above are the float64 Deconvolve trains on.
     assert result.weights.dtype == np.single
     assert len(result.outcomes) == 1
     assert result.outcomes[0].status == "skipped"
@@ -546,6 +547,30 @@ def _run_with_ibu(
     return run_dir
 
 
+def test_ibu_writes_its_own_timings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`timings_ibu.json`, not `timings.json`: IBU's `data` and `evaluate`
+    phases would replace the training pass's rows of the same names.
+    """
+    timing.enable(True)
+    try:
+        run_dir: Path = _run_with_ibu(tmp_path, ("m", "w"), monkeypatch)
+    finally:
+        timing.enable(False)
+
+    artifacts: Path = run_dir / "artifacts"
+    payload: dict[str, Any] = json.loads((artifacts / "timings_ibu.json").read_text())
+    assert [p["name"] for p in payload["phases"]] == [
+        "parse_config",
+        "data",
+        "ibu",
+        "evaluate",
+    ]
+    assert {p["pass"] for p in payload["phases"]} == {"ibu"}
+    assert not (artifacts / "timings.json").exists()
+
+
 def test_ibu_and_ran_agree_on_metric_key_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -555,7 +580,52 @@ def test_ibu_and_ran_agree_on_metric_key_order(
     ran_keys = list(json.loads((run_dir / "artifacts/metrics.json").read_text()))
     ibu_keys = list(json.loads((run_dir / "artifacts/metrics_ibu.json").read_text()))
     assert ibu_keys == ran_keys
-    assert ibu_keys == ["detector_m", "detector_w", "particle_m", "particle_w"]
+    assert ibu_keys == [
+        "detector_m",
+        "detector_w",
+        "particle_m",
+        "particle_w",
+        "joint",
+    ]
+
+
+def test_ibu_and_ran_both_record_a_joint_score_per_level(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The report's joint table reads the same two records out of each file."""
+    run_dir: Path = _run_with_ibu(tmp_path, ("m", "w"), monkeypatch)
+
+    for name in ("metrics.json", "metrics_ibu.json"):
+        joint: dict[str, dict[str, float]] = json.loads(
+            (run_dir / "artifacts" / name).read_text()
+        )["joint"]
+        assert set(joint) == {"detector", "particle"}
+        for record in joint.values():
+            assert set(record) == {
+                "sliced_wasserstein_before",
+                "sliced_wasserstein_after",
+                "sliced_wasserstein_improvement_pct",
+            }
+            assert all(np.isfinite(value) for value in record.values())
+
+
+def test_joint_weights_are_the_normalized_product_of_the_1d_weights() -> None:
+    """IBU's implied joint: the observables reweighted as if independent."""
+    weights = np.array([[1.0, 2.0, 3.0, 2.0], [2.0, 1.0, 1.0, 4.0]], dtype=np.single)
+
+    joint = ibu.joint_weights(weights)
+
+    product = np.array([2.0, 2.0, 3.0, 8.0])
+    np.testing.assert_allclose(joint, product / product.mean(), rtol=1e-6)
+    assert joint.dtype == np.single
+
+
+def test_a_refused_variable_drops_out_of_the_joint_weights() -> None:
+    """A skipped variable is weight one everywhere, so a factor of one."""
+    unfolded = np.array([0.5, 1.5, 1.0, 1.0], dtype=np.single)
+    weights = np.stack([unfolded, np.ones_like(unfolded)])
+
+    np.testing.assert_allclose(ibu.joint_weights(weights), unfolded, rtol=1e-6)
 
 
 def test_ibu_records_which_variables_it_gave_up_on(

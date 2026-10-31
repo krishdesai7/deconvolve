@@ -1,7 +1,7 @@
 <!-- markdownlint-disable no-inline-html -->
 # Evaluation & Metrics
 
-`deconvolve evaluate` measures how well a trained generator's weights close the gap between simulation and data. It compares the two samples before and after reweighting, per observable, using three distance metrics, and at both detector and particle level.
+`deconvolve evaluate` measures how well a trained generator's weights close the gap between simulation and data. It compares the two samples before and after reweighting, per observable, using three distance metrics, plus one joint distance over all observables at once, at both detector and particle level.
 
 ```shell
 deconvolve evaluate runs/2026-09-10T132409Z        # one run
@@ -31,7 +31,7 @@ The generator's weights \(w = g(z_\text{gen})\) are computed on the test split's
 
 "Detector level" measures the performance of the algorithm in ensuring that reweighted Simulation indistinguishable from Data. "Particle level" evaluates the unfolded Generation against Truth. It is the only place \(z_\text{true}\) is ever read. That's possible for the datasets described in [Datasets](datasets.md) because the benchmark datasets have a known truth, and it is an after-the-fact score. No network ever sees \(z_\text{true}\), which can be validated using `deconvolve leakage-check --poison`.
 
-Each observable (each column) is scored separately. For jets, the columns are the observables. For Gaussian data, they are `dim_0`, `dim_1`, and so on.
+Each observable (each column) is scored separately by the three per-observable metrics. For jets, the columns are the observables. For Gaussian data, they are `dim_0`, `dim_1`, and so on. The [sliced Wasserstein distance](#4-sliced-wasserstein-distance) is the exception: it scores every column at once.
 
 ---
 
@@ -65,9 +65,21 @@ A symmetric \(f-\)divergence that behaves well when the two distributions are cl
 
 It is computed from the same histograms as the JS divergence, with bins where both are empty skipped.
 
+### 4. Sliced Wasserstein distance
+
+The three metrics above look at one observable at a time, so they cannot see correlations. Two samples with identical marginals and different joint structure score identically on all of them, and a reweighting that fixes every marginal while leaving the correlations wrong would look like a complete success. The sliced Wasserstein distance is the one joint number per level:
+
+\[\mathcal{SW}_1(p, q) = \frac{1}{K} \sum_{k=1}^{K} \mathcal{W}_1\left(\theta_k^\top p,\ \theta_k^\top q\right)\]
+
+where the directions \(\theta_k\) are drawn uniformly on the unit sphere. Each term is the exact, weighted 1D Wasserstein distance above, taken along a random projection rather than along a coordinate axis.
+
+- **Standardized:** both samples are first shifted and scaled by the *reference's* per-observable mean and standard deviation. Otherwise whichever observable has the largest numerical range would dominate every projection. The value is therefore in units of standard deviations, and is not comparable to the per-observable Wasserstein distances. Improvement percentages can be compared.
+- **Fixed directions:** \(K = 128\) directions from a fixed seed (`SLICED_PROJECTIONS`, `SLICED_SEED` in `deconvolve.evaluation`). Every before/after value, and every method, is scored on the same directions, so differences between them are paired comparisons and most of the Monte-Carlo error from the finite \(K\) cancels. `benchmarks/sliced.py` repeats the estimate over seeds when the spread itself is in question.
+- **IBU:** IBU unfolds each observable separately and has no single joint weight. Its joint score uses the renormalized product of its per-observable weights, which is the joint distribution 1D unfolding implicitly assumes: observables reweighted as if they were independent.
+
 ### Display scale
 
-`metrics.json` stores all three metrics exactly as defined above. Their raw values are small. Therefore, user facing values are multiplied by \(10^3\) for readability. Improvement percentages are ratios, so the scale doesn't affect them.
+`metrics.json` stores every metric exactly as defined above. Their raw values are small. Therefore, user facing values are multiplied by \(10^3\) for readability. Improvement percentages are ratios, so the scale doesn't affect them.
 
 ### Binning
 
@@ -81,6 +93,7 @@ The expensive part of every metric runs on the JAX device (the accelerator, if t
 
 - **Vectorized over observables:** one dispatch computes every column at once.
 - **Little host transfer:** the Wasserstein distances come back as one number per observable, and the histograms as `observables × 100` bin counts. The two divergences are then computed from those histograms on the host, in double precision.
+- **Sliced Wasserstein:** the projections and the 1D distances along them run on device in blocks of 32 directions. Only one number per direction comes back to the host, where they are averaged in double precision.
 - **Performance:** measured at 100k nature and 100k MC events in 6 dimensions, about 0.28 s of compute, plus a one-time XLA compilation.
 
 ---
@@ -89,7 +102,7 @@ The expensive part of every metric runs on the JAX device (the accelerator, if t
 
 ### `artifacts/metrics.json`
 
-Metrics are written to `RUN_DIR/artifacts/metrics.json`. There is one entry per level and observable, keyed `<level>_<observable>`. Detector-level entries come first, then particle-level ones, each in the column order of `config.json`'s `variables`. For example, for a jet run:
+Metrics are written to `RUN_DIR/artifacts/metrics.json`. There is one entry per level and observable, keyed `<level>_<observable>`. Detector-level entries come first, then particle-level ones, each in the column order of `config.json`'s `variables`. A final `joint` entry holds the sliced Wasserstein distance, one record per level. For example, for a jet run:
 
 ```json
 {
@@ -106,11 +119,19 @@ Metrics are written to `RUN_DIR/artifacts/metrics.json`. There is one entry per 
   },
   "detector_M": { "...": "..." },
   "particle_m": { "...": "..." },
-  "particle_M": { "...": "..." }
+  "particle_M": { "...": "..." },
+  "joint": {
+    "detector": {
+      "sliced_wasserstein_before": "...",
+      "sliced_wasserstein_after": "...",
+      "sliced_wasserstein_improvement_pct": "..."
+    },
+    "particle": { "...": "..." }
+  }
 }
 ```
 
-Every entry has the same nine fields:
+Every `<level>_<observable>` entry has the same nine fields:
 
 | Field | Meaning |
 | :--- | :--- |
@@ -118,13 +139,15 @@ Every entry has the same nine fields:
 | `<metric>_after` | Distance between the reference and the reweighted simulation. |
 | `<metric>_improvement_pct` | \(\left(1 - \frac{\text{after}}{\text{before}}\right) \times 100\%\). Positive values mean that reweighting helped. `0` if `before` is `0`. |
 
-where `<metric>` is `wasserstein`, `jensenshannon` or `triangular`. Values are unscaled; see [Display scale](#display-scale).
+where `<metric>` is `wasserstein`, `jensenshannon` or `triangular`. Each `joint` record has the same three fields with `<metric>` = `sliced_wasserstein`. Values are unscaled; see [Display scale](#display-scale). Code that loops over the per-observable entries should skip the `joint` key.
+
+A `metrics.json` written before the joint metrics existed has no `joint` entry. Rerunning with `--force` adds it, and until then `evaluate` and the baselines log a warning when they skip the stale file.
 
 The baselines write their scores in exactly the same format, so the three are directly comparable: `deconvolve baseline ibu` writes `artifacts/metrics_ibu.json`, and `deconvolve baseline omnifold` writes `artifacts/metrics_omnifold.json` (see [Baselines](baselines.md)). `deconvolve report` reads all three into the run's PDF (see [Reporting & Artifacts](reporting.md)).
 
 ### Terminal summary
 
-`evaluate` also prints one table per level, with a Wasserstein, JS and \(\Delta\) row for each observable, all multiplied by \(10^3\) for readability:
+`evaluate` also prints one table per level, with a Wasserstein, JS and \(\Delta\) row for each observable and a final sliced Wasserstein row (`all (joint)`), all multiplied by \(10^3\) for readability:
 
 ```text
              2026-09-10T132409Z — Detector level

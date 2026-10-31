@@ -34,7 +34,7 @@ CACHE_ENV_VAR: Final[LiteralString] = "DECONVOLVE_CACHE_DIR"
 CACHE_DIR: Final[Path] = Path(
     os.environ.get(key=CACHE_ENV_VAR) or ".cache"
 ).expanduser()
-"""The one root for everything RAN can regenerate.
+"""The one root for everything Deconvolve can regenerate.
 
 Generated Gaussian datasets, the per-variable jet caches pulled from Zenodo,
 and the XLA compilation cache under `jax/`. It is `.cache` unless
@@ -73,6 +73,12 @@ RUN_DIR: Final[Path] = Path("runs")
 # (Wasserstein) and 8.5e-5..1.3e-2 (JS), which is what a human reader needs
 # scaled.
 METRIC_DISPLAY_SCALE: Final[float] = 1e3
+
+# The one `metrics.json` key that is not `<level>_<variable>`: the sliced
+# Wasserstein distance scores every observable at once, so it has no variable
+# to be keyed by. It holds one record per level, `{"detector": ..., "particle":
+# ...}`, and anything iterating the per-variable entries skips it by this name.
+JOINT_METRICS_KEY: Final[LiteralString] = "joint"
 
 # A run directory is read by people. `config.json` and `report.pdf` stay at the
 # root because they are what a person opens; everything else -- checkpoints,

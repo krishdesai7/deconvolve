@@ -1,0 +1,38 @@
+{
+  "total_seconds": 6.356711571046617,
+  "compile_cache_warm": true,
+  "phases": [
+    {
+      "name": "parse_config",
+      "seconds": 0.0012153259885963053,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "ibu"
+    },
+    {
+      "name": "data",
+      "seconds": 0.17338558202027343,
+      "depth": 0,
+      "detail": "gaussian cache hit",
+      "failed": false,
+      "pass": "ibu"
+    },
+    {
+      "name": "ibu",
+      "seconds": 0.30797454802086577,
+      "depth": 0,
+      "detail": "niter=10",
+      "failed": false,
+      "pass": "ibu"
+    },
+    {
+      "name": "evaluate",
+      "seconds": 5.874136115016881,
+      "depth": 0,
+      "detail": "4 variables",
+      "failed": false,
+      "pass": "ibu"
+    }
+  ]
+}

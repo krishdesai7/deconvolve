@@ -1,0 +1,14 @@
+[
+  {
+    "variable_name": "dim_0",
+    "status": "completed",
+    "n_bins": 6,
+    "skip_reason": null
+  },
+  {
+    "variable_name": "dim_1",
+    "status": "completed",
+    "n_bins": 5,
+    "skip_reason": null
+  }
+]

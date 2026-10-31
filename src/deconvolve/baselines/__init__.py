@@ -1,4 +1,4 @@
-"""Comparison baselines for RAN: IBU and OmniFold.
+"""Comparison baselines for Deconvolve: IBU and OmniFold.
 
 ```python
 from deconvolve.baselines import ibu_evaluate_runs, omnifold_evaluate_runs
@@ -13,7 +13,7 @@ the `module load cudatoolkit/12.9` that Perlmutter needs and the silent CPU
 fallback it prevents.
 
 Both are scored by the same code: `_shared` reads the run's config, rebuilds
-its populations, and computes the same metrics RAN is scored by, so a
+its populations, and computes the same metrics Deconvolve is scored by, so a
 comparison is a comparison of unfolding methods and nothing else.
 """
 

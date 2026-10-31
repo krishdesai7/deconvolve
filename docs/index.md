@@ -15,8 +15,8 @@ Unfolding is the process of recovering particle-level distributions from the det
 
 [<span style="font-variant: small-caps;">OmniFold</span>](https://arxiv.org/abs/1911.09107) unfolds without binning by replacing the response matrix with classifiers that estimate likelihood ratios directly from unbinned events, alternating between particle level and detector level until the reweighting converges. <span style="font-variant: small-caps;">Deconvolve</span> instead poses the whole problem as a single adversarial learning algorithm: a generator learns a continuous particle-level weight function in one pass, with a discriminator at detector level supplying the training signal, rather than iterating several pairs of independently-refit classifiers to a fixed point.
 
-<figure class="ran-figure" markdown="span">
-  ![<span style="font-variant: small-caps;">Deconvolve</span> reweights particle-level events and is scored at detector level](assets/schematic.svg){ .ran-schematic }
+<figure class="deconvolve-figure" markdown="span">
+  ![<span style="font-variant: small-caps;">Deconvolve</span> reweights particle-level events and is scored at detector level](assets/schematic.svg){ .deconvolve-schematic }
   <figcaption>
     The generator <code>g(z)</code> assigns a weight to each particle-level
     event; those weights are carried to detector level, where the

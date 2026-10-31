@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 # stack. See the spec's "Deferred" section.
 _ENV_ONLY: tuple[tuple[str, str], ...] = (
     (CACHE_ENV_VAR, ".cache"),
-    ("DECONVOLVE_TIMING", "off"),
+    ("DECONVOLVE_TIMING", "on"),
 )
 
 

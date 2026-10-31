@@ -1,13 +1,13 @@
 # Caching
 
-Everything RAN can regenerate lives under one root, `.cache/` by default:
+Everything Deconvolve can regenerate lives under one root, `.cache/` by default:
 generated Gaussian datasets, the per-variable jet `.npz` files pulled from
 Zenodo, and the XLA compilation cache. **`DECONVOLVE_CACHE_DIR` moves the whole tree**,
 which is what a cluster needs — on Perlmutter `$HOME` is small, quota'd and
 shared across nodes:
 
 ```bash
-export DECONVOLVE_CACHE_DIR="$SCRATCH/ran-cache"
+export DECONVOLVE_CACHE_DIR="$SCRATCH/deconvolve-cache"
 ```
 
 It is deliberately its own variable rather than a read of `XDG_CACHE_HOME`. That
@@ -72,7 +72,7 @@ ensemble of N interpreters compiling one architecture pays the cost once instead
 of N times. Measured locally, 1.41s cold → 0.36s warm across processes.
 
 Two settings, not one. JAX's default `jax_persistent_cache_min_compile_time_secs`
-of 1.0s leaves RAN's cache **entirely empty**: a run compiles a few dozen
+of 1.0s leaves Deconvolve's cache **entirely empty**: a run compiles a few dozen
 executables totalling ~4.6s and no single one of them clears a second.
 `_use_compilation_cache` drops it to zero.
 

@@ -1,9 +1,9 @@
 """The part of a baseline that is not the unfolding method.
 
 Reading a run's config, rebuilding its populations, and scoring the resulting
-weights with the same metrics RAN is scored by.
+weights with the same metrics Deconvolve is scored by.
 
-A baseline attempts the same task RAN does -- generate weights that reweight
+A baseline attempts the same task Deconvolve does -- generate weights that reweight
 Generation, using only the relationship between Data and Simulation -- so it
 needs the same run config, the same event populations, and the same metric
 record. Keeping those here means a comparison is a comparison of unfolding
@@ -24,12 +24,20 @@ from ..evaluation.evaluate import (
     _load_splits,
     _triangular_per_dim,
     _wd_per_dim,
+    joint_entry,
 )
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from ..coretypes import ZXY, DatasetSplits, EventArray, MetricRecord, Populations
+    from ..coretypes import (
+        ZXY,
+        DatasetSplits,
+        EventArray,
+        JointMetricRecord,
+        MetricRecord,
+        Populations,
+    )
 
 
 def _positive_int(value: object, key: str) -> int:
@@ -56,11 +64,13 @@ def _parse_variable_names(
         return tuple(f"dim_{i}" for i in range(dim))
 
     variables: object = raw.get("variables")
-    if not isinstance(variables, (list, tuple)) or any(
-        not isinstance(name, str) or not name for name in variables
-    ):
+    # Spelled `object` because `isinstance` alone narrows to `list[Unknown]`.
+    items: tuple[object, ...] | None = (
+        tuple(variables) if isinstance(variables, (list, tuple)) else None
+    )
+    if items is None or any(not isinstance(name, str) or not name for name in items):
         raise ValueError("variables must be a sequence of nonempty strings")
-    variable_names: tuple[str, ...] = cast(typ=tuple[str, ...], val=tuple(variables))
+    variable_names: tuple[str, ...] = cast(typ=tuple[str, ...], val=items)
     if len(variable_names) != dim:
         raise ValueError(
             f"variables has length {len(variable_names)}, expected dim={dim}"
@@ -70,10 +80,11 @@ def _parse_variable_names(
 
 def parse_run_config(raw: object) -> RunConfig:
     """Validate a run's `config.json`, already parsed from JSON, into a `RunConfig`."""
-    if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
+    entries: dict[object, object] | None = raw if isinstance(raw, dict) else None
+    if entries is None or not all(isinstance(k, str) for k in entries):
         raise ValueError("run config must be a JSON object")
 
-    config: dict[str, Any] = cast(typ="dict[str, Any]", val=raw)
+    config: dict[str, Any] = cast(typ="dict[str, Any]", val=entries)
     dim: int = _positive_int(value=config.get("dim"), key="dim")
     n_samples: int = _positive_int(value=config.get("n_samples"), key="n_samples")
     batch_size: int = _positive_int(value=config.get("batch_size"), key="batch_size")
@@ -128,7 +139,7 @@ def prepare_populations(
 
     By construction, `fit` is `Split.TRAIN | Split.VAL`, not `Split.ALL`. A
     baseline fitted on every event and then scored on the test split would be
-    scored on data it had already used and would be handed information RAN is
+    scored on data it had already used and would be handed information Deconvolve is
     denied: `train` does read the test split, to compute a test-level MMD
     diagnostic, but nothing weight-bearing depends on that read, so the test
     split still cannot influence the returned model or its selection
@@ -188,4 +199,21 @@ def evaluate_dimension(
         "triangular_before": triangular_before,
         "triangular_after": triangular_after,
         "triangular_improvement_pct": _improvement(triangular_before, triangular_after),
+    }
+
+
+def evaluate_joint(
+    test: Populations, weights: EventArray
+) -> dict[str, JointMetricRecord]:
+    """Both levels' joint (sliced Wasserstein) records, for `JOINT_METRICS_KEY`.
+
+    `weights` is one weight per test event, applied to every observable at
+    once -- the joint distribution a method actually produces, which is the
+    thing the per-dimension scores cannot see.
+    """
+    return {
+        "detector": joint_entry(ref=test.data, comp=test.mc.x, weights=weights),
+        "particle": joint_entry(
+            ref=test.require_truth(), comp=test.mc.z, weights=weights
+        ),
     }

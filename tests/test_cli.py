@@ -26,6 +26,7 @@ def test_registered_command_trees_are_exact() -> None:
         "train",
         "evaluate",
         "report",
+        "plot",
         "baseline",
         "uncertainty",
         "leakage-check",
@@ -41,6 +42,7 @@ def test_registered_command_trees_are_exact() -> None:
         ("train",),
         ("evaluate",),
         ("report",),
+        ("plot",),
         ("baseline", "ibu"),
         ("baseline", "omnifold"),
         ("uncertainty", "run"),
@@ -141,7 +143,7 @@ def test_train_converts_typer_values_for_the_workflow(
     assert calls[0]["lr_g"] == pytest.approx(3e-5)
     assert calls[0]["lr_d"] == pytest.approx(1e-4)
     # 0.015: +4.30 +- 0.88 points on the 12-observable aggregate against 0
-    # (p = 0.0017), and admissible on RAN's own selection criterion. See
+    # (p = 0.0017), and admissible on Deconvolve's own selection criterion. See
     # "The dispersion penalty" in benchmarks/README.md.
     assert calls[0]["lambda_dispersion"] == pytest.approx(0.015)
     assert calls[0]["plots"] is True
@@ -199,3 +201,15 @@ def test_report_takes_the_run_directory_positionally(
 
     assert result.exit_code == 0
     assert seen == {"run_dir": tmp_path, "force": True, "compile_pdf": False}
+
+
+def test_plot_takes_the_run_directory_positionally(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: list[Path] = []
+    monkeypatch.setattr(cli, "plot_runs", seen.append)
+
+    result = runner.invoke(app, ["plot", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert seen == [tmp_path]

@@ -300,8 +300,8 @@ def test_particle_curve_is_recorded_when_truth_exists(
     config: Any = json.loads(s=(run_dir / "config.json").read_text())
     assert config["best_epoch"] >= 0
     assert config["mmd_subsample"] == 16384
-    assert len(config["mmd_sigmas_detector"]) == 5  # pyrefly: ignore[unknown-argument-type] -- config["mmd_sigmas_*"] is a list
-    assert len(config["mmd_sigmas_particle"]) == 5  # pyrefly: ignore[unknown-argument-type]
+    assert len(config["mmd_sigmas_detector"]) == 5
+    assert len(config["mmd_sigmas_particle"]) == 5
     # The unsound knobs are gone from the record, not merely unused.
     assert "criterion" not in config
     assert "patience" not in config
@@ -772,13 +772,13 @@ def test_timing_writes_a_phase_breakdown_into_the_run_dir(
     payload: dict[str, Any] = json.loads(
         s=(run_dir / "artifacts" / "timings.json").read_text()
     )
-    assert {p["name"] for p in payload["phases"]} == {
-        "data",
-        "load",
-        "plots",
-        "evaluate",
-    }
+    assert {p["name"] for p in payload["phases"]} == {"data", "load", "evaluate"}
     assert payload["total_seconds"] > 0.0
+    # The figures carry every method, so drawing them is not Deconvolve's cost.
+    shared: dict[str, Any] = json.loads(
+        s=(run_dir / "artifacts" / timing.SHARED_TIMINGS_FILE).read_text()
+    )
+    assert [p["name"] for p in shared["phases"]] == ["plots"]
     # The reload path never trains, so nothing nested under `train` appears.
     assert all(p["depth"] == 0 for p in payload["phases"])
 
@@ -827,7 +827,7 @@ class TestBaselineDiscovery:
             run_dir=tmp_path, dim=2
         )
 
-        assert [o.label for o in overlays] == ["OmniFold"]
+        assert [o.label for o in overlays] == [r"\textsc{OmniFold}"]
         # One vector, repeated: OmniFold reweights events, not observables.
         assert len(overlays[0].weights) == 2
         assert np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])
@@ -848,6 +848,6 @@ class TestBaselineDiscovery:
             run_dir=tmp_path, dim=2
         )
 
-        assert [o.label for o in overlays] == ["IBU", "OmniFold"]
+        assert [o.label for o in overlays] == ["IBU", r"\textsc{OmniFold}"]
         # IBU's per-observable vectors must stay distinct, not be collapsed.
         assert not np.array_equal(a1=overlays[0].weights[0], a2=overlays[0].weights[1])

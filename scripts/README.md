@@ -1,13 +1,14 @@
+<!-- markdownlint-disable single-h1 no-duplicate-heading -->
 # Slurm scripts
 
 ## submit.zsh
 
-End-to-end unfolding run: train -> IBU baseline -> replot with the baseline overlaid -> metrics. Defaults to all six jet observables; every stage runs in one sequential job on one GPU.
+End-to-end unfolding run: train -> IBU baseline -> OmniFold baseline -> replot with both baselines overlaid -> metrics -> report. Defaults to all twelve jet observables at `-n1600000 -l3 -u128`; those sizes apply only to jet runs, so a Gaussian run keeps `deconvolve train`'s own defaults. `train` runs with `--no-plots`, since `plot` redraws every figure once both baselines exist. Every stage runs in one sequential job on one GPU.
 
 ### Examples
 
 ```shell
-    sbatch scripts/submit.zsh                       # all 6 jet observables
+    sbatch scripts/submit.zsh                       # all 12 jet observables
     sbatch scripts/submit.zsh --seed 7              # extra flags reach `deconvolve train`
     sbatch scripts/submit.zsh --var m --var w       # a subset
     sbatch scripts/submit.zsh --dataset gaussian --config params/2d_correlated.yaml
@@ -21,11 +22,11 @@ _`-c32` is mandatory:_ the gpu_shared queue requires exactly 32 logical cores pe
 
 `-Cgpu` sets the device requested to an 40GB A100, of which Perlmutter has ~1200 nodes; `-Cgpu&hbm80g` may be chosen if more memory is needed. This requests the 80GB part but from a pool of ~200, so it will cost queue time.
 
-`-t00:15:00` sets the runtime to 15 minutes. With the default parameters, a full run takes about ~5 minutes end to end, dominated by npz loading and matplotlib, not by the GPU. This is a ~3x margin. This does however assume the jet cache is already warm. A cold cache pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB), and the job may overrun the 15 minute limit. Warm it on a login node first with `uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(1000)"`.
+`-t01:15:00` sets the runtime to 75 minutes. Deconvolve itself takes ~4 minutes end to end, dominated by npz loading and matplotlib rather than the GPU; OmniFold alone measured ~41 minutes on the shipped configuration (1.6M samples, twelve observables, 3 iterations, 50 epochs); the redraw, metrics and report add a few more. That is ~50 minutes, a ~1.5x margin. This assumes the jet cache and the OmniFold worker's environment are both already warm (see `submit_omnifold.zsh` below for the worker). A cold jet cache pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) and may push the job over the limit. Warm it on a login node first with `uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(1000)"`.
 
 ### Run script
 
-- `set -e` is important here because this script involves running four distinct stages, and a failed train must not go on to run IBU against a previous run directory.
+- `set -e` is important here because this script runs several stages in sequence, and a failed train must not go on to run the baselines against a previous run directory.
 - `DECONVOLVE_CACHE_DIR` is inherited from the submitting shell (SLURM exports the environment by default).
 - `_save_run` names the run directory for the UTC timestamp and returns it only to its Python caller, so a shell has to find it. Hence this script anchors on a marker file rather than "newest directory": `runs/` already holds older runs, and a mistake here would silently attach IBU to one of them.
 - IBU unfolds the same populations for comparison. The reload pass after it puts the baseline into the figures: `workflows.train.run` reads ibu_weights.npz only if it exists when the plots are drawn, and on the training pass it does not exist yet.
@@ -58,7 +59,9 @@ The default `TRAIN_ARGS` is _prepended_ to the command line arguments. Since cli
 
 The OmniFold baseline against an **existing** run directory: unfold -> redraw the
 figures with the OmniFold curve on them -> re-score -> rebuild the report. The
-RAN training in that directory is read, never repeated.
+Deconvolve training in that directory is read, never repeated. `submit.zsh` now runs
+OmniFold itself, so this is for a run made without it, or for rerunning the
+baseline with different flags.
 
 ### Examples
 
@@ -69,13 +72,9 @@ RAN training in that directory is read, never repeated.
 
 Extra flags after the run directory reach `deconvolve baseline omnifold`.
 
-### Why it is a separate job
+### When to use it
 
-OmniFold measured ~41 minutes on the shipped configuration (1.6M samples, twelve
-observables, 3 iterations, 50 epochs), against `submit.zsh`'s entire 10-minute
-wall clock. Folding it in would have meant sizing that job for the baseline
-rather than for the method. This one asks for 75 minutes, ~1.5x the whole
-pipeline.
+`submit.zsh` runs OmniFold with its defaults, since the extra flags on its command line go to `deconvolve train`. Use this script to add OmniFold to a run that predates that, or to rerun it with different flags (`--niter 5` above). It asks for 75 minutes, ~1.5x the OmniFold half of the pipeline plus the redraw.
 
 ### Two things that fail quietly without help
 
@@ -100,7 +99,7 @@ is not in `uv.lock`, and first use pulls ~3.5GB of CUDA wheels --- which a compu
 node generally cannot do. Warm it on a login node:
 
 ```shell
-    uv run --no-project src/ran/baselines/_omnifold_worker.py
+    uv run --no-project src/deconvolve/baselines/_omnifold_worker.py
 ```
 
 ## submit_hparam.zsh

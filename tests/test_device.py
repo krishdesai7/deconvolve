@@ -45,7 +45,11 @@ class TestTrainSplit:
     def test_is_a_pytree(self) -> None:
         """The splits have to survive `tree_map` to cross a jit boundary."""
         split = TrainSplit.from_zxy(_toy().train.as_arrays())
-        doubled = jax.tree.map(lambda a: a * 2, split)
+
+        def double(a: jax.Array) -> jax.Array:
+            return a * 2
+
+        doubled = jax.tree.map(double, split)
         assert isinstance(doubled, TrainSplit)
         np.testing.assert_allclose(np.asarray(doubled.z), np.asarray(split.z) * 2)
 

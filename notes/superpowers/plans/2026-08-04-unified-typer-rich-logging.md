@@ -4,7 +4,7 @@
 
 **Goal:** Replace six Fire entry points and production built-in `print()` calls with one unified Typer command tree, standard-library logging rendered by `RichHandler`, and Rich-native progress and metric tables.
 
-**Architecture:** `ran.cli` owns a root Typer app and nested baseline and sweep apps; every command lazily imports its domain function so the JAX and TensorFlow Keras backends remain isolated by process. `ran.logging_config` owns root logging setup, while domain modules expose ordinary callable APIs and module-level loggers. `ran.workflow` owns the former primary entry-point workflow, and `ran.leakage` owns the former repository script logic.
+**Architecture:** `deconvolve.cli` owns a root Typer app and nested baseline and sweep apps; every command lazily imports its domain function so the JAX and TensorFlow Keras backends remain isolated by process. `deconvolve.logging_config` owns root logging setup, while domain modules expose ordinary callable APIs and module-level loggers. `deconvolve.workflow` owns the former primary entry-point workflow, and `deconvolve.leakage` owns the former repository script logic.
 
 **Tech Stack:** Python 3.13, Typer 0.27.1 or newer, Rich via Typer, standard-library `logging`, pytest, Ruff, Pyrefly, Complexipy.
 
@@ -12,10 +12,10 @@
 
 - Expose exactly `train`, `evaluate`, `baseline`, `sweep`, and `leakage-check` at the root.
 - Expose exactly `omnifold` and `ibu` below `baseline`.
-- Expose exactly `ran`, `omnifold`, and `collect` below `sweep`.
+- Expose exactly `deconvolve`, `omnifold`, and `collect` below `sweep`.
 - Every Typer application uses `rich_markup_mode="rich"`.
-- `ran.cli` must not import Keras, JAX, TensorFlow, `ran.workflow`, `ran.train`, `ran.evaluate`, or either baseline module at module import time.
-- `baseline omnifold` and `sweep omnifold` must continue to start TensorFlow in a fresh process; all RAN commands continue to use JAX.
+- `deconvolve.cli` must not import Keras, JAX, TensorFlow, `deconvolve.workflow`, `deconvolve.train`, `deconvolve.evaluate`, or either baseline module at module import time.
+- `baseline omnifold` and `sweep omnifold` must continue to start TensorFlow in a fresh process; all Deconvolve commands continue to use JAX.
 - Global logging defaults to `INFO` and is selected before the command with `--log-level`.
 - Domain modules never configure the root logger during import.
 - Logging calls use lazy `%`-style argument substitution, not f-strings.
@@ -28,11 +28,13 @@
 
 ### Task 1: Shared Rich Logging Configuration
 
-**Files:**
-- Create: `src/ran/logging_config.py`
+#### Files
+
+- Create: `src/deconvolve/logging_config.py`
 - Create: `tests/test_logging_config.py`
 
-**Interfaces:**
+#### Interfaces
+
 - Produces: `configure_logging(level: str = "INFO") -> None`
 - Consumes: `rich.logging.RichHandler`, standard-library root logging
 
@@ -56,7 +58,7 @@ def restore_root_logging():
 
 
 def test_configure_logging_installs_one_rich_handler_and_level():
-    from ran.logging_config import configure_logging
+    from deconvolve.logging_config import configure_logging
 
     configure_logging("debug")
 
@@ -67,7 +69,7 @@ def test_configure_logging_installs_one_rich_handler_and_level():
 
 
 def test_configure_logging_is_deterministic_when_called_twice():
-    from ran.logging_config import configure_logging
+    from deconvolve.logging_config import configure_logging
 
     configure_logging("INFO")
     configure_logging("WARNING")
@@ -79,7 +81,7 @@ def test_configure_logging_is_deterministic_when_called_twice():
 
 
 def test_configure_logging_rejects_unknown_level():
-    from ran.logging_config import configure_logging
+    from deconvolve.logging_config import configure_logging
 
     with pytest.raises(ValueError, match="Unknown log level"):
         configure_logging("verbose")
@@ -89,11 +91,11 @@ def test_configure_logging_rejects_unknown_level():
 
 Run: `uv run pytest -q tests/test_logging_config.py`
 
-Expected: FAIL because `ran.logging_config` does not exist.
+Expected: FAIL because `deconvolve.logging_config` does not exist.
 
 - [ ] **Step 3: Implement the minimal shared configuration**
 
-Create `src/ran/logging_config.py` with this behavior:
+Create `src/deconvolve/logging_config.py` with this behavior:
 
 ```python
 import logging
@@ -132,7 +134,7 @@ Expected: 3 passed.
 - [ ] **Step 5: Commit the logging configuration**
 
 ```bash
-git add src/ran/logging_config.py tests/test_logging_config.py
+git add src/deconvolve/logging_config.py tests/test_logging_config.py
 git commit -m "feat: configure Rich application logging"
 ```
 
@@ -141,57 +143,57 @@ git commit -m "feat: configure Rich application logging"
 ### Task 2: Extract Domain Workflows from CLI Entry Points
 
 **Files:**
-- Create: `src/ran/workflow.py`
-- Create: `src/ran/leakage.py`
+- Create: `src/deconvolve/workflow.py`
+- Create: `src/deconvolve/leakage.py`
 - Create: `tests/test_command_targets.py`
-- Modify: `src/ran/evaluate.py`
-- Modify: `src/ran/baselines/omnifold.py`
-- Modify: `src/ran/baselines/ibu.py`
-- Modify: `src/ran/experiments/cubic_sweep.py`
+- Modify: `src/deconvolve/evaluate.py`
+- Modify: `src/deconvolve/baselines/omnifold.py`
+- Modify: `src/deconvolve/baselines/ibu.py`
+- Modify: `src/deconvolve/experiments/cubic_sweep.py`
 - Delete: `scripts/leakage_check.py`
 
 **Interfaces:**
-- Produces: `ran.workflow.run`, with its complete public signature specified in Step 3
-- Produces: `ran.leakage.run_leakage_check(poison: bool = False, seed: int = 42, init_seed: int = 0) -> None`
-- Produces: `ran.evaluate.evaluate_runs(run_dir: str | Path = "runs", force: bool = False) -> None`
-- Produces: `ran.baselines.omnifold.evaluate_runs(run_dir: str | Path = "runs", force: bool = False, niter: int = 3, epochs: int = 50) -> None`
-- Produces: `ran.baselines.ibu.evaluate_runs(run_dir: str | Path = "runs", force: bool = False, n_iterations: int = 10, purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD) -> None`
-- Preserves: `run_ran`, `run_omnifold`, and `collect` in `ran.experiments.cubic_sweep`
+
+- Produces: `deconvolve.workflow.run`, with its complete public signature specified in Step 3
+- Produces: `deconvolve.leakage.run_leakage_check(poison: bool = False, seed: int = 42, init_seed: int = 0) -> None`
+- Produces: `deconvolve.evaluate.evaluate_runs(run_dir: str | Path = "runs", force: bool = False) -> None`
+- Produces: `deconvolve.baselines.omnifold.evaluate_runs(run_dir: str | Path = "runs", force: bool = False, niter: int = 3, epochs: int = 50) -> None`
+- Produces: `deconvolve.baselines.ibu.evaluate_runs(run_dir: str | Path = "runs", force: bool = False, n_iterations: int = 10, purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD) -> None`
 
 - [ ] **Step 1: Write failing import-boundary tests**
 
 ```python
 def test_primary_workflow_has_a_domain_entry_point():
-    from ran.workflow import run
+    from deconvolve.workflow import run
 
     assert callable(run)
 
 
 def test_leakage_check_has_a_package_entry_point():
-    from ran.leakage import run_leakage_check
+    from deconvolve.leakage import run_leakage_check
 
     assert callable(run_leakage_check)
 
 
 def test_batch_orchestrators_have_domain_names():
-    from ran.baselines.ibu import evaluate_runs as evaluate_ibu_runs
-    from ran.evaluate import evaluate_runs
+    from deconvolve.baselines.ibu import evaluate_runs as evaluate_ibu_runs
+    from deconvolve.evaluate import evaluate_runs
 
     assert callable(evaluate_runs)
     assert callable(evaluate_ibu_runs)
 ```
 
-Do not import `ran.baselines.omnifold` in this test process because the rest of the test suite uses JAX. OmniFold command registration is exercised without importing its implementation in Task 3.
+Do not import `deconvolve.baselines.omnifold` in this test process because the rest of the test suite uses JAX. OmniFold command registration is exercised without importing its implementation in Task 3.
 
 - [ ] **Step 2: Run the tests and verify missing-module/name failures**
 
 Run: `uv run pytest -q tests/test_command_targets.py`
 
-Expected: FAIL because `ran.workflow`, `ran.leakage`, and the renamed orchestrators do not exist.
+Expected: FAIL because `deconvolve.workflow`, `deconvolve.leakage`, and the renamed orchestrators do not exist.
 
 - [ ] **Step 3: Move the primary workflow without changing behavior**
 
-Move the imports and body of `src/ran/__main__.py:23-208` into `src/ran/workflow.py` and rename `main` to `run`. Keep this exact public signature:
+Move the imports and body of `src/deconvolve/__main__.py:23-208` into `src/deconvolve/workflow.py` and rename `main` to `run`. Keep this exact public signature:
 
 ```python
 def run(
@@ -213,17 +215,17 @@ Do not alter calculations, file names, model saving, seed handling, plotting, or
 
 - [ ] **Step 4: Move the leakage workflow into the package**
 
-Create `src/ran/leakage.py` from `scripts/leakage_check.py`, rename `run` to `run_leakage_check`, give `poison` a default of `False`, remove the Fire import and module entry-point block, and delete `scripts/leakage_check.py`.
+Create `src/deconvolve/leakage.py` from `scripts/leakage_check.py`, rename `run` to `run_leakage_check`, give `poison` a default of `False`, remove the Fire import and module entry-point block, and delete `scripts/leakage_check.py`.
 
 - [ ] **Step 5: Rename batch orchestration functions and remove Fire shells**
 
 Apply these exact renames:
 
 ```python
-# ran.evaluate
+# deconvolve.evaluate
 def evaluate_runs(run_dir: str | Path = "runs", force: bool = False) -> None:
 
-# ran.baselines.omnifold
+# deconvolve.baselines.omnifold
 def evaluate_runs(
     run_dir: str | Path = "runs",
     force: bool = False,
@@ -231,7 +233,7 @@ def evaluate_runs(
     epochs: int = 50,
 ) -> None:
 
-# ran.baselines.ibu
+# deconvolve.baselines.ibu
 DEFAULT_PURITY_THRESHOLD = np.sqrt(0.5, dtype=np.double)
 
 def evaluate_runs(
@@ -253,7 +255,7 @@ Expected: all selected tests pass.
 - [ ] **Step 7: Commit the domain extraction**
 
 ```bash
-git add src/ran/workflow.py src/ran/leakage.py src/ran/evaluate.py src/ran/baselines/omnifold.py src/ran/baselines/ibu.py src/ran/experiments/cubic_sweep.py tests/test_command_targets.py scripts/leakage_check.py
+git add src/deconvolve/workflow.py src/deconvolve/leakage.py src/deconvolve/evaluate.py src/deconvolve/baselines/omnifold.py src/deconvolve/baselines/ibu.py tests/test_command_targets.py scripts/leakage_check.py
 git commit -m "refactor: extract CLI domain workflows"
 ```
 
@@ -262,11 +264,13 @@ git commit -m "refactor: extract CLI domain workflows"
 ### Task 3: Build the Unified Lazy-Import Typer Command Tree
 
 **Files:**
-- Create: `src/ran/cli.py`
+
+- Create: `src/deconvolve/cli.py`
 - Create: `tests/test_cli.py`
-- Replace: `src/ran/__main__.py`
+- Replace: `src/deconvolve/__main__.py`
 
 **Interfaces:**
+
 - Produces: `app: typer.Typer`, `baseline_app: typer.Typer`, `sweep_app: typer.Typer`
 - Consumes: all domain functions produced by Task 2 through imports inside command functions only
 - Consumes: `configure_logging` from Task 1
@@ -279,8 +283,8 @@ import sys
 
 from typer.testing import CliRunner
 
-import ran.cli as cli
-from ran.cli import app
+import deconvolve.cli as cli
+from deconvolve.cli import app
 
 runner = CliRunner()
 
@@ -302,7 +306,7 @@ def test_baseline_help_lists_both_methods():
 def test_sweep_help_lists_all_actions():
     result = runner.invoke(app, ["sweep", "--help"])
     assert result.exit_code == 0
-    for command in ("ran", "omnifold", "collect"):
+    for command in ("deconvolve", "omnifold", "collect"):
         assert command in result.stdout
 
 
@@ -311,7 +315,7 @@ def test_importing_cli_does_not_commit_a_keras_backend():
         [
             sys.executable,
             "-c",
-            "import sys; import ran.cli; assert 'keras' not in sys.modules",
+            "import sys; import deconvolve.cli; assert 'keras' not in sys.modules",
         ],
         check=False,
         capture_output=True,
@@ -331,9 +335,9 @@ from types import ModuleType
 def test_train_converts_typer_values_for_the_workflow(monkeypatch, tmp_path):
     calls = []
     configured_levels = []
-    fake_workflow = ModuleType("ran.workflow")
+    fake_workflow = ModuleType("deconvolve.workflow")
     fake_workflow.run = lambda **kwargs: calls.append(kwargs)
-    monkeypatch.setitem(sys.modules, "ran.workflow", fake_workflow)
+    monkeypatch.setitem(sys.modules, "deconvolve.workflow", fake_workflow)
     monkeypatch.setattr(cli, "configure_logging", configured_levels.append)
 
     result = runner.invoke(
@@ -367,11 +371,11 @@ def test_train_converts_typer_values_for_the_workflow(monkeypatch, tmp_path):
 
 Run: `uv run pytest -q tests/test_cli.py`
 
-Expected: FAIL because `ran.cli` does not exist.
+Expected: FAIL because `deconvolve.cli` does not exist.
 
 - [ ] **Step 4: Implement application objects, global logging, and lazy commands**
 
-Create `src/ran/cli.py` with only standard-library, Typer, and logging configuration imports at module scope. Define:
+Create `src/deconvolve/cli.py` with only standard-library, Typer, and logging configuration imports at module scope. Define:
 
 ```python
 from enum import StrEnum
@@ -380,7 +384,7 @@ from typing import Annotated
 
 import typer
 
-from ran.logging_config import configure_logging
+from deconvolve.logging_config import configure_logging
 
 DEFAULT_VARIABLES = ("m", "M", "w", "tau21", "zg", "sdm")
 
@@ -433,7 +437,7 @@ def train_command(
     seed: int | None = None,
     data_seed: int = 42,
 ) -> None:
-    from ran.workflow import run
+    from deconvolve.workflow import run
 
     run(
         batch_size=batch_size,
@@ -454,10 +458,10 @@ Use `Path("runs")` as the default for evaluation and both baselines. Preserve Om
 
 - [ ] **Step 5: Replace the module entry point**
 
-Replace `src/ran/__main__.py` with:
+Replace `src/deconvolve/__main__.py` with:
 
 ```python
-from ran.cli import app
+from deconvolve.cli import app
 
 
 if __name__ == "__main__":
@@ -469,15 +473,15 @@ if __name__ == "__main__":
 Run:
 
 ```bash
-uv run -m ran --help
-uv run -m ran train --help
-uv run -m ran evaluate --help
-uv run -m ran baseline omnifold --help
-uv run -m ran baseline ibu --help
-uv run -m ran sweep ran --help
-uv run -m ran sweep omnifold --help
-uv run -m ran sweep collect --help
-uv run -m ran leakage-check --help
+uv run -m deconvolve --help
+uv run -m deconvolve train --help
+uv run -m deconvolve evaluate --help
+uv run -m deconvolve baseline omnifold --help
+uv run -m deconvolve baseline ibu --help
+uv run -m deconvolve sweep deconvolve --help
+uv run -m deconvolve sweep omnifold --help
+uv run -m deconvolve sweep collect --help
+uv run -m deconvolve leakage-check --help
 ```
 
 Expected: every invocation exits 0 and displays Rich-formatted help without importing Keras for root help.
@@ -491,7 +495,7 @@ Expected: all focused tests pass.
 - [ ] **Step 8: Commit the unified CLI**
 
 ```bash
-git add src/ran/cli.py src/ran/__main__.py tests/test_cli.py
+git add src/deconvolve/cli.py src/deconvolve/__main__.py tests/test_cli.py
 git commit -m "feat: add unified Typer command tree"
 ```
 
@@ -500,20 +504,22 @@ git commit -m "feat: add unified Typer command tree"
 ### Task 4: Replace Built-In Prints with Semantic Logging
 
 **Files:**
+
 - Modify: `tests/test_cubic_sweep.py`
-- Modify: `src/ran/workflow.py`
-- Modify: `src/ran/leakage.py`
-- Modify: `src/ran/train.py`
-- Modify: `src/ran/evaluate.py`
-- Modify: `src/ran/baselines/omnifold.py`
-- Modify: `src/ran/baselines/ibu.py`
-- Modify: `src/ran/data/datasets.py`
-- Modify: `src/ran/data/jets.py`
-- Modify: `src/ran/data/download.py`
-- Modify: `src/ran/plotting.py`
-- Modify: `src/ran/experiments/cubic_sweep.py`
+- Modify: `src/deconvolve/workflow.py`
+- Modify: `src/deconvolve/leakage.py`
+- Modify: `src/deconvolve/train.py`
+- Modify: `src/deconvolve/evaluate.py`
+- Modify: `src/deconvolve/baselines/omnifold.py`
+- Modify: `src/deconvolve/baselines/ibu.py`
+- Modify: `src/deconvolve/data/datasets.py`
+- Modify: `src/deconvolve/data/jets.py`
+- Modify: `src/deconvolve/data/download.py`
+- Modify: `src/deconvolve/plotting.py`
+- Modify: `src/deconvolve/experiments/cubic_sweep.py`
 
 **Interfaces:**
+
 - Every reporting module owns `logger = logging.getLogger(__name__)`
 - Existing return values and exceptions remain unchanged
 
@@ -523,7 +529,7 @@ Replace `capsys` with `caplog`, set the warning level, and assert against record
 
 ```python
 def test_collect_skips_points_missing_one_method(tmp_path, caplog):
-    from ran.experiments.cubic_sweep import collect
+    from deconvolve.experiments.cubic_sweep import collect
 
     _write_points(tmp_path, [0], [0.0])
     _write_points(tmp_path, [1], [10.0], omnifold=False)
@@ -547,7 +553,7 @@ Expected: FAIL because `caplog.text` does not contain the printed warning.
 Use these exact severity mappings:
 
 | Module and event | Level |
-|---|---|
+| --- | --- |
 | `workflow`: run/baseline weights loaded, run saved | INFO |
 | `workflow`: final metric calculation caught failure | `logger.exception` |
 | `train`: epoch, early stop, final test losses | INFO |
@@ -599,7 +605,7 @@ Expected: all selected tests pass.
 - [ ] **Step 6: Commit semantic logging conversions**
 
 ```bash
-git add src/ran/workflow.py src/ran/leakage.py src/ran/train.py src/ran/evaluate.py src/ran/baselines/omnifold.py src/ran/baselines/ibu.py src/ran/data/datasets.py src/ran/data/jets.py src/ran/plotting.py src/ran/experiments/cubic_sweep.py tests/test_cubic_sweep.py
+git add src/deconvolve/workflow.py src/deconvolve/leakage.py src/deconvolve/train.py src/deconvolve/evaluate.py src/deconvolve/baselines/omnifold.py src/deconvolve/baselines/ibu.py src/deconvolve/data/datasets.py src/deconvolve/data/jets.py src/deconvolve/plotting.py
 git commit -m "refactor: replace operational prints with logging"
 ```
 
@@ -608,14 +614,16 @@ git commit -m "refactor: replace operational prints with logging"
 ### Task 5: Replace Presentation Prints with Rich Tables and Progress
 
 **Files:**
+
 - Create: `tests/test_console_output.py`
 - Create: `tests/test_source_hygiene.py`
-- Modify: `src/ran/evaluate.py`
-- Modify: `src/ran/baselines/omnifold.py`
-- Modify: `src/ran/baselines/ibu.py`
-- Modify: `src/ran/data/download.py`
+- Modify: `src/deconvolve/evaluate.py`
+- Modify: `src/deconvolve/baselines/omnifold.py`
+- Modify: `src/deconvolve/baselines/ibu.py`
+- Modify: `src/deconvolve/data/download.py`
 
 **Interfaces:**
+
 - Produces: `render_metrics(run_name: str, metrics: dict, var_names: list[str], console: Console | None = None) -> None`
 - Produces: download reporthook updates a Rich `Progress` task without calling built-in print
 - Replaces: `_print_metrics` imports in both baselines with `render_metrics`
@@ -630,7 +638,7 @@ from rich.console import Console
 
 
 def test_render_metrics_outputs_named_columns_and_values():
-    from ran.evaluate import render_metrics
+    from deconvolve.evaluate import render_metrics
 
     output = StringIO()
     console = Console(file=output, color_system=None, width=120)
@@ -665,7 +673,7 @@ from rich.progress import Progress
 
 
 def test_download_file_updates_a_rich_progress_task(monkeypatch, tmp_path):
-    import ran.data.download as download
+    import deconvolve.data.download as download
 
     completed = []
 
@@ -762,7 +770,7 @@ Expected: exit 0 with no logging or built-in-print violations.
 - [ ] **Step 9: Commit Rich presentation**
 
 ```bash
-git add src/ran/evaluate.py src/ran/baselines/omnifold.py src/ran/baselines/ibu.py src/ran/data/download.py tests/test_console_output.py tests/test_source_hygiene.py
+git add src/deconvolve/evaluate.py src/deconvolve/baselines/omnifold.py src/deconvolve/baselines/ibu.py src/deconvolve/data/download.py tests/test_console_output.py tests/test_source_hygiene.py
 git commit -m "feat: render metrics and downloads with Rich"
 ```
 
@@ -771,37 +779,39 @@ git commit -m "feat: render metrics and downloads with Rich"
 ### Task 6: Update Documentation and SLURM Commands
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `scripts/submit.sh`
 - Modify: `scripts/submit_sweep.sh`
-- Modify: module docstrings in `src/ran/evaluate.py`, `src/ran/baselines/omnifold.py`, `src/ran/baselines/ibu.py`, and `src/ran/experiments/cubic_sweep.py`
+- Modify: module docstrings in `src/deconvolve/evaluate.py`, `src/deconvolve/baselines/omnifold.py`, `src/deconvolve/baselines/ibu.py`, and `src/deconvolve/experiments/cubic_sweep.py`
 
 **Interfaces:**
-- Documents and invokes only the unified `uv run -m ran` command tree
-- Preserves separate processes for RAN and OmniFold sweep steps
+
+- Documents and invokes only the unified `uv run -m deconvolve` command tree
+- Preserves separate processes for Deconvolve and OmniFold sweep steps
 
 - [ ] **Step 1: Record stale command references before editing**
 
 Run:
 
 ```bash
-rg -n "uv run -m ran\.(evaluate|baselines|experiments)|uv run -m ran --(config|dataset|load)|scripts/leakage_check|--[a-z]+_[a-z]+|\bFire\b" README.md scripts src/ran
+rg -n "uv run -m deconvolve\.(evaluate|baselines|experiments)|uv run -m deconvolve --(config|dataset|load)|scripts/leakage_check|--[a-z]+_[a-z]+|\bFire\b" README.md scripts src/deconvolve
 ```
 
 Expected: matches show the old module paths, implicit train command, underscore options, leakage script, and Fire references that need replacement.
 
 - [ ] **Step 2: Update primary usage and the option table**
 
-Use `uv run -m ran train` for every training or reload example. Replace underscore option spellings with Typer's hyphenated spellings. Replace tuple-literal jet variables with:
+Use `uv run -m deconvolve train` for every training or reload example. Replace underscore option spellings with Typer's hyphenated spellings. Replace tuple-literal jet variables with:
 
 ```bash
-uv run -m ran train --dataset jets --variable m --variable w
+uv run -m deconvolve train --dataset jets --variable m --variable w
 ```
 
 Document the global log level with:
 
 ```bash
-uv run -m ran --log-level DEBUG train --config params/1d_default.yaml
+uv run -m deconvolve --log-level DEBUG train --config params/1d_default.yaml
 ```
 
 - [ ] **Step 3: Update evaluation, baselines, leakage, and project structure**
@@ -809,38 +819,22 @@ uv run -m ran --log-level DEBUG train --config params/1d_default.yaml
 Use these canonical command shapes:
 
 ```bash
-uv run -m ran evaluate --run-dir runs/2026-03-14T061023Z
-uv run -m ran baseline omnifold --run-dir runs/2026-03-14T061023Z
-uv run -m ran baseline ibu --run-dir runs/2026-03-14T061023Z
-uv run -m ran leakage-check --clean
-uv run -m ran leakage-check --poison
+uv run -m deconvolve evaluate --run-dir runs/2026-03-14T061023Z
+uv run -m deconvolve baseline omnifold --run-dir runs/2026-03-14T061023Z
+uv run -m deconvolve baseline ibu --run-dir runs/2026-03-14T061023Z
+uv run -m deconvolve leakage-check --clean
+uv run -m deconvolve leakage-check --poison
 ```
 
 Add `cli.py`, `workflow.py`, `logging_config.py`, and `leakage.py` to the project tree; remove `scripts/leakage_check.py`; replace Fire with Typer and Rich in the dependency list.
-
-Add a cubic sweep subsection documenting the three unified commands:
-
-```bash
-uv run -m ran sweep ran --s-index 0 --sweep-dir runs/cubic-sweep
-uv run -m ran sweep omnifold --s-index 0 --sweep-dir runs/cubic-sweep
-uv run -m ran sweep collect --sweep-dir runs/cubic-sweep
-```
 
 - [ ] **Step 4: Update SLURM scripts while preserving process isolation**
 
 In `scripts/submit.sh`, run:
 
 ```bash
-uv run -m ran train "$@"
-uv run -m ran baseline omnifold --run-dir="${LATEST_RUN}"
-```
-
-In `scripts/submit_sweep.sh`, update the two commands inside each `srun` process and the final collection command to:
-
-```bash
-uv run -m ran sweep ran --s-index='${i}' --sweep-dir='${SWEEP_DIR}' --n-points='${N_POINTS}'
-uv run -m ran sweep omnifold --s-index='${i}' --sweep-dir='${SWEEP_DIR}' --n-points='${N_POINTS}'
-uv run -m ran sweep collect --sweep-dir="${SWEEP_DIR}" --n-points="${N_POINTS}"
+uv run -m deconvolve train "$@"
+uv run -m deconvolve baseline omnifold --run-dir="${LATEST_RUN}"
 ```
 
 - [ ] **Step 5: Confirm no stale CLI references remain**
@@ -848,21 +842,21 @@ uv run -m ran sweep collect --sweep-dir="${SWEEP_DIR}" --n-points="${N_POINTS}"
 Run:
 
 ```bash
-rg -n "uv run -m ran\.(evaluate|baselines|experiments)|uv run -m ran --(config|dataset|load)|scripts/leakage_check|--[a-z]+_[a-z]+|\bFire\b" README.md scripts src/ran
+rg -n "uv run -m deconvolve\.(evaluate|baselines)|uv run -m deconvolve --(config|dataset|load)|scripts/leakage_check|--[a-z]+_[a-z]+|\bFire\b" README.md scripts src/deconvolve
 ```
 
 Expected: no matches. Mentions of the general word `fire` in unrelated prose are not introduced.
 
 - [ ] **Step 6: Smoke-test every documented command's help path**
 
-Run: `uv run -m ran --help && uv run -m ran train --help && uv run -m ran evaluate --help && uv run -m ran baseline --help && uv run -m ran sweep --help && uv run -m ran leakage-check --help`
+Run: `uv run -m deconvolve --help && uv run -m deconvolve train --help && uv run -m deconvolve evaluate --help && uv run -m deconvolve baseline omnifold --help && uv run -m deconvolve baseline ibu --help && uv run -m deconvolve leakage-check --help`
 
 Expected: exit 0.
 
 - [ ] **Step 7: Commit documentation and job scripts**
 
 ```bash
-git add README.md scripts/submit.sh scripts/submit_sweep.sh src/ran/evaluate.py src/ran/baselines/omnifold.py src/ran/baselines/ibu.py src/ran/experiments/cubic_sweep.py
+git add README.md scripts/submit.sh scripts/submit_sweep.sh src/deconvolve/evaluate.py src/deconvolve/baselines/omnifold.py src/deconvolve/baselines/ibu.py
 git commit -m "docs: document unified command tree"
 ```
 
@@ -871,9 +865,11 @@ git commit -m "docs: document unified command tree"
 ### Task 7: Full Verification and Regression Audit
 
 **Files:**
+
 - Modify only files implicated by failures introduced by Tasks 1-6
 
 **Interfaces:**
+
 - Verifies the approved design end to end
 - Does not broaden scope to unrelated pre-existing lint or type issues
 
@@ -887,7 +883,7 @@ Expected: exit 0 without modifying `pyproject.toml` or `uv.lock`.
 
 Run: `uv run pytest -q`
 
-Expected: all regular tests pass; the explicitly opt-in real OmniFold training test remains skipped unless `RAN_RUN_SLOW=1` is set.
+Expected: all regular tests pass; the explicitly opt-in real OmniFold training test remains skipped unless `DECONVOLVE_RUN_SLOW=1` is set.
 
 - [ ] **Step 3: Run scoped logging and CLI lint verification**
 
@@ -913,13 +909,13 @@ Expected for this refactor: no new failures in changed files. The repository alr
 Run:
 
 ```bash
-uv run -m ran --help
-uv run -m ran baseline omnifold --help
-uv run -m ran sweep omnifold --help
-uv run python -c "import sys; import ran.cli; assert 'keras' not in sys.modules"
+uv run -m deconvolve --help
+uv run -m deconvolve baseline omnifold --help
+uv run -m deconvolve sweep omnifold --help
+uv run python -c "import sys; import deconvolve.cli; assert 'keras' not in sys.modules"
 ```
 
-Expected: all commands exit 0 and importing `ran.cli` does not import Keras.
+Expected: all commands exit 0 and importing `deconvolve.cli` does not import Keras.
 
 - [ ] **Step 6: Audit the final tree and diff**
 

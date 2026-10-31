@@ -1,6 +1,6 @@
 """The two-way variance decomposition, and the covariance the field assumes away.
 
-A run of RAN is a function of two independent random draws: the dataset `D` it
+A run of Deconvolve is a function of two independent random draws: the dataset `D` it
 saw and the initialization seed `S` it started from. Write one run's output as
 `T(D, S)`. The law of total variance splits its variance exactly:
 

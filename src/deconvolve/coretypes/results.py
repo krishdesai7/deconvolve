@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from .events import Populations
-    from .types import MetricRecord
+    from .types import JointMetricRecord, MetricRecord
 
 
 class UnfoldingPopulations(NamedTuple):
@@ -43,3 +43,6 @@ class IBUResult:
     variable_names: tuple[str, ...]
     weights: NDArray[np.single]
     outcomes: tuple[VariableOutcome, ...]
+    # Scored with the product of the per-variable weights; see
+    # `baselines.ibu.joint_weights`.
+    joint: dict[str, JointMetricRecord]

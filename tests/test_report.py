@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import shutil
@@ -36,6 +37,9 @@ def test_every_token_the_generator_fills_is_in_the_template() -> None:
         "<<PARTICLE_WASSERSTEIN>>",
         "<<PARTICLE_JS>>",
         "<<PARTICLE_VLC>>",
+        # One joint row per level, the only number that sees correlations.
+        "<<DETECTOR_SLICED>>",
+        "<<PARTICLE_SLICED>>",
     }
 
 
@@ -90,7 +94,7 @@ def test_a_non_finite_improvement_leaves_the_rest_of_the_row_intact() -> None:
     )
 
     # Two absent-IBU cells, two absent-OmniFold cells, and the non-finite
-    # RAN improvement.
+    # Deconvolve improvement.
     assert body.count(r"\multicolumn{1}{c}{---}") == 5
     # The scaled `after` still lands: 0.1 x 10^3.
     assert "100" in body
@@ -215,6 +219,99 @@ def test_the_pass_is_folded_into_the_detail_cell() -> None:
     assert "cache hit -- train" in report.timing_rows(payload)
 
 
+def test_underscore_bookkeeping_is_not_a_setting() -> None:
+    """`_origin` says which config layer set each option: for tools, not readers."""
+    rows: str = report.config_rows(
+        {"dim": 1, "seed": 3, "_origin": {"seed": "default"}}, None
+    )
+    assert "_origin" not in rows
+    assert "seed" in rows
+
+
+def _pass(name: str, seconds: float, pass_name: str) -> dict[str, Any]:
+    return {
+        "total_seconds": seconds,
+        "phases": [
+            {
+                "name": name,
+                "seconds": seconds,
+                "depth": 0,
+                "detail": None,
+                "failed": False,
+                "pass": pass_name,
+            }
+        ],
+    }
+
+
+def test_a_single_timed_pass_has_no_label_row() -> None:
+    """Only training timed: the table reads exactly as it did before OmniFold."""
+    timings = _pass("train", 2.0, "train")
+    assert report.timings_body(
+        [(r"\textsc{Deconvolve}", timings)]
+    ) == report.timing_rows(timings)
+
+
+def test_each_timed_pass_gets_its_own_labelled_block_and_total() -> None:
+    body: str = report.timings_body(
+        [
+            (r"\textsc{Deconvolve}", _pass("train", 2.0, "train")),
+            (r"\textsc{OmniFold} baseline", _pass("omnifold", 400.0, "omnifold")),
+        ]
+    )
+    assert body.index(r"\itshape \textsc{Deconvolve}") < body.index(
+        r"\itshape \textsc{OmniFold} baseline"
+    )
+    assert body.count(r"\textbf{total}") == 2
+    assert "400" in body
+
+
+def test_the_omnifold_timings_reach_the_report(reference_run: Path) -> None:
+    """`timings_omnifold.json` is its own file; the report has to look for it."""
+    _ = (reference_run / "artifacts" / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert r"\textsc{OmniFold} baseline" in source
+    assert "omnifold & 400" in source
+
+
+def test_the_ibu_timings_reach_the_report(reference_run: Path) -> None:
+    """`timings_ibu.json` is its own file too, and its block sits before OmniFold's."""
+    artifacts: Path = reference_run / "artifacts"
+    _ = (artifacts / "timings_ibu.json").write_text(
+        json.dumps(_pass("ibu", 3.0, "ibu"))
+    )
+    _ = (artifacts / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert "ibu & 3" in source
+    assert source.index(r"\textsc{IBU} baseline") < source.index(
+        r"\textsc{OmniFold} baseline"
+    )
+
+
+def test_the_shared_timings_close_the_table(reference_run: Path) -> None:
+    """Drawing the figures is every method's, so it gets its own last block."""
+    artifacts: Path = reference_run / "artifacts"
+    _ = (artifacts / "timings_shared.json").write_text(
+        json.dumps(_pass("plots", 7.0, "plot"))
+    )
+    _ = (artifacts / "timings_omnifold.json").write_text(
+        json.dumps(_pass("omnifold", 400.0, "omnifold"))
+    )
+    source: str = report.render(reference_run)
+    assert "plots & 7" in source
+    assert source.index(r"\textsc{OmniFold} baseline") < source.index("Common")
+
+
+def test_level_figures_are_capped_in_height_as_well_as_width() -> None:
+    """A one-panel figure is nearly square: width alone overflowed the page."""
+    template: str = report.load_template()
+    assert "height=0.95\\textheight,keepaspectratio,page=#2" in template
+
+
 _METRIC_KEYS = ("wasserstein", "jensenshannon", "triangular")
 
 
@@ -231,10 +328,16 @@ def _entry(before: float, after: float) -> dict[str, float]:
 
 
 def test_rows_are_in_display_order() -> None:
-    ran = {f"detector_{v}": _entry(1.0, 0.1) for v in SUBSTRUCTURE_VARIABLES}
+    deconvolve = {f"detector_{v}": _entry(1.0, 0.1) for v in SUBSTRUCTURE_VARIABLES}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", SUBSTRUCTURE_VARIABLES, ran, None, None, frozenset()
+        "detector",
+        "wasserstein",
+        SUBSTRUCTURE_VARIABLES,
+        deconvolve,
+        None,
+        None,
+        frozenset(),
     )
 
     # Group headings live in the configuration table, not the metric tables
@@ -254,10 +357,10 @@ def test_a_group_with_no_variables_is_omitted_from_config_variables() -> None:
 
 def test_a_missing_baseline_renders_dashes() -> None:
     """The template fixes the column count, so the group cannot be omitted."""
-    ran = {"detector_m": _entry(1.0, 0.1)}
+    deconvolve = {"detector_m": _entry(1.0, 0.1)}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", ("m",), ran, None, None, frozenset()
+        "detector", "wasserstein", ("m",), deconvolve, None, None, frozenset()
     )
 
     # Two cells per absent baseline, and both baselines are absent here.
@@ -266,32 +369,38 @@ def test_a_missing_baseline_renders_dashes() -> None:
 
 def test_a_skipped_variable_is_daggered_rather_than_shown_as_zero() -> None:
     """IBU returning its input unchanged is a refusal, not a measurement."""
-    ran = {"detector_zg": _entry(1.0, 0.1)}
+    deconvolve = {"detector_zg": _entry(1.0, 0.1)}
     ibu = {"detector_zg": _entry(1.0, 1.0)}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", ("zg",), ran, ibu, None, frozenset({"zg"})
+        "detector", "wasserstein", ("zg",), deconvolve, ibu, None, frozenset({"zg"})
     )
 
     assert r"\dag" in body
 
 
 def test_a_completed_variable_is_not_daggered() -> None:
-    ran = {"detector_m": _entry(1.0, 0.1)}
+    deconvolve = {"detector_m": _entry(1.0, 0.1)}
     ibu = {"detector_m": _entry(1.0, 0.5)}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", ("m",), ran, ibu, None, frozenset()
+        "detector", "wasserstein", ("m",), deconvolve, ibu, None, frozenset()
     )
 
     assert r"\dag" not in body
 
 
 def test_a_gaussian_run_has_rows_but_no_groups() -> None:
-    ran = {f"detector_dim_{i}": _entry(1.0, 0.1) for i in range(2)}
+    deconvolve = {f"detector_dim_{i}": _entry(1.0, 0.1) for i in range(2)}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", ("dim_0", "dim_1"), ran, None, None, frozenset()
+        "detector",
+        "wasserstein",
+        ("dim_0", "dim_1"),
+        deconvolve,
+        None,
+        None,
+        frozenset(),
     )
 
     assert "Mass and hard scale" not in body
@@ -300,11 +409,11 @@ def test_a_gaussian_run_has_rows_but_no_groups() -> None:
 
 def test_a_daggered_table_ends_with_a_legend_explaining_the_mark() -> None:
     """An unexplained dagger prevents no misreading."""
-    ran = {"detector_zg": _entry(1.0, 0.1)}
+    deconvolve = {"detector_zg": _entry(1.0, 0.1)}
     ibu = {"detector_zg": _entry(1.0, 1.0)}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", ("zg",), ran, ibu, None, frozenset({"zg"})
+        "detector", "wasserstein", ("zg",), deconvolve, ibu, None, frozenset({"zg"})
     )
 
     assert body.splitlines()[-1] == report._DAGGER_LEGEND
@@ -315,11 +424,17 @@ def test_a_daggered_table_ends_with_a_legend_explaining_the_mark() -> None:
 
 
 def test_a_table_with_nothing_skipped_carries_no_legend() -> None:
-    ran = {f"detector_{v}": _entry(1.0, 0.1) for v in SUBSTRUCTURE_VARIABLES}
+    deconvolve = {f"detector_{v}": _entry(1.0, 0.1) for v in SUBSTRUCTURE_VARIABLES}
     ibu = {f"detector_{v}": _entry(1.0, 0.5) for v in SUBSTRUCTURE_VARIABLES}
 
     body: str = report.metrics_table(
-        "detector", "wasserstein", SUBSTRUCTURE_VARIABLES, ran, ibu, None, frozenset()
+        "detector",
+        "wasserstein",
+        SUBSTRUCTURE_VARIABLES,
+        deconvolve,
+        ibu,
+        None,
+        frozenset(),
     )
 
     assert report._DAGGER_LEGEND not in body
@@ -410,7 +525,8 @@ def test_missing_metrics_degrade_to_a_row_rather_than_raising(
 
     source: str = report.render(reference_run)
 
-    assert source.count("metrics.json not found") == 6  # 3 metrics x 2 levels
+    # (3 per-variable metrics + the joint table) x 2 levels
+    assert source.count("metrics.json not found") == 8
     assert rf"\multicolumn{{{report._TABLE_COLUMNS}}}" in source
 
 
@@ -654,7 +770,7 @@ class TestOmniFoldColumns:
         assert "50" in body
 
     def test_the_methods_are_ordered_ibu_omnifold_ran(self) -> None:
-        """RAN sits last, where the eye lands, behind what it is compared to.
+        """Deconvolve sits last, where the eye lands, behind what it is compared to.
 
         Ordering is positional in the row -- nothing labels the cells -- so a
         swapped pair would silently attribute each method's numbers to another.
@@ -663,19 +779,19 @@ class TestOmniFoldColumns:
             "detector",
             "wasserstein",
             ("m",),
-            {"detector_m": _entry(1.0, 0.001)},  # RAN: 1.0
+            {"detector_m": _entry(1.0, 0.001)},  # Deconvolve: 1.0
             {"detector_m": _entry(1.0, 0.002)},  # IBU: 2.0
             {"detector_m": _entry(1.0, 0.003)},  # OmniFold: 3.0
             frozenset(),
         )
 
         cells = [c.strip() for c in body.splitlines()[-1].split("&")]
-        # label, Sim, IBU, IBU%, OmniFold, OmniFold%, RAN, RAN%
+        # label, Sim, IBU, IBU%, OmniFold, OmniFold%, Deconvolve, Deconvolve%
         assert len(cells) == report._TABLE_COLUMNS
         assert cells[2].removeprefix(r"\bfseries ").startswith("2")
         assert cells[4].removeprefix(r"\bfseries ").startswith("3")
         assert cells[6].removeprefix(r"\bfseries ").startswith("1")
-        # RAN performed best (1.0 vs 2.0 and 3.0), so its cells are bolded
+        # Deconvolve performed best (1.0 vs 2.0 and 3.0), so its cells are bolded
         assert cells[6].startswith(r"\bfseries")
         assert cells[7].startswith(r"\bfseries")
         assert not cells[2].startswith(r"\bfseries")
@@ -683,7 +799,7 @@ class TestOmniFoldColumns:
 
     def test_best_performing_method_is_bolded(self) -> None:
         r"""The method achieving lowest distance is highlighted with \bfseries."""
-        # OmniFold (0.001) wins over RAN (0.002) and IBU (0.003)
+        # OmniFold (0.001) wins over Deconvolve (0.002) and IBU (0.003)
         body = report.metrics_table(
             "detector",
             "wasserstein",
@@ -730,3 +846,83 @@ class TestOmniFoldColumns:
         row = body.splitlines()[-1]
         assert len(row.split("&")) == report._TABLE_COLUMNS
         assert row.count(r"\multicolumn{1}{c}{---}") == 2
+
+
+def _joint(before: float, after: float) -> dict[str, float]:
+    return {
+        "sliced_wasserstein_before": before,
+        "sliced_wasserstein_after": after,
+        "sliced_wasserstein_improvement_pct": (1 - after / before) * 100,
+    }
+
+
+class TestJointTable:
+    """The sliced Wasserstein row: one per level, read from `metrics["joint"]`."""
+
+    def test_is_one_row_with_every_column_filled(self) -> None:
+        deconvolve = {"joint": {"detector": _joint(1.0, 0.1)}}
+        ibu = {"joint": {"detector": _joint(1.0, 0.5)}}
+        omnifold = {"joint": {"detector": _joint(1.0, 0.3)}}
+
+        body = report.joint_table("detector", deconvolve, ibu, omnifold)
+
+        lines = body.splitlines()
+        assert lines[0] == r"\midrule"
+        assert len(lines) == 2
+        cells = [c.strip() for c in lines[1].split("&")]
+        assert len(cells) == report._TABLE_COLUMNS
+        assert r"\textit{All}" in cells[0]
+        assert cells[1] == "1000"  # Sim, scaled
+        assert cells[2].startswith("500")  # IBU
+        assert cells[4].startswith("300")  # OmniFold
+        assert cells[6] == r"\bfseries 100"  # Deconvolve, best
+        assert not cells[2].startswith(r"\bfseries")
+
+    def test_reads_the_requested_level(self) -> None:
+        deconvolve = {
+            "joint": {
+                "detector": _joint(1.0, 0.1),
+                "particle": _joint(2.0, 0.2),
+            }
+        }
+        body = report.joint_table("particle", deconvolve, None, None)
+        cells = [c.strip() for c in body.splitlines()[-1].split("&")]
+        assert cells[1] == "2000"
+
+    def test_a_missing_baseline_renders_dashes(self) -> None:
+        deconvolve = {"joint": {"detector": _joint(1.0, 0.1)}}
+        body = report.joint_table("detector", deconvolve, None, None)
+        assert body.count(r"\multicolumn{1}{c}{---}") == 4
+
+    def test_a_baseline_file_from_before_the_joint_metrics_renders_dashes(
+        self,
+    ) -> None:
+        deconvolve = {"joint": {"detector": _joint(1.0, 0.1)}}
+        old_ibu = {"detector_m": _entry(1.0, 0.5)}
+        body = report.joint_table("detector", deconvolve, old_ibu, None)
+        assert body.count(r"\multicolumn{1}{c}{---}") == 4
+
+    def test_a_metrics_file_from_before_the_joint_metrics_names_the_fix(
+        self,
+    ) -> None:
+        """Dashes in Deconvolve's own columns would read as Deconvolve having failed."""
+        body = report.joint_table(
+            "detector", {"detector_m": _entry(1.0, 0.1)}, None, None
+        )
+        assert "evaluate --force" in body
+        assert body.count("&") == 0
+
+    def test_the_joint_record_does_not_confuse_the_ibu_skip_fallback(
+        self, tmp_path: Path
+    ) -> None:
+        """Without `ibu_outcomes.json` the skip set is inferred from the entries."""
+        ibu = {
+            "detector_m": _entry(1.0, 1.0),
+            "detector_w": _entry(1.0, 0.5),
+            "joint": {"detector": _joint(1.0, 0.7)},
+        }
+        assert report.skipped_variables(tmp_path, ibu) == frozenset({"m"})
+
+    def test_reaches_the_rendered_report(self, reference_run: Path) -> None:
+        source = report.render(reference_run)
+        assert source.count(r"\textit{All}") == 2

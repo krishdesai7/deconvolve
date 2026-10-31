@@ -1,9 +1,9 @@
-"""IBU (Iterative Bayesian Unfolding) baseline to compare with RAN.
+"""IBU (Iterative Bayesian Unfolding) baseline to compare with Deconvolve.
 
 It is a simple unfolding method that uses a Bayesian approach to unfold the
 data. IBU performs 1D per-variable unfolding with purity-based automatic
 binning. It builds the response matrix from MC, unfolds data, and converts the
-result to per-event weights for evaluation with the same metrics as RAN.
+result to per-event weights for evaluation with the same metrics as Deconvolve.
 
 ```shell
 deconvolve baseline ibu runs/2026-...
@@ -17,32 +17,41 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..coretypes import (
     DEFAULT_PURITY_THRESHOLD,
+    JOINT_METRICS_KEY,
     IBUResult,
     VariableOutcome,
     artifacts_dir,
 )
-from ..evaluation import apply_to_runs, render_metrics
+from ..evaluation import apply_to_runs, render_metrics, warn_if_no_joint
+from ..instrumentation import timing
 from ..training import EPS
 from ._shared import (
     evaluate_dimension,
+    evaluate_joint,
     load_populations,
     parse_run_config,
 )
 
 if TYPE_CHECKING:
     from logging import Logger
-    from typing import Final
+    from typing import Any, Final
 
     from numpy._typing import _DTypeLikeFloat
     from numpy.typing import NDArray
 
-    from ..coretypes import EventArray, MetricRecord, Populations, RunConfig
+    from ..coretypes import (
+        EventArray,
+        JointMetricRecord,
+        MetricRecord,
+        Populations,
+        RunConfig,
+    )
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -60,7 +69,7 @@ class _BinnedReweighting:
     Fitting the response and iterating the prior on every event, then quoting
     metrics on a subset of those same events, is conventional for both IBU and
     OmniFold -- and it scores an estimator on data it has already seen. It also
-    hands the baseline information RAN is denied: `deconvolve.training.engine`
+    hands the baseline information Deconvolve is denied: `deconvolve.training.engine`
     reads the test split only to compute a diagnostic that cannot influence the
     returned model, and never to fit or select. A comparison is only a
     comparison if both sides see the same events.
@@ -416,6 +425,24 @@ def unfold_variable(
     )
 
 
+def joint_weights(weights: NDArray[np.single]) -> NDArray[np.single]:
+    """One weight per event from IBU's `(dim, n)` per-variable weights.
+
+    IBU unfolds each variable on its own, so it never produces a joint
+    reweighting; the product of its 1D weights, renormalized, is the joint it
+    implicitly assumes -- the observables reweighted as if independent. That is
+    exactly the assumption the sliced Wasserstein distance exists to test, so
+    it is what IBU's joint score is computed on.
+
+    A variable IBU refused to unfold carries weight one everywhere and drops
+    out of the product. The product is taken in float64: twelve factors can
+    leave float32's comfortable range before the normalization brings them
+    back.
+    """
+    product: NDArray[np.double] = np.prod(a=weights, axis=0, dtype=np.double)
+    return _normalize_weights((product / product.mean()).astype(np.single))
+
+
 def _run_and_evaluate(
     config: RunConfig,
     n_iterations: int = 10,
@@ -429,7 +456,9 @@ def _run_and_evaluate(
 
     fit: Populations
     test: Populations
-    fit, test = load_populations(config)
+    detail: str = f"{config.dataset.value} (n={config.n_samples}, dim={config.dim})"
+    with timing.phase("data", detail=detail):
+        fit, test = load_populations(config)
     test_truth: NDArray[np.single] = test.require_truth()
     weights: NDArray[np.single] = np.empty(
         shape=(config.dim, len(test.mc)), dtype=np.single
@@ -438,29 +467,35 @@ def _run_and_evaluate(
     particle: dict[str, MetricRecord] = {}
     outcomes: list[VariableOutcome] = []
 
-    for dimension, variable_name in enumerate(iterable=config.variable_names):
-        unfolding: VariableUnfolding = unfold_variable(
-            variable_name=variable_name,
-            mc_gen=fit.mc.z[:, dimension],
-            mc_sim=fit.mc.x[:, dimension],
-            observed=fit.data[:, dimension],
-            n_iterations=n_iterations,
-            purity_threshold=purity_threshold,
-        )
-        test_weights: NDArray[np.single] = unfolding.weights_for(
-            gen=test.mc.z[:, dimension]
-        )
-        weights[dimension] = test_weights
-        outcomes.append(unfolding.outcome)
-        detector[f"detector_{variable_name}"] = evaluate_dimension(
-            reference=test.data[:, dimension],
-            comparison=test.mc.x[:, dimension],
-            weights=test_weights,
-        )
-        particle[f"particle_{variable_name}"] = evaluate_dimension(
-            reference=test_truth[:, dimension],
-            comparison=test.mc.z[:, dimension],
-            weights=test_weights,
+    # Two loops rather than one, so the unfolding and the scoring are timed
+    # apart, as OmniFold's are.
+    with timing.phase("ibu", detail=f"niter={n_iterations}"):
+        for dimension, variable_name in enumerate(iterable=config.variable_names):
+            unfolding: VariableUnfolding = unfold_variable(
+                variable_name=variable_name,
+                mc_gen=fit.mc.z[:, dimension],
+                mc_sim=fit.mc.x[:, dimension],
+                observed=fit.data[:, dimension],
+                n_iterations=n_iterations,
+                purity_threshold=purity_threshold,
+            )
+            weights[dimension] = unfolding.weights_for(gen=test.mc.z[:, dimension])
+            outcomes.append(unfolding.outcome)
+
+    with timing.phase("evaluate", detail=f"{config.dim} variables"):
+        for dimension, variable_name in enumerate(iterable=config.variable_names):
+            detector[f"detector_{variable_name}"] = evaluate_dimension(
+                reference=test.data[:, dimension],
+                comparison=test.mc.x[:, dimension],
+                weights=weights[dimension],
+            )
+            particle[f"particle_{variable_name}"] = evaluate_dimension(
+                reference=test_truth[:, dimension],
+                comparison=test.mc.z[:, dimension],
+                weights=weights[dimension],
+            )
+        joint: dict[str, JointMetricRecord] = evaluate_joint(
+            test, joint_weights(weights)
         )
 
     # Every detector entry, then every particle entry, matching the key order
@@ -472,6 +507,7 @@ def _run_and_evaluate(
         variable_names=config.variable_names,
         weights=weights,
         outcomes=tuple(outcomes),
+        joint=joint,
     )
 
 
@@ -480,7 +516,7 @@ def evaluate_single(
     force: bool = False,
     n_iterations: int = 10,
     purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD,
-) -> dict[str, MetricRecord]:
+) -> dict[str, Any]:
     """Run IBU on a single run's dataset and save comparison metrics.
 
     It fits on train+val, then scores the held-out test split with the result,
@@ -497,12 +533,13 @@ def evaluate_single(
 
     if out_path.exists() and outcomes_path.exists() and not force:
         logger.info("%s: metrics_ibu.json exists, skipping (use --force)", run_dir.name)
-        return cast(
-            typ="dict[str, MetricRecord]", val=json.loads(s=out_path.read_text())
-        )
+        existing: dict[str, Any] = json.loads(s=out_path.read_text())
+        warn_if_no_joint(run_dir.name, out_path.name, existing)
+        return existing
 
-    raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
-    config: RunConfig = parse_run_config(raw_config)
+    with timing.phase("parse_config"):
+        raw_config: object = json.loads(s=(run_dir / "config.json").read_text())
+        config: RunConfig = parse_run_config(raw_config)
     if out_path.exists() and not outcomes_path.exists():
         logger.info(
             "%s: metrics_ibu.json exists but ibu_outcomes.json is missing, "
@@ -521,7 +558,8 @@ def evaluate_single(
         purity_threshold=purity_threshold,
     )
 
-    json.dump(obj=result.metrics, fp=out_path.open(mode="w"), indent=2)
+    metrics: dict[str, Any] = {**result.metrics, JOINT_METRICS_KEY: result.joint}
+    json.dump(obj=metrics, fp=out_path.open(mode="w"), indent=2)
 
     # `outcomes` records the variables IBU's purity binning gave up on and
     # returned unchanged. Without it, a report showing `IBU == Sim` and a 0.0%
@@ -543,8 +581,25 @@ def evaluate_single(
         out_path,
         weights_path,
     )
-    render_metrics(f"{run_dir.name} [IBU]", result.metrics, list(result.variable_names))
-    return result.metrics
+    render_metrics(f"{run_dir.name} [IBU]", metrics, list(result.variable_names))
+    # The figures were drawn when training finished, before this baseline
+    # existed; nothing redraws them on its own.
+    logger.info(
+        "%s: run `deconvolve plot %s` to add the %s overlay to the figures",
+        run_dir.name,
+        run_dir,
+        "IBU",
+    )
+
+    # Its own file, not `timings.json`, for the reason OmniFold's is: this
+    # pass's `data`/`evaluate` phases would overwrite the training pass's rows.
+    timing.report()
+    timing.write(
+        run_dir,
+        pass_name="ibu",  # ruff: ignore[hardcoded-password-func-arg]
+        filename="timings_ibu.json",
+    )
+    return metrics
 
 
 def evaluate_runs(
@@ -553,7 +608,7 @@ def evaluate_runs(
     n_iterations: int = 10,
     purity_threshold: np.double = DEFAULT_PURITY_THRESHOLD,
 ) -> None:
-    """Run the IBU baseline on completed RAN runs.
+    """Run the IBU baseline on completed Deconvolve runs.
 
     Args:
         run_dir: A single run, or a directory of runs.

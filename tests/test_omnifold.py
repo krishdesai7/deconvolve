@@ -293,7 +293,7 @@ class TestEvaluateSingle:
         def _stub_unfold(**kwargs: object) -> EventArray:
             target = kwargs["z_target"]
             assert isinstance(target, np.ndarray)
-            return np.ones(target.shape[0], dtype=np.single)
+            return np.ones(len(target), dtype=np.single)
 
         monkeypatch.setattr(omnifold, "unfold", _stub_unfold)
         metrics = omnifold.evaluate_single(run_dir)
@@ -307,7 +307,8 @@ class TestEvaluateSingle:
             assert saved.files == ["weights"]
         assert set(metrics) == {
             f"{level}_dim_{i}" for level in ("detector", "particle") for i in range(dim)
-        }
+        } | {"joint"}
+        assert set(metrics["joint"]) == {"detector", "particle"}
 
         # A second call must not re-run the unfolding.
         def _explode(**_kwargs: object) -> EventArray:

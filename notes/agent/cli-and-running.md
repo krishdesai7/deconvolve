@@ -1,16 +1,19 @@
 # Running
 
-The package installs a `ran` console script (`[project.scripts]` →
+The package installs a `deconvolve` console script (`[project.scripts]` →
 `deconvolve.cli:app`), which is the canonical entry point. In a checkout, prefix it
 with `uv run` to use the project environment without activating it
-(`uv run deconvolve train ...`); `python -m ran` still works via `__main__.py`. Shell
+(`uv run deconvolve train ...`); `python -m deconvolve` still works via `__main__.py`. Shell
 completion comes from `deconvolve --install-completion` and needs the script name, so
 it does not work through `python -m`.
 
 One Typer command tree. Flags are kebab-case; subcommands are
-`train`, `evaluate`, `report`, `leakage-check`, `baseline {ibu,omnifold}`,
+`train`, `evaluate`, `plot`, `report`, `leakage-check`, `baseline {ibu,omnifold}`,
 `uncertainty {freeze,run,collect}`, `config show`. `--log-level` is global and
-goes before the subcommand.
+goes before the subcommand. It governs the `deconvolve.*` loggers only; every
+other library is held at WARNING (matplotlib's PDF writer drives
+`fontTools.subset`, which logs hundreds of INFO lines per figure), except at
+`DEBUG`, which opens everything.
 
 Every layerable option above also resolves through the five-layer config
 stack — code default, global `deconvolve.toml`, project `deconvolve.toml`/`[tool.deconvolve]`,
@@ -39,8 +42,8 @@ compared against.
 Model selection is not a flag: it is fixed to the detector-level MMD argmin
 (see [training-loop.md](training-loop.md)). `--no-plots` skips the figures,
 which are a large share of a short run's wall clock and no part of scoring
-one; metrics still run, and `--load-run` on the same directory draws them
-afterwards.
+one; metrics still run, and `deconvolve plot` on the same directory draws
+them afterwards.
 
 `--run-dir` names where a run saves, and a sweep needs it. The default is a UTC
 timestamp at second resolution, which several runs of identical shape launched
@@ -58,6 +61,7 @@ deconvolve train --dataset jets --var m --var w                      # a subset 
 deconvolve train --dataset jets --lr-g 3e-4 -k 2 --no-plots          # tuning: see benchmarks/README.md
 deconvolve train --dataset jets --seed 3 --run-dir runs/hp_x/lrg1e-4_seed03  # one arm of a sweep
 deconvolve train --load-run runs/2026-03-14T061023Z                  # reload a saved run
+deconvolve plot runs/2026-...                                        # redraw figures, with any baselines
 deconvolve evaluate runs                                             # compute metrics for all runs
 deconvolve evaluate runs/2026-...                                    # single run
 deconvolve baseline ibu runs/2026-...                                # IBU comparison
@@ -104,16 +108,22 @@ stub worker over the same `.npz` contract and tests the seam instead — see
 
 ## `scripts/submit.zsh`
 
-The full pipeline rather than a bare `deconvolve train`: it trains, runs the IBU
-baseline on the same run directory, reloads once so the figures come back out
-with the baseline overlaid (`workflows.train.run` picks up `ibu_weights.npz` only if
-it exists when the plots are drawn), recomputes metrics, then
-`module load texlive` and `deconvolve report` to leave a PDF at the top of the run
+The full pipeline rather than a bare `deconvolve train`: it loads `texlive`
+first (the figures are typeset with `text.usetex`, so plotting needs LaTeX too, not
+just the report), trains with `--no-plots` (the redraw below would replace
+them), runs the IBU and then the OmniFold baseline on the same
+run directory (the latter under `cudatoolkit/12.9`, unloaded straight after), reloads
+once so the figures come back out with both baselines overlaid
+(`_load_baseline_weights` picks up whichever `*_weights.npz` exist when the plots
+are drawn), recomputes metrics, then runs `deconvolve report` to leave a PDF at the top of the run
 directory. It defaults to the full **twelve**-observable jet run at
 `-n 1600000 -l 3 -u 128`, with `DECONVOLVE_TIMING=1` exported so the run reports
 where its wall clock went. Extra flags reach `deconvolve train`; those defaults are
 prepended, and click keeps the last occurrence of a scalar option, so
-anything on the command line still wins.
+anything on the command line still wins. The script reads the dataset off its
+arguments (the last `-D`/`--dataset`, jets if none) and prepends the jet sizes
+and the on-disk clamp only for jets, so a `-Dgaussian --config ...` run keeps
+`train`'s own defaults.
 
 The script does not name the twelve observables as `--var` flags, and instead
 lets `load_jet_dataset`'s own default stand: `--var` is repeatable, so click
@@ -136,7 +146,7 @@ At the shipped 1.6M samples and 100 epochs that is ~21.8k generator and ~109k
 discriminator updates (the train split is 70% of `n_samples`, batched at 1024
 and grouped by `-k`).
 
-The job asks for **`--qos=shared --time=00:15:00`** on a quarter node
+The job asks for **`--qos=shared --time=01:15:00`** on a quarter node
 (`--gpus=1 --cpus-per-task=32`, and deliberately no `--mem`): nothing shards
 across devices, so three of a node's four A100s would sit idle, and `shared`
 charges for the quarter actually used while backfilling into gaps a
@@ -150,12 +160,14 @@ against a run that needs ~105MB on device and under a gigabyte on host.
 `-C gpu` is the 40GB A100 (~1200 nodes). `-C gpu&hbm80g` gets the 80GB part
 from a pool of ~200 — more queue time for headroom this job does not use.
 
-The wall clock is sized from `benchmarks/boundary.py` on an A100 (4.6s
-compile, 0.034s per epoch at the same 500k x 6D shape): training is ~15s at
-the parameters above and the pipeline is minutes, dominated by npz loading
-and matplotlib. **Warm the jet cache on a login node first** — a cold cache
-pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) inside the job and
-will exceed the `debug` ceiling:
+The wall clock is sized by OmniFold, ~41 minutes of the ~50 (see
+[omnifold.md](omnifold.md)). Deconvolve's part comes from `benchmarks/boundary.py`
+on an A100 (4.6s compile, 0.034s per epoch at the same 500k x 6D shape): training
+is ~15s at the parameters above and the rest is minutes, dominated by npz loading
+and matplotlib. **Warm the jet cache and the OmniFold worker's environment on a
+login node first** (the worker's command is in omnifold.md) — a cold jet cache
+pulls 3.3GB from Zenodo (Pythia26 1.55GB + Herwig 1.75GB) inside the job and can
+push it past the limit:
 
 ```bash
 uv run python -c "from deconvolve.data import load_jet_dataset; load_jet_dataset(n_samples=1000)"

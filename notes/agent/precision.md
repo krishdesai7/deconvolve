@@ -1,6 +1,6 @@
 # Precision
 
-**RAN is float32 end to end, and the pin lives in one place:**
+**Deconvolve is float32 end to end, and the pin lives in one place:**
 `EVENT_DTYPE` in `src/deconvolve/coretypes/constants.py`, with its annotation-space
 twin `EventArray` in `coretypes/types.py`. `JAX_ENABLE_X64=0` and the `dtype=`
 arguments in `src/deconvolve/training/models.py` follow from it. There is no dtype parameter
