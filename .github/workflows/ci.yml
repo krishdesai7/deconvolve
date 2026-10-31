@@ -5,46 +5,46 @@ name: CI
 # minutes -- while pushes to master still need their own run because the release
 # workflow commits there directly.
 on:
-  pull_request:
-  push:
-    branches: [master]
+    pull_request:
+    push:
+        branches: [master]
 
 # A branch only needs its newest commit checked. Without this, pushing three
 # times in a minute queues three full runs and the first two are already stale.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+    ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          enable-cache: true
+            - name: Install uv
+              uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+              with:
+                  enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --locked
+            - name: Install dependencies
+              run: uv sync --locked
 
-      - name: Lint
-        run: uv run --locked ruff check
+            - name: Lint
+              run: uv run --locked ruff check
 
-      - name: Format check
-        run: uv format --check --diff
+            - name: Format check
+              run: uv format --check --diff
 
-      - name: Type check
-        run: |
-         uv run --locked pyrefly check --min-severity info
-         uv check --locked
+            - name: Type check
+              run: |
+                  uv run --locked pyrefly check --min-severity info
+                  uv check --locked
 
-      - name: Complexity check
-        run: uv run --locked complexipy --suggest-refactors
+            - name: Complexity check
+              run: uv run --locked complexipy --suggest-refactors
 
-      - name: Test
-        run: uv run --locked pytest -q
+            - name: Test
+              run: uv run --locked pytest -q
 
-      - name: Audit
-        run: uv audit --locked
+            - name: Audit
+              run: uv audit --locked

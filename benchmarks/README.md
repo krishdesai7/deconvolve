@@ -723,3 +723,30 @@ supporting evidence and nothing more. Getting TF to emit those lines needs
 the conventional `TF_CPP_MIN_LOG_LEVEL=3` suppresses the summary too, which is
 how an earlier version of this benchmark reported a failure it could not
 explain.
+
+## `dispersion_split.py`
+
+Splits each run's generator-weight variance into the part the detector can see
+and the part it averages away:
+
+    Var(w) = Var(E[w|x]) + E[Var(w|x)]
+           =  visible    +  residual
+
+`E[w|x]` is an MLP regressing `w(z_gen)` on `x_sim`, fit on the MC train split
+and scored on the MC test split. Two classifier reference rows go alongside the
+runs: the oracle `w*(z)` and the reco-level ratio `ω(x) = p_data(x)/q_sim(x)`.
+`reco gap` is how far each run's reweighted sim still is from data.
+
+```sh
+uv run benchmarks/dispersion_split.py runs/<jets λ=0.015> runs/<jets λ=0> --out split.json
+```
+
+Every run passed must share a dataset, because the references are fit once on
+the first run's data. On the 1D Gaussian the generator rows reproduce the
+analytic split to within 0.005. The classifier references come out about 20% low
+(oracle Var 0.431 against 0.547), so read them as lower bounds on the true spread.
+
+This is the tool behind
+`notes/working-notes/2026-10-residual-dispersion.md`. That note tested
+penalising only the residual, and the idea was dropped: it lost to the
+total-variance penalty on jets by 3.5 points, beyond seed noise.
