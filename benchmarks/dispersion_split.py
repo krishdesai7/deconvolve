@@ -186,7 +186,7 @@ def _populations(config: dict[str, Any]) -> tuple[Populations, Populations]:
     return splits.train.as_arrays().partition(), splits.test.as_arrays().partition()
 
 
-def main() -> None:
+def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -202,42 +202,57 @@ def main() -> None:
         "--no-references", action="store_true", help="skip the oracle and omega rows"
     )
     _ = ap.add_argument("--verbose", action="store_true")
-    args = ap.parse_args()
-    set_random_seed(args.seed)
+    return ap.parse_args()
 
-    configs = [json.loads((r / "config.json").read_text()) for r in args.runs]
-    for r, c in zip(args.runs[1:], configs[1:], strict=False):
+
+def _load_configs(runs: list[Path]) -> list[dict[str, Any]]:
+    configs = [json.loads((r / "config.json").read_text()) for r in runs]
+    for r, c in zip(runs[1:], configs[1:], strict=False):
         diff = [k for k in SHARED_KEYS if c.get(k) != configs[0].get(k)]
         if diff:
             raise SystemExit(
-                f"{r} differs from {args.runs[0]} in {diff}; pass them separately"
+                f"{r} differs from {runs[0]} in {diff}; pass them separately"
             )
+    return configs
 
-    print(f"loading {configs[0]['dataset']} data ...", flush=True)
-    train, test = _populations(configs[0])
+
+def _reference_rows(
+    train: Populations, test: Populations, args: argparse.Namespace
+) -> tuple[np.ndarray, dict[str, dict[str, float]]]:
+    """The omega(x) and oracle w*(z) rows, plus omega on MC test for `reco_gap`."""
     xs_tr, xs_te = train.mc.x, test.mc.x
-    results: dict[str, dict[str, float]] = {}
-
-    omega_test = None
-    if not args.no_references:
-        print("fitting omega(x) = p_data/q_sim ...", flush=True)
-        omega_test = _ratio(train.data, xs_tr, args)(xs_te)
-        results["omega(x)"] = {"visible": float(omega_test.var())}
-        print("fitting oracle w*(z) = p_truth/p_gen ...", flush=True)
-        # z_true enters here and only here, to build the reference weights.
-        w_star = _ratio(train.require_truth(), train.mc.z, args)
-        results["oracle w*"] = _split(
+    print("fitting omega(x) = p_data/q_sim ...", flush=True)
+    omega_test = _ratio(train.data, xs_tr, args)(xs_te)
+    print("fitting oracle w*(z) = p_truth/p_gen ...", flush=True)
+    # z_true enters here and only here, to build the reference weights.
+    w_star = _ratio(train.require_truth(), train.mc.z, args)
+    rows = {
+        "omega(x)": {"visible": float(omega_test.var())},
+        "oracle w*": _split(
             w_star(train.mc.z), w_star(test.mc.z), xs_tr, xs_te, omega_test, args
-        )
+        ),
+    }
+    return omega_test, rows
 
-    for run, config in zip(args.runs, configs, strict=False):
-        print(f"{run.name}: λ={config.get('lambda_dispersion')} ...", flush=True)
-        g = load_model(run / "artifacts" / "generator.keras")
-        w_tr = np.asarray(_generator_weights(g, z_gen=train.mc.z), dtype=np.float64)
-        w_te = np.asarray(_generator_weights(g, z_gen=test.mc.z), dtype=np.float64)
-        label = f"{run.name} (λ={config.get('lambda_dispersion')})"
-        results[label] = _split(w_tr, w_te, xs_tr, xs_te, omega_test, args)
 
+def _run_row(
+    run: Path,
+    config: dict[str, Any],
+    train: Populations,
+    test: Populations,
+    omega_test: np.ndarray | None,
+    args: argparse.Namespace,
+) -> tuple[str, dict[str, float]]:
+    lam = config.get("lambda_dispersion")
+    print(f"{run.name}: λ={lam} ...", flush=True)
+    g = load_model(run / "artifacts" / "generator.keras")
+    w_tr = np.asarray(_generator_weights(g, z_gen=train.mc.z), dtype=np.float64)
+    w_te = np.asarray(_generator_weights(g, z_gen=test.mc.z), dtype=np.float64)
+    row = _split(w_tr, w_te, train.mc.x, test.mc.x, omega_test, args)
+    return f"{run.name} (λ={lam})", row
+
+
+def _print_table(results: dict[str, dict[str, float]]) -> None:
     cols = ("var_w", "visible", "residual", "closure", "reco_gap", "ess_frac")
     name_w = max(len(k) for k in results) + 2
     print("\n" + "".ljust(name_w) + "".join(c.rjust(10) for c in cols))
@@ -246,6 +261,26 @@ def main() -> None:
             name.ljust(name_w)
             + "".join((f"{row[c]:10.4f}" if c in row else "".rjust(10)) for c in cols)
         )
+
+
+def main() -> None:
+    args = _parse_args()
+    set_random_seed(args.seed)
+    configs = _load_configs(args.runs)
+
+    print(f"loading {configs[0]['dataset']} data ...", flush=True)
+    train, test = _populations(configs[0])
+
+    omega_test = None
+    results: dict[str, dict[str, float]] = {}
+    if not args.no_references:
+        omega_test, results = _reference_rows(train, test, args)
+
+    for run, config in zip(args.runs, configs, strict=False):
+        label, row = _run_row(run, config, train, test, omega_test, args)
+        results[label] = row
+
+    _print_table(results)
     if args.out:
         args.out.write_text(json.dumps(results, indent=2))
         print(f"\nwrote {args.out}")
