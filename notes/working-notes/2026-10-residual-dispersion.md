@@ -3,7 +3,7 @@
 Plan: `notes/superpowers/plans/2026-10-30-residual-dispersion-penalty.md`.
 Split script: `benchmarks/dispersion_split.py`.
 
-**Status: Gaussian done, jets pending (HPC).**
+**Status: Gaussian and jets (one seed) done. Seed check pending (HPC).**
 
 ## 1D Gaussian (`params/1d_default.yaml`, seed 446727034)
 
@@ -20,21 +20,48 @@ All three arms use the same seed and data. Variances are on the MC test split, w
 
 **Reading.** Residual mode removes most of the damage: particle W1 goes from 0.098 to 0.035, but λ=0 reaches 0.016. The plan expected visible variance within 0.02 of λ=0's 0.334. It came out 0.271, so that expectation is **not met**. The cause is not h. The ideal weights carry 0.187 of residual themselves, and for a well-posed deconvolution (Gaussian smearing is injective) visible and residual are not independent knobs. w is a single function of z, and its tails carry both, so shrinking the residual also flattens the visible part. The bias is about a third of the total-mode bias, as the analysis predicted before the build. It isn't zero.
 
-## Jets (pending)
+## Jets (seed 337443673, 1.6M events, 128×3)
 
-Run on the HPC node:
+The split comes from `jets_split_residual.json`. "Particle SW" is the joint particle-level sliced-Wasserstein improvement from `metrics.json`.
+
+| run | mode, λ | particle SW | Var(w) | visible | residual | reco gap | ESS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026-10-31T013457Z | total, 0 | 77.3% | 0.385 | 0.168 | 0.218 | 0.0156 | 72.2% |
+| 2026-10-30T203443Z | **total, 0.015** | **87.8%** | 0.192 | 0.119 | 0.073 | 0.0150 | 83.9% |
+| 2026-10-31T175315Z | residual, 0.015 | 82.4% | 0.232 | 0.148 | 0.085 | 0.0155 | 81.2% |
+| 2026-10-31T175423Z | residual, 0.05 | 84.0% | 0.157 | 0.118 | 0.039 | 0.0195 | 86.5% |
+| oracle w* | | | 0.275 | 0.163 | 0.114 | 0.0291 | 78.4% |
+| ω(x) | | | | 0.141 | | | |
+
+**Reading.** Residual mode loses to total λ=0.015 at both λ values. Within residual mode, more λ helps (82.4% at 0.015, 84.0% at 0.05). But the λ=0.05 run shrinks past the truth on every axis:
+- its residual is a third of the oracle's;
+- its visible part falls below Var(ω), the floor that matching the reco-level ratio requires;
+- its reco gap grows, so the discriminator can see it.
+
+It still unfolds better at particle level. So on jets, λ works as ordinary shrinkage against generator estimation noise, not as "remove what the detector can't see". Total mode, which also shrinks the visible part, does better than residual mode, which preserves it.
+
+**Hypothesis (untested).** The best λ is set by estimation variance: the dimension of z, the sample size and generator capacity. It is not set by response non-universality. On the 1D Gaussian the generator has little to overfit and λ=0 wins. With a 12-dimensional z, λ>0 wins.
+
+**Caveats.**
+- Each arm is one seed.
+- The split references are classifier estimates and move between runs: the oracle residual was 0.166 in `jets_split.json` and 0.114 here. Compare the variance columns only within a single file.
+
+## Seed check (pending, HPC)
+
+Two more seeds each for total λ=0.015 and residual λ=0.05. With the seed-337443673 runs above, that makes three per arm:
 
 ```sh
-for lam in 0.015 0.05; do
-  uv run deconvolve train -D jets --n-samples 1600000 --hidden-units 128 --n-layers 3 \
-    --seed 337443673 --dispersion-mode residual --lambda-dispersion $lam --no-plots
+for seed in 20261031 20261101; do
+  for arm in total:0.015 residual:0.05; do
+    uv run deconvolve train -D jets --n-samples 1600000 --hidden-units 128 --n-layers 3 \
+      --seed $seed --dispersion-mode ${arm%%:*} --lambda-dispersion ${arm##*:} --no-plots
+  done
 done
-uv run python benchmarks/dispersion_split.py runs/2026-10-30T203443Z runs/2026-10-31T013457Z \
-  runs/<two new runs> --out jets_split_residual.json
 ```
 
-Also report the trained h's explained fraction for each residual run, as was done for the Gaussian above.
+## Verdict (provisional)
 
-## Verdict (provisional, Gaussian only)
+Residual mode wins neither benchmark: λ=0 wins the Gaussian and total λ=0.015 wins jets.
 
-Keep residual mode **opt-in**. It's a better-aimed regularizer than total mode, but it isn't free on a problem whose truth has invisible structure. Whether it should become the default depends on jets: ship it if it matches or beats total-mode λ=0.015 on the joint particle metric.
+- **If the seed check finds no residual-mode advantage beyond the seed spread:** leave `feat/residual-dispersion` unmerged as the record, and land only this note.
+- **Next open question either way:** choosing λ without truth. If λ is a bias–variance knob, held-out reco-level MMD (already computed for checkpoint selection) is the natural criterion to test.
