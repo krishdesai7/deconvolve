@@ -86,3 +86,19 @@ def build_discriminator(
         x = _keras_dense(hidden_units, activation="relu", dtype="float32")(inputs=x)
     x = _keras_dense(units=1, activation="sigmoid", dtype="float32")(inputs=x)
     return _keras_model(inputs, outputs=x, name="discriminator")
+
+
+def build_regressor(
+    dim: int = 1, hidden_units: int = 64, n_layers: int = 2
+) -> DeconvolveModel:
+    """h(x): reco-level events -> E[w|x], the weights the detector can see.
+
+    Softplus out, like `g`, because a conditional mean of positive weights is
+    positive.
+    """
+    inputs: KerasTensor = _keras_input(shape=(dim,), dtype="float32")
+    x: KerasTensor = inputs
+    for _ in range(n_layers):
+        x = _keras_dense(hidden_units, activation="relu", dtype="float32")(inputs=x)
+    x = _keras_dense(units=1, activation="softplus", dtype="float32")(inputs=x)
+    return _keras_model(inputs, outputs=x, name="regressor")

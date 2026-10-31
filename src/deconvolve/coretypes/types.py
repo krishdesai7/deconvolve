@@ -111,6 +111,7 @@ class GenGradFn(Protocol):
         x: JaxArray,
         y: JaxArray,
         mask: JaxArray,
+        anchor: JaxArray,
         /,
     ) -> GenGradsAndAux: ...
 

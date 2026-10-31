@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, assert_type
 
 from deconvolve.coretypes import (
     DeconvolveModel,
+    DispersionMode,
     KerasVariable,
     Variables,
 )
@@ -66,7 +67,14 @@ def check_training_boundary(
     assert_type(epsilon(), float)
     assert_type(set_random_seed(0), None)
     _: tuple[TrainStep, TrainStep, EvalStep] = _make_steps(
-        g=model, d=model, opt_g=optimizer, opt_d=optimizer, lambda_dispersion=0.0
+        g=model,
+        d=model,
+        opt_g=optimizer,
+        opt_d=optimizer,
+        lambda_dispersion=0.0,
+        dispersion_mode=DispersionMode.total,
+        h=None,
+        opt_h=None,
     )
 
 

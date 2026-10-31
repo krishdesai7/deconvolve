@@ -30,7 +30,7 @@ from .mmd import (
     subsample_indices,
     weighted_mmd,
 )
-from .models import build_discriminator, build_generator
+from .models import build_discriminator, build_generator, build_regressor
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -50,6 +50,7 @@ __all__: Final[Sequence[str]] = (
     "build_cache",
     "build_discriminator",
     "build_generator",
+    "build_regressor",
     "engine",
     "load_params",
     "median_bandwidth",

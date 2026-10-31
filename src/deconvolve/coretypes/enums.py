@@ -35,3 +35,16 @@ class Resample(StrEnum):
     both = auto()
     data = auto()
     mc = auto()
+
+
+class DispersionMode(StrEnum):
+    """What `--lambda-dispersion` penalises.
+
+    `total` is the variance of `g`'s normalised MC weights, `Var(w)`. `residual`
+    is only the part the detector averages away, `E[Var(w|x)]`, measured against
+    a regressor `h(x) = E[w|x]` trained alongside `g` and `d`; the visible part
+    `Var(E[w|x])` is left to the discriminator. See `engine.weight_residual`.
+    """
+
+    total = auto()
+    residual = auto()

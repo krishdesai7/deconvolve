@@ -43,7 +43,7 @@ from jaxtyping import Array, Float, Int, jaxtyped
 
 # `COMPILE_CACHE_DIR` is a runtime value; `Variables` only annotates, but it
 # annotates `@jaxtyped(beartype)` and beartype resolves at decoration time
-from ..coretypes import COMPILE_CACHE_DIR, Variables, artifacts_dir
+from ..coretypes import COMPILE_CACHE_DIR, DispersionMode, Variables, artifacts_dir
 from ..data import DeviceSplits, EvalSplit, gather, train_indices
 from ..instrumentation import is_enabled, phase
 from .mmd import bandwidths, build_cache, mmd_curve, subsample_indices, weighted_mmd
@@ -51,6 +51,7 @@ from .models import (
     backend,
     build_discriminator,
     build_generator,
+    build_regressor,
     epsilon,
     set_random_seed,
 )
@@ -121,12 +122,17 @@ class EpochParams(NamedTuple):
     from different epochs is a trap. The non-trainable lists are empty for
     these Dense-only architectures, and are carried anyway so the day someone
     adds BatchNorm this stays correct rather than silently wrong.
+
+    The regressor's lists are empty outside residual mode, and on any run saved
+    before it existed: `load_params` yields `[]` for a field with no keys.
     """
 
     g_trainable: Variables
     g_non_trainable: Variables
     d_trainable: Variables
     d_non_trainable: Variables
+    h_trainable: Variables
+    h_non_trainable: Variables
 
 
 class TrainResult(NamedTuple):
@@ -153,6 +159,8 @@ class TrainResult(NamedTuple):
         sigmas: The RBF bandwidths `bandwidths()` chose from the validation
             subsample, reused for the test-side cache so both numbers share
             one kernel.
+        h: The regressor `h(x) = E[w|x]` in residual mode, restored to
+            `best_epoch` alongside `g` and `d`; `None` in total mode.
     """
 
     g: DeconvolveModel
@@ -161,17 +169,24 @@ class TrainResult(NamedTuple):
     seed: int
     best_epoch: int = -1
     params: EpochParams = EpochParams(
-        g_trainable=[], g_non_trainable=[], d_trainable=[], d_non_trainable=[]
+        g_trainable=[],
+        g_non_trainable=[],
+        d_trainable=[],
+        d_non_trainable=[],
+        h_trainable=[],
+        h_non_trainable=[],
     )
     mmd_test: float = float("nan")
     sigmas: tuple[float, ...] = ()
+    h: DeconvolveModel | None = None
 
 
 class TrainState(NamedTuple):
     """All mutable training state, as a JAX pytree.
 
     Held outside the `keras.Model`s so jitted steps stay pure and no
-    host/device sync happens between steps.
+    host/device sync happens between steps. The regressor's three lists are
+    empty outside residual mode, so they add no leaves to a total-mode run.
     """
 
     g_trainable: Variables
@@ -180,6 +195,9 @@ class TrainState(NamedTuple):
     d_non_trainable: Variables
     opt_g: Variables
     opt_d: Variables
+    h_trainable: Variables
+    h_non_trainable: Variables
+    opt_h: Variables
 
 
 PARAMS_FILE: Final[str] = "params.npz"
@@ -383,6 +401,87 @@ def weighted_bce(
     return total / count
 
 
+class _Regressor(NamedTuple):
+    """The residual mode's `h(x) = E[w|x]`, as two traced functions.
+
+    Attributes:
+        fit: One MSE step of `h` toward the given (constant) weights, on the
+            batch's MC rows only.
+        predict: `h(x)` from the state's current parameters, inference mode.
+    """
+
+    fit: Callable[
+        [
+            TrainState,
+            Float[Array, " n d"],
+            Float[Array, " n"],
+            Float[Array, " n"],
+            Float[Array, " n"],
+        ],
+        TrainState,
+    ]
+    predict: Callable[[TrainState, Float[Array, " n d"]], Float[Array, " n"]]
+
+
+def _make_regressor(h: DeconvolveModel, opt_h: StatelessOptimizer) -> _Regressor:
+    """Build `h`'s update and forward pass, closing over the model."""
+
+    def _forward(
+        trainable: Variables,
+        non_trainable: Variables,
+        x: Float[Array, " n d"],
+        *,
+        training: bool,
+    ) -> tuple[Float[Array, " n"], Variables]:
+        out, non_trainable = h.stateless_call(
+            trainable_variables=trainable,
+            non_trainable_variables=non_trainable,
+            inputs=x,
+            training=training,
+        )
+        return jnp.squeeze(a=out, axis=-1), non_trainable
+
+    def _loss(
+        trainable: Variables,
+        non_trainable: Variables,
+        x: Float[Array, " n d"],
+        w: Float[Array, " n"],
+        y: Float[Array, " n"],
+        mask: Float[Array, " n"],
+    ) -> tuple[Float[Array, ""], Variables]:
+        pred, non_trainable = _forward(trainable, non_trainable, x, training=True)
+        # The same masked MC mean `g` is penalised with, so `h` minimises exactly
+        # the residual it is later measured against.
+        return weight_residual(w, pred, y, mask), non_trainable
+
+    grad_fn = jax.value_and_grad(fun=_loss, has_aux=True)
+
+    def fit(
+        state: TrainState,
+        x: Float[Array, " n d"],
+        w: Float[Array, " n"],
+        y: Float[Array, " n"],
+        mask: Float[Array, " n"],
+    ) -> TrainState:
+        (_, non_trainable), grads = grad_fn(
+            state.h_trainable, state.h_non_trainable, x, w, y, mask
+        )
+        trainable, opt_vars = opt_h.stateless_apply(
+            optimizer_variables=state.opt_h,
+            grads=grads,
+            trainable_variables=state.h_trainable,
+        )
+        return state._replace(
+            h_trainable=trainable, h_non_trainable=non_trainable, opt_h=opt_vars
+        )
+
+    def predict(state: TrainState, x: Float[Array, " n d"]) -> Float[Array, " n"]:
+        pred, _ = _forward(state.h_trainable, state.h_non_trainable, x, training=False)
+        return pred
+
+    return _Regressor(fit=fit, predict=predict)
+
+
 def _make_steps(
     g: DeconvolveModel,
     d: DeconvolveModel,
@@ -391,12 +490,28 @@ def _make_steps(
     # No default: `train` always passes it, and a second copy of the shipped
     # value here is a second place for it to drift.
     lambda_dispersion: float,
+    dispersion_mode: DispersionMode,
+    h: DeconvolveModel | None,
+    opt_h: StatelessOptimizer | None,
 ) -> tuple[TrainStep, TrainStep, EvalStep]:
     """Build the jitted disc/gen/eval steps, closing over the models.
 
     The models are captured rather than passed so jit sees only array
     arguments; each returned function is traced once per input shape.
+
+    `h` and `opt_h` are the residual mode's regressor and are `None` exactly
+    in total mode. In residual mode `h` takes one step on every discriminator
+    batch, and `g`'s penalty becomes `weight_residual` against `h(x)`.
     """
+    residual: bool = dispersion_mode == DispersionMode.residual
+    if residual != (h is not None and opt_h is not None):
+        raise ValueError(
+            "residual dispersion mode needs a regressor h and its optimizer, "
+            "and total mode takes neither"
+        )
+    regressor: _Regressor | None = (
+        _make_regressor(h, opt_h) if h is not None and opt_h is not None else None
+    )
 
     @jaxtyped(typechecker=beartype)
     def _weights(
@@ -445,6 +560,7 @@ def _make_steps(
         x: Float[Array, " n d"],
         y: Float[Array, " n"],
         mask: Float[Array, " n"],
+        anchor: Float[Array, " n"],
     ) -> tuple[Float[Array, ""], tuple[Variables, Float[Array, ""]]]:
         w, g_non_trainable = _weights(
             g_trainable, g_non_trainable, z, y, mask, training=True
@@ -463,9 +579,13 @@ def _make_steps(
         # number: CLAUDE.md's Training Loop documents the history's three
         # columns as one weighted BCE on one scale, and `losses.pdf` would
         # otherwise plot a penalised curve against two unpenalised ones.
-        penalised: Float[Array, ""] = adversarial + lambda_dispersion * (
-            weight_dispersion(w, y, mask)
+        # `anchor` is `h(x)`, a constant here; total mode ignores it.
+        spread: Float[Array, ""] = (
+            weight_residual(w, anchor, y, mask)
+            if residual
+            else weight_dispersion(w, y, mask)
         )
+        penalised: Float[Array, ""] = adversarial + lambda_dispersion * spread
         return penalised, (g_non_trainable, adversarial)
 
     disc_grad_fn: DiscGradFn = jax.value_and_grad(fun=_disc_loss, has_aux=True)
@@ -492,14 +612,15 @@ def _make_steps(
             grads=grads,
             trainable_variables=state.d_trainable,
         )
-        return (
-            state._replace(
-                d_trainable=d_trainable,
-                d_non_trainable=d_non_trainable,
-                opt_d=opt_d_vars,
-            ),
-            loss,
+        state = state._replace(
+            d_trainable=d_trainable,
+            d_non_trainable=d_non_trainable,
+            opt_d=opt_d_vars,
         )
+        if regressor is not None:
+            # Same batch, same constant weights: `h` tracks the current `g`.
+            state = regressor.fit(state, x, w, y, mask)
+        return state, loss
 
     @jaxtyped(typechecker=beartype)
     def gen_step(
@@ -509,7 +630,14 @@ def _make_steps(
         y: Float[Array, " n"],
         mask: Float[Array, " n"],
     ) -> tuple[TrainState, Float[Array, ""]]:
-        """One generator update; d is frozen (it enters only as a constant)."""
+        """One generator update; d is frozen (it enters only as a constant).
+
+        So is `h`: its prediction is taken here, outside the differentiated
+        function, which is what makes the residual penalty's gradient exact.
+        """
+        anchor: Float[Array, " n"] = (
+            regressor.predict(state, x) if regressor is not None else jnp.ones_like(a=y)
+        )
         (_penalised, (g_non_trainable, adversarial)), grads = gen_grad_fn(
             state.g_trainable,
             state.g_non_trainable,
@@ -519,6 +647,7 @@ def _make_steps(
             x,
             y,
             mask,
+            anchor,
         )
         g_trainable, opt_g_vars = opt_g.stateless_apply(
             optimizer_variables=state.opt_g,
@@ -684,6 +813,8 @@ def _make_epoch(
             g_non_trainable=state.g_non_trainable,
             d_trainable=state.d_trainable,
             d_non_trainable=state.d_non_trainable,
+            h_trainable=state.h_trainable,
+            h_non_trainable=state.h_non_trainable,
         )
         return RunCarry(state=state, key=key), (row, params)
 
@@ -701,6 +832,8 @@ def _initial_state(
     d: DeconvolveModel,
     opt_g: StatelessOptimizer,
     opt_d: StatelessOptimizer,
+    h: DeconvolveModel | None,
+    opt_h: StatelessOptimizer | None,
 ) -> TrainState:
     return TrainState(
         g_trainable=[v.value for v in g.trainable_variables],
@@ -709,6 +842,11 @@ def _initial_state(
         d_non_trainable=[v.value for v in d.non_trainable_variables],
         opt_g=[v.value for v in opt_g.variables],
         opt_d=[v.value for v in opt_d.variables],
+        h_trainable=[] if h is None else [v.value for v in h.trainable_variables],
+        h_non_trainable=[]
+        if h is None
+        else [v.value for v in h.non_trainable_variables],
+        opt_h=[] if opt_h is None else [v.value for v in opt_h.variables],
     )
 
 
@@ -758,7 +896,12 @@ def _run(
 
 
 def _restore(
-    g: DeconvolveModel, d: DeconvolveModel, params: EpochParams, epoch: int, /
+    g: DeconvolveModel,
+    d: DeconvolveModel,
+    h: DeconvolveModel | None,
+    params: EpochParams,
+    epoch: int,
+    /,
 ) -> None:
     """Write one epoch's parameters back into the live Keras models."""
     chosen: EpochParams = cast(
@@ -768,6 +911,9 @@ def _restore(
     _assign(g.non_trainable_variables, values=chosen.g_non_trainable)
     _assign(d.trainable_variables, values=chosen.d_trainable)
     _assign(d.non_trainable_variables, values=chosen.d_non_trainable)
+    if h is not None:
+        _assign(h.trainable_variables, values=chosen.h_trainable)
+        _assign(h.non_trainable_variables, values=chosen.h_non_trainable)
 
 
 def _detector_arrays(
@@ -825,6 +971,7 @@ def _weights_per_epoch(
 def _select_by_mmd(
     g: DeconvolveModel,
     d: DeconvolveModel,
+    h: DeconvolveModel | None,
     splits: DatasetSplits,
     params: EpochParams,
     history: dict[str, list[float]],
@@ -858,7 +1005,7 @@ def _select_by_mmd(
         mmd[best_epoch],
         ess[best_epoch],
     )
-    _restore(g, d, params, best_epoch)
+    _restore(g, d, h, params, best_epoch)
 
     # Recomputed on test, because selecting 100 times against one val
     # subsample is exactly the regime where the estimator starts fitting the
@@ -930,6 +1077,7 @@ def train(
     lr_g: float = 3e-5,
     lr_d: float = 1e-4,
     lambda_dispersion: float = 0.015,
+    dispersion_mode: DispersionMode = DispersionMode.total,
     log_every: int = 1,
     *,
     fused: bool = True,
@@ -958,6 +1106,9 @@ def train(
             reproducible after the fact without having to decide up front that
             it is worth reproducing.
         n_disc_steps: Discriminator steps per generator step.
+        dispersion_mode: What `lambda_dispersion` penalises. `residual` adds
+            the regressor `h(x)`, built after `g` and `d` so their initial
+            weights do not depend on the mode, and trained at `lr_d`.
         fused: Whether to run the whole epoch loop as one `lax.scan` (the
             default) or drive the identical per-epoch function from a Python
             `while` for debugging; the two must agree bit-for-bit.
@@ -985,9 +1136,17 @@ def train(
     opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=lr_d)
     opt_g.build(g.trainable_variables)
     opt_d.build(d.trainable_variables)
+    h: DeconvolveModel | None = None
+    opt_h: StatelessOptimizer | None = None
+    if dispersion_mode == DispersionMode.residual:
+        h = build_regressor(dim=dim, hidden_units=hidden_units, n_layers=n_layers)
+        opt_h = keras.optimizers.Adam(learning_rate=lr_d)
+        opt_h.build(h.trainable_variables)
 
-    state: TrainState = _initial_state(g, d, opt_g, opt_d)
-    disc_step, gen_step, eval_step = _make_steps(g, d, opt_g, opt_d, lambda_dispersion)
+    state: TrainState = _initial_state(g, d, opt_g, opt_d, h, opt_h)
+    disc_step, gen_step, eval_step = _make_steps(
+        g, d, opt_g, opt_d, lambda_dispersion, dispersion_mode, h, opt_h
+    )
     one_pass: Callable[
         [TrainState, PRNGKeyArray],
         tuple[TrainState, Float[Array, ""], Float[Array, ""]],
@@ -1015,8 +1174,8 @@ def train(
 
     with phase("select"):
         best_epoch, mmd_test, sigmas = _select_by_mmd(
-            g, d, splits, params, history, n_epochs, seed
+            g, d, h, splits, params, history, n_epochs, seed
         )
 
     logger.info("Init seed %d", seed)
-    return TrainResult(g, d, history, seed, best_epoch, params, mmd_test, sigmas)
+    return TrainResult(g, d, history, seed, best_epoch, params, mmd_test, sigmas, h)

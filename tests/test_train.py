@@ -23,6 +23,7 @@ from deconvolve.coretypes import (
     Events,
     Split,
 )
+from deconvolve.coretypes.enums import DispersionMode
 from deconvolve.data import DeconvolveDataset, DeviceSplits, train_indices
 from deconvolve.training.engine import (
     EPS,
@@ -42,6 +43,7 @@ from deconvolve.training.engine import (
 from deconvolve.training.models import (
     backend,
     build_generator,
+    build_regressor,
     load_model,
     set_random_seed,
 )
@@ -331,7 +333,10 @@ class TestTrainSteps:
 
     @staticmethod
     def _setup(
-        dim: int = 2, n: int = 64, lambda_dispersion: float = 0.0
+        dim: int = 2,
+        n: int = 64,
+        lambda_dispersion: float = 0.0,
+        dispersion_mode: DispersionMode = DispersionMode.total,
     ) -> tuple[tuple[TrainStep, TrainStep, EvalStep], TrainState, tuple[Array, ...]]:
         from deconvolve.training.models import build_discriminator, build_generator
 
@@ -342,6 +347,12 @@ class TestTrainSteps:
         opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-2)
         opt_g.build(g.trainable_variables)
         opt_d.build(d.trainable_variables)
+        h: DeconvolveModel | None = None
+        opt_h: StatelessOptimizer | None = None
+        if dispersion_mode == DispersionMode.residual:
+            h = build_regressor(dim=dim, hidden_units=8, n_layers=1)
+            opt_h = keras.optimizers.Adam(learning_rate=1e-2)
+            opt_h.build(h.trainable_variables)
         state = TrainState(
             g_trainable=[v.value for v in g.trainable_variables],
             g_non_trainable=[v.value for v in g.non_trainable_variables],
@@ -349,6 +360,11 @@ class TestTrainSteps:
             d_non_trainable=[v.value for v in d.non_trainable_variables],
             opt_g=[v.value for v in opt_g.variables],
             opt_d=[v.value for v in opt_d.variables],
+            h_trainable=[] if h is None else [v.value for v in h.trainable_variables],
+            h_non_trainable=(
+                [] if h is None else [v.value for v in h.non_trainable_variables]
+            ),
+            opt_h=[] if opt_h is None else [v.value for v in opt_h.variables],
         )
         rng: np.random.Generator = np.random.default_rng(seed=6)
         # Device arrays, because that is what the steps see: they are traced
@@ -365,7 +381,10 @@ class TestTrainSteps:
                 np.ones(shape=n),
             )
         )
-        return _make_steps(g, d, opt_g, opt_d, lambda_dispersion), state, batch
+        steps = _make_steps(
+            g, d, opt_g, opt_d, lambda_dispersion, dispersion_mode, h, opt_h
+        )
+        return steps, state, batch
 
     @pytest.mark.slow
     def test_disc_step_updates_only_the_discriminator(self) -> None:
@@ -410,6 +429,46 @@ class TestTrainSteps:
         )
         assert int(count) == len(batch[2])
 
+    @pytest.mark.slow
+    def test_residual_disc_step_updates_d_and_h_not_g(self) -> None:
+        (disc_step, _, _), state, batch = self._setup(
+            dispersion_mode=DispersionMode.residual
+        )
+        new, _ = disc_step(state, *batch)
+        for field in ("d_trainable", "h_trainable"):
+            for before, after in zip(
+                getattr(state, field), getattr(new, field), strict=True
+            ):
+                assert not np.allclose(a=np.asarray(a=before), b=np.asarray(a=after))
+        for before, after in zip(state.g_trainable, new.g_trainable, strict=True):
+            np.testing.assert_array_equal(
+                actual=np.asarray(a=before), desired=np.asarray(a=after)
+            )
+
+    @pytest.mark.slow
+    def test_regressor_loss_ignores_nature_rows(self) -> None:
+        """`h` is fit to MC rows only; data rows carry `w = 1` by construction."""
+        (disc_step, _, _), state, batch = self._setup(
+            dispersion_mode=DispersionMode.residual
+        )
+        z, x, y, mask = batch
+        moved: Array = jnp.where(y[:, None] == 1, 1e3, x)
+        a, _ = disc_step(state, z, x, y, mask)
+        b, _ = disc_step(state, z, moved, y, mask)
+        for left, right in zip(a.h_trainable, b.h_trainable, strict=True):
+            np.testing.assert_allclose(
+                actual=np.asarray(a=left), desired=np.asarray(a=right), rtol=1e-6
+            )
+
+    def test_residual_mode_needs_a_regressor(self) -> None:
+        from deconvolve.training.models import build_discriminator
+
+        g: DeconvolveModel = build_generator(dim=1, hidden_units=4, n_layers=1)
+        d: DeconvolveModel = build_discriminator(dim=1, hidden_units=4, n_layers=1)
+        opt: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-3)
+        with pytest.raises(ValueError, match="regressor"):
+            _ = _make_steps(g, d, opt, opt, 0.015, DispersionMode.residual, None, None)
+
 
 @pytest.mark.slow
 def test_train_runs_and_returns_usable_models(tmp_path: Path) -> None:
@@ -435,7 +494,7 @@ def test_train_runs_and_returns_usable_models(tmp_path: Path) -> None:
         data=ZXY(Events(z, x), y)
     )
 
-    g, _d, history, seed, best_epoch, _params, _mmd_test, _sigmas = train(
+    g, _d, history, seed, best_epoch, _params, _mmd_test, _sigmas, _h = train(
         splits=splits,
         dim=1,
         n_epochs=3,
@@ -806,7 +865,8 @@ class TestFusion:
         )
 
     @pytest.mark.slow
-    def test_fused_and_eager_runs_agree(self) -> None:
+    @pytest.mark.parametrize(argnames="mode", argvalues=list(DispersionMode))
+    def test_fused_and_eager_runs_agree(self, mode: DispersionMode) -> None:
         """`fused=False` is the debugging path, so it must not be a second model.
 
         It runs the identical epoch function from a Python `while` instead of a
@@ -823,6 +883,7 @@ class TestFusion:
                 n_layers=1,
                 seed=42,
                 n_epochs=3,
+                dispersion_mode=mode,
                 fused=fused,
             )
 
@@ -1268,3 +1329,99 @@ class TestDispersionPenalty:
         # A weighted BCE sits near log 2 while d is confused, and is bounded
         # below by 0. A penalty folded into this number would push it far above.
         assert all(0.0 < value < 2.0 for value in penalised.history["train_g"])
+
+
+# `TestDispersionPenalty._run(0.015, epochs=5)` on the engine before the
+# regressor existed. Total mode must keep reproducing it: a default run is not
+# allowed to drift because a mode it does not use was added.
+_GOLDEN_TRAIN_G: tuple[float, ...] = (
+    0.6565247178077698,
+    0.6242237091064453,
+    0.6542395949363708,
+    0.6654340028762817,
+    0.6621710062026978,
+)
+_GOLDEN_VAL_D: tuple[float, ...] = (
+    0.6520312428474426,
+    0.6578016877174377,
+    0.6633957624435425,
+    0.6686779856681824,
+    0.6737580895423889,
+)
+
+
+@pytest.mark.slow
+class TestResidualPenalty:
+    """`--dispersion-mode residual`: penalise only `E[Var(w|x)]`."""
+
+    @staticmethod
+    def _run(
+        mode: DispersionMode, lambda_dispersion: float, epochs: int = 5
+    ) -> TrainResult:
+        return train(
+            TestDispersionPenalty._splits(),
+            dim=1,
+            hidden_units=8,
+            n_layers=1,
+            seed=0,
+            n_epochs=epochs,
+            lr_g=1e-2,
+            lambda_dispersion=lambda_dispersion,
+            dispersion_mode=mode,
+        )
+
+    def test_total_mode_matches_the_pre_change_golden(self) -> None:
+        result: TrainResult = TestDispersionPenalty()._run(0.015, epochs=5)
+
+        assert result.history["train_g"] == pytest.approx(_GOLDEN_TRAIN_G, rel=1e-6)
+        assert result.history["val_d"] == pytest.approx(_GOLDEN_VAL_D, rel=1e-6)
+
+    def test_total_mode_builds_no_regressor(self) -> None:
+        result: TrainResult = self._run(DispersionMode.total, 0.015)
+
+        assert result.h is None
+        assert result.params.h_trainable == []
+        assert result.params.h_non_trainable == []
+
+    def test_residual_mode_at_zero_lambda_matches_total_mode(self) -> None:
+        """At λ = 0 `h` trains but must not touch `g` or `d`."""
+        total: TrainResult = self._run(DispersionMode.total, 0.0)
+        residual: TrainResult = self._run(DispersionMode.residual, 0.0)
+
+        for key in ("train_d", "train_g", "val_d"):
+            assert residual.history[key] == pytest.approx(total.history[key], rel=1e-6)
+
+    def test_residual_mode_trains_the_regressor(self) -> None:
+        result: TrainResult = self._run(DispersionMode.residual, 0.015, epochs=20)
+        assert result.h is not None
+        mc: Events = TestDispersionPenalty._splits().test.as_arrays().partition().mc
+        raw: NDArray[np.single] = np.asarray(a=result.g(mc.z)).ravel()
+        w: NDArray[np.single] = raw / raw.mean()
+        h: NDArray[np.single] = np.asarray(a=result.h(mc.x)).ravel()
+
+        assert float(np.mean(a=np.square(w - h))) < float(np.var(a=w))
+        first: Array = result.params.h_trainable[0][0]
+        assert not np.allclose(
+            a=np.asarray(a=first), b=np.asarray(a=result.h.trainable_variables[0])
+        )
+
+    def test_residual_penalty_tames_the_weights(self) -> None:
+        loose: TrainResult = self._run(DispersionMode.residual, 0.0, epochs=40)
+        tight: TrainResult = self._run(DispersionMode.residual, 100.0, epochs=40)
+
+        assert min(tight.history["val_ess"]) > min(loose.history["val_ess"])
+
+    def test_recorded_loss_stays_on_the_bce_scale(self) -> None:
+        result: TrainResult = self._run(DispersionMode.residual, 100.0, epochs=10)
+
+        assert all(0.0 < value < 2.0 for value in result.history["train_g"])
+
+    def test_load_params_without_regressor_keys(self, tmp_path: Path) -> None:
+        """A run saved before the regressor existed reloads with empty lists."""
+        result: TrainResult = self._run(DispersionMode.total, 0.015, epochs=2)
+        _ = save_params(tmp_path, result.params)
+
+        loaded = load_params(tmp_path)
+
+        assert loaded.h_trainable == []
+        assert loaded.h_non_trainable == []
