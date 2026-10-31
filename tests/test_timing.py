@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import math
-import time
 from io import StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -20,7 +19,7 @@ from deconvolve.instrumentation import timing
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from pathlib import Path
     from typing import Any
 
@@ -264,9 +263,7 @@ class TestMerge:
         assert by_name["train"]["pass"] == "train"
         assert by_name["plots"]["pass"] == "load"
 
-    def test_a_rerun_phase_replaces_its_earlier_record(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_rerun_phase_replaces_its_earlier_record(self, tmp_path: Path) -> None:
         """The two durations are pinned rather than raced.
 
         Two empty `with timing.phase(...)` blocks can land inside one
@@ -275,10 +272,11 @@ class TestMerge:
         intermittently for a reason that has nothing to do with merging.
         """
         ticks: Iterator[float] = iter([0.0, 1.0, 10.0, 12.0])
-        real: Callable[[], float] = time.perf_counter
-        monkeypatch.setattr(timing.time, "perf_counter", lambda: next(ticks, real()))
 
-        with timing.phase("plots"):
+        def clock() -> float:
+            return next(ticks)
+
+        with timing.phase("plots", clock=clock):
             pass
         timing.write(tmp_path, pass_name="train")
         first: dict[str, Any] = json.loads(
@@ -286,7 +284,7 @@ class TestMerge:
         )
         timing.reset()
 
-        with timing.phase("plots"):
+        with timing.phase("plots", clock=clock):
             pass
         timing.write(tmp_path, pass_name="load")
         second: dict[str, Any] = json.loads(

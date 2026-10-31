@@ -195,8 +195,18 @@ def note(detail: str, /, *, to: str | None = None) -> None:
 
 
 @contextmanager
-def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
-    """Time the block, unless timing is off -- in which case do nothing at all."""
+def phase(
+    name: str,
+    /,
+    *,
+    detail: str | None = None,
+    clock: Callable[[], float] = time.perf_counter,
+) -> Generator[_Open]:
+    """Time the block, unless timing is off -- in which case do nothing at all.
+
+    `clock` returns seconds and is called once on entry and once on exit; it is a
+    parameter so a test can pin the durations instead of racing a real clock.
+    """
     recorder: _Recorder | None = _recorder
     if recorder is None:
         yield _NOOP
@@ -208,7 +218,7 @@ def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
     recorder.open.append(handle)
     recorder.names.append(name)
     recorder.depth = depth + 1
-    start: float = time.perf_counter()
+    start: float = clock()
     failed = False
     try:
         yield handle
@@ -218,7 +228,7 @@ def phase(name: str, /, *, detail: str | None = None) -> Generator[_Open]:
         failed = True
         raise
     finally:
-        elapsed: float = time.perf_counter() - start
+        elapsed: float = clock() - start
         recorder.depth = depth
         _ = recorder.open.pop()
         _ = recorder.names.pop()
