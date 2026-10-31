@@ -17,6 +17,7 @@ from .engine import (
     save_params,
     train,
     weight_dispersion,
+    weight_residual,
     weighted_bce,
 )
 from .mmd import (
@@ -61,6 +62,7 @@ __all__: Final[Sequence[str]] = (
     "subsample_indices",
     "train",
     "weight_dispersion",
+    "weight_residual",
     "weighted_bce",
     "weighted_mmd",
 )

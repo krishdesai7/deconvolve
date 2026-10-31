@@ -316,6 +316,37 @@ def weight_dispersion(
 
 
 @jaxtyped(typechecker=beartype)
+def weight_residual(
+    w: Float[Array | NDArray[np.single], " n"],
+    h: Float[Array | NDArray[np.single], " n"],
+    y: Float[Array | NDArray[np.single], " n"],
+    mask: Float[Array | NDArray[np.single], " n"],
+    /,
+) -> Float[Array, ""]:
+    """The part of the weights' spread the detector averages away.
+
+    The masked MC mean of `(w - h)^2`. With `h(x) = E[w|x]` this is
+    `E[Var(w|x)]`, the second term of
+
+        Var(w) = Var(E[w|x]) + E[Var(w|x)]
+
+    Only the first term is visible to `d`: reweighting sim by `w(z)` gives the
+    reco density `q_sim(x) E[w|x]`, so `d` constrains `E[w|x]` and nothing
+    else. `weight_dispersion` penalises both terms and so fights `d` on the
+    visible one; this penalises only what the data cannot pin.
+
+    Holding `h` constant gives the exact gradient of `E[Var(w|x)]` at the
+    optimal `h`: the term from `h`'s own dependence on `w` carries a factor
+    `E[w - E[w|x] | x] = 0`. Nature's and padded rows are excluded exactly as
+    in `weight_dispersion`.
+    """
+    one: Float[Array, " n"] = jnp.ones_like(a=y)
+    mc: Float[Array | NDArray[np.single], " n"] = mask * (one - y)
+    n_mc: Float[Array, ""] = jnp.sum(a=mc)
+    return jnp.sum(a=mc * jnp.square(w - h)) / (n_mc + EPS)
+
+
+@jaxtyped(typechecker=beartype)
 def bce_sums(
     d_out: Float[Array | NDArray[np.single], " n"],
     y: Float[Array | NDArray[np.single], " n"],

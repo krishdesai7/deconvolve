@@ -36,6 +36,7 @@ from deconvolve.training.engine import (
     save_params,
     train,
     weight_dispersion,
+    weight_residual,
     weighted_bce,
 )
 from deconvolve.training.models import (
@@ -1104,6 +1105,87 @@ class TestWeightDispersion:
                 )
             ),
             rel=1e-5,
+        )
+
+
+class TestWeightResidual:
+    """`weight_residual`: the part of the weight variance `d` cannot see.
+
+    With `h = E[w|x]`, the masked MC mean of `(w - h)^2` is `E[Var(w|x)]`, the
+    residual in `Var(w) = Var(E[w|x]) + E[Var(w|x)]`. Penalising it rather than
+    `Var(w)` leaves the visible part, which the discriminator pins, to the data.
+    """
+
+    @staticmethod
+    def _ones(n: int) -> NDArray[np.single]:
+        return np.ones(shape=n, dtype=np.single)
+
+    def test_matching_h_has_no_residual(self) -> None:
+        y: NDArray[np.single] = np.zeros(shape=4, dtype=np.single)
+        w: NDArray[np.single] = np.asarray(a=[0.5, 1.5, 0.7, 1.3], dtype=np.single)
+
+        assert float(weight_residual(w, w, y, self._ones(4))) == pytest.approx(
+            expected=0.0
+        )
+
+    def test_constant_h_at_one_equals_weight_dispersion(self) -> None:
+        """At `h = 1`, the mean of normalised weights, it is `Var(w)`."""
+        rng: np.random.Generator = np.random.default_rng(seed=0)
+        raw: NDArray[np.single] = rng.lognormal(sigma=0.5, size=4096).astype(
+            dtype=np.single
+        )
+        y: NDArray[np.single] = np.zeros(shape=raw.size, dtype=np.single)
+        mask: NDArray[np.single] = self._ones(raw.size)
+        w: Array = normalize_weights(raw, y, mask)
+
+        assert float(weight_residual(w, jnp.ones_like(a=w), y, mask)) == pytest.approx(
+            expected=float(weight_dispersion(w, y, mask)), rel=1e-5
+        )
+
+    def test_ignores_the_nature_rows(self) -> None:
+        y: NDArray[np.single] = np.asarray(a=[1.0, 1.0, 0.0, 0.0], dtype=np.single)
+        w: NDArray[np.single] = np.asarray(a=[1.0, 1.0, 0.5, 1.5], dtype=np.single)
+        h: NDArray[np.single] = np.asarray(a=[9.0, 9.0, 1.0, 1.0], dtype=np.single)
+
+        assert float(weight_residual(w, h, y, self._ones(4))) == pytest.approx(
+            expected=0.25
+        )
+
+    def test_ignores_padded_rows(self) -> None:
+        y: NDArray[np.single] = np.zeros(shape=6, dtype=np.single)
+        w: NDArray[np.single] = np.asarray(
+            a=[0.5, 1.5, 0.5, 1.5, 0.0, 0.0], dtype=np.single
+        )
+        h: NDArray[np.single] = np.asarray(
+            a=[1.0, 1.0, 1.0, 1.0, 7.0, 7.0], dtype=np.single
+        )
+        mask: NDArray[np.single] = np.asarray(
+            a=[1.0, 1.0, 1.0, 1.0, 0.0, 0.0], dtype=np.single
+        )
+
+        assert float(weight_residual(w, h, y, mask)) == pytest.approx(expected=0.25)
+
+    def test_constant_offset_in_h_does_not_move_g(self) -> None:
+        """An untrained `h` is off by a constant; normalisation makes that inert.
+
+        The weights have mean 1 on every batch, so `sum (w - h - c)^2` differs
+        from `sum (w - h)^2` by a term that does not depend on `w`.
+        """
+        rng: np.random.Generator = np.random.default_rng(seed=1)
+        raw: Array = jnp.asarray(
+            a=rng.lognormal(sigma=0.5, size=256).astype(dtype=np.single)
+        )
+        h: Array = jnp.asarray(a=rng.normal(size=256).astype(dtype=np.single))
+        y: Array = jnp.zeros(shape=256, dtype=jnp.float32)
+        mask: Array = jnp.ones(shape=256, dtype=jnp.float32)
+
+        def penalty(raw: Array, h: Array) -> Array:
+            return weight_residual(normalize_weights(raw, y, mask), h, y, mask)
+
+        np.testing.assert_allclose(
+            actual=np.asarray(a=jax.grad(fun=penalty)(raw, h + 3.0)),
+            desired=np.asarray(a=jax.grad(fun=penalty)(raw, h)),
+            atol=1e-5,
         )
 
 
