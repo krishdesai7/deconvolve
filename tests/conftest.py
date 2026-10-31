@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
 import deconvolve  # ruff: ignore[unused-import]  -- imported for its backend bootstrap
+import matplotlib as mpl
 import pytest
 from deconvolve.coretypes import constants
 
@@ -89,6 +91,20 @@ def _no_global_config_layer(
     monkeypatch.setenv(
         "XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("no-global-config"))
     )
+
+
+@pytest.fixture(autouse=True)
+def _mathtext_without_tex(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fall back to mathtext where there is no `latex` binary to shell out to.
+
+    `deconvolve.evaluation.plotting` sets `text.usetex` at import, so every
+    figure draw needs TeX -- which CI deliberately does not install (see the
+    comment above `_NO_TEX` in `tests/test_report.py`). Almost none of these
+    tests are about glyph rendering, so mathtext is a faithful stand-in for
+    them; the ones that do need real TeX are skipped on `_NO_TEX`.
+    """
+    if shutil.which("latex") is None:
+        monkeypatch.setitem(mpl.rcParams, "text.usetex", False)
 
 
 _METRIC_NAMES = ("wasserstein", "jensenshannon", "triangular")
