@@ -20,152 +20,152 @@ name: Release
 # exception belongs to this workflow rather than to anyone.
 
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version bump (blank = infer from merged PR labels)"
-        type: choice
-        # No `major`. Versions stay below 1.0 until the project is ready to
-        # publish; the guard in "Read new version" enforces the same rule
-        # against a bump rooster infers on its own.
-        options: ["", minor, patch, pre]
-        default: ""
-        required: false
-      publish_pypi:
-        description: "Also publish to PyPI (read the note on the publish step first)"
-        type: boolean
-        default: false
+    workflow_dispatch:
+        inputs:
+            bump:
+                description: "Version bump (blank = infer from merged PR labels)"
+                type: choice
+                # No `major`. Versions stay below 1.0 until the project is ready to
+                # publish; the guard in "Read new version" enforces the same rule
+                # against a bump rooster infers on its own.
+                options: ["", minor, patch, pre]
+                default: ""
+                required: false
+            publish_pypi:
+                description: "Also publish to PyPI (read the note on the publish step first)"
+                type: boolean
+                default: false
 
 permissions:
-  contents: write
-  # Mints the OIDC token PyPI's trusted publishing trades for an upload token.
-  # Without it the publish step fails even with a publisher registered.
-  id-token: write
+    contents: write
+    # Mints the OIDC token PyPI's trusted publishing trades for an upload token.
+    # Without it the publish step fails even with a publisher registered.
+    id-token: write
 
 # Two releases at once would race on the tag and on master's ref. Queue them.
 concurrency:
-  group: release
-  cancel-in-progress: false
+    group: release
+    cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # rooster diffs against the last tag, so it needs the full history.
-          fetch-depth: 0
-          # Wires the deploy key into the git remote, so the push below goes
-          # over SSH as the ruleset's bypass actor rather than as GITHUB_TOKEN.
-          ssh-key: ${{ secrets.RELEASE_SSH_KEY }}
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  # rooster diffs against the last tag, so it needs the full history.
+                  fetch-depth: 0
+                  # Wires the deploy key into the git remote, so the push below goes
+                  # over SSH as the ruleset's bypass actor rather than as GITHUB_TOKEN.
+                  ssh-key: ${{ secrets.RELEASE_SSH_KEY }}
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          enable-cache: true
+            - name: Install uv
+              uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+              with:
+                  enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --group release --locked
+            - name: Install dependencies
+              run: uv sync --group release --locked
 
-      - name: Bump version and update changelog
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BUMP: ${{ inputs.bump }}
-        run: |
-          if [ -n "$BUMP" ]; then
-            uv run rooster release --bump "$BUMP"
-          else
-            uv run rooster release
-          fi
+            - name: Bump version and update changelog
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  BUMP: ${{ inputs.bump }}
+              run: |
+                  if [ -n "$BUMP" ]; then
+                    uv run rooster release --bump "$BUMP"
+                  else
+                    uv run rooster release
+                  fi
 
-      # rooster rewrites the version in pyproject.toml but knows nothing about
-      # uv.lock, which pins `deconvolve` by that same version. Without this the release
-      # commit fails CI's `uv sync --locked` and has to be fixed up by hand.
-      # Bare `uv lock` re-pins only what changed; it does not upgrade deps.
-      - name: Re-lock
-        run: uv lock
+            # rooster rewrites the version in pyproject.toml but knows nothing about
+            # uv.lock, which pins `deconvolve` by that same version. Without this the release
+            # commit fails CI's `uv sync --locked` and has to be fixed up by hand.
+            # Bare `uv lock` re-pins only what changed; it does not upgrade deps.
+            - name: Re-lock
+              run: uv lock
 
-      - name: Read new version
-        id: version
-        run: |
-          version=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
-          if [ -z "$version" ]; then
-            echo "::error::Could not read version from pyproject.toml"
-            exit 1
-          fi
-          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-            echo "::error::Tag $version already exists -- nothing to release."
-            exit 1
-          fi
-          # 1.0 is reserved for the first PyPI publication and is not reached
-          # by accident. rooster cannot infer it (major-labels is empty) and
-          # the bump input does not offer it, so this only fires if one of
-          # those is deliberately changed.
-          case "$version" in
-            0.*) ;;
-            *)
-              echo "::error::Refusing to release $version. Versions stay below 1.0 until this project is ready to publish to PyPI."
-              exit 1
-              ;;
-          esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+            - name: Read new version
+              id: version
+              run: |
+                  version=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+                  if [ -z "$version" ]; then
+                    echo "::error::Could not read version from pyproject.toml"
+                    exit 1
+                  fi
+                  if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+                    echo "::error::Tag $version already exists -- nothing to release."
+                    exit 1
+                  fi
+                  # 1.0 is reserved for the first PyPI publication and is not reached
+                  # by accident. rooster cannot infer it (major-labels is empty) and
+                  # the bump input does not offer it, so this only fires if one of
+                  # those is deliberately changed.
+                  case "$version" in
+                    0.*) ;;
+                    *)
+                      echo "::error::Refusing to release $version. Versions stay below 1.0 until this project is ready to publish to PyPI."
+                      exit 1
+                      ;;
+                  esac
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # rooster curated these notes already; reuse them instead of GitHub's
-      # autogenerated commit list. Everything between this version's heading
-      # and the next one.
-      - name: Extract release notes
-        id: notes
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          {
-            echo "notes<<RELEASE_NOTES_EOF"
-            awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^## / {exit} f' CHANGELOG.md
-            echo "RELEASE_NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
+            # rooster curated these notes already; reuse them instead of GitHub's
+            # autogenerated commit list. Everything between this version's heading
+            # and the next one.
+            - name: Extract release notes
+              id: notes
+              env:
+                  VERSION: ${{ steps.version.outputs.version }}
+              run: |
+                  {
+                    echo "notes<<RELEASE_NOTES_EOF"
+                    awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^## / {exit} f' CHANGELOG.md
+                    echo "RELEASE_NOTES_EOF"
+                  } >> "$GITHUB_OUTPUT"
 
-      - name: Build
-        run: uv build
+            - name: Build
+              run: uv build
 
-      - name: Commit, tag and push
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml uv.lock CHANGELOG.md
-          git commit -m "Release $VERSION"
-          git tag "$VERSION"
-          # Push the commit and the tag together: if the ref push is rejected,
-          # no tag is left behind pointing at a commit master never got.
-          git push origin "HEAD:${{ github.ref_name }}" "refs/tags/$VERSION"
+            - name: Commit, tag and push
+              env:
+                  VERSION: ${{ steps.version.outputs.version }}
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add pyproject.toml uv.lock CHANGELOG.md
+                  git commit -m "Release $VERSION"
+                  git tag "$VERSION"
+                  # Push the commit and the tag together: if the ref push is rejected,
+                  # no tag is left behind pointing at a commit master never got.
+                  git push origin "HEAD:${{ github.ref_name }}" "refs/tags/$VERSION"
 
-      - name: Create GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-          NOTES: ${{ steps.notes.outputs.notes }}
-        run: gh release create "$VERSION" dist/* --title "$VERSION" --notes "$NOTES"
+            - name: Create GitHub release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  VERSION: ${{ steps.version.outputs.version }}
+                  NOTES: ${{ steps.notes.outputs.notes }}
+              run: gh release create "$VERSION" dist/* --title "$VERSION" --notes "$NOTES"
 
-      # Off by default; flip the input when a release should also reach PyPI.
-      #
-      # There is no credential here, and that is the point. PyPI's trusted
-      # publishing exchanges the OIDC token GitHub mints for this run for a
-      # short-lived, project-scoped upload token, so there is no PYPI_TOKEN to
-      # leak, rotate, or leave sitting in repository secrets. uv performs the
-      # exchange itself, which is why the step is bare; `always` rather than
-      # `automatic` so a misconfiguration fails here instead of silently
-      # falling back to looking for credentials that no longer exist.
-      #
-      # It matches on repository AND workflow filename, registered at
-      # pypi.org/manage/project/deconvolve/settings/publishing (or as a pending
-      # publisher at pypi.org/manage/account/publishing): owner
-      # `krishdesai7`, repo `deconvolve`, workflow `release.yml`, environment
-      # blank. Renaming this file, or moving this step into another workflow,
-      # breaks the match and the upload fails with a 403 that says nothing
-      # about why. The environment is deliberately blank: this job also tags
-      # and pushes to master, so gating it on an environment would gate the
-      # whole release rather than just the upload.
-      - name: Publish to PyPI
-        if: inputs.publish_pypi
-        run: uv publish --trusted-publishing always
+            # Off by default; flip the input when a release should also reach PyPI.
+            #
+            # There is no credential here, and that is the point. PyPI's trusted
+            # publishing exchanges the OIDC token GitHub mints for this run for a
+            # short-lived, project-scoped upload token, so there is no PYPI_TOKEN to
+            # leak, rotate, or leave sitting in repository secrets. uv performs the
+            # exchange itself, which is why the step is bare; `always` rather than
+            # `automatic` so a misconfiguration fails here instead of silently
+            # falling back to looking for credentials that no longer exist.
+            #
+            # It matches on repository AND workflow filename, registered at
+            # pypi.org/manage/project/deconvolve/settings/publishing (or as a pending
+            # publisher at pypi.org/manage/account/publishing): owner
+            # `krishdesai7`, repo `deconvolve`, workflow `release.yml`, environment
+            # blank. Renaming this file, or moving this step into another workflow,
+            # breaks the match and the upload fails with a 403 that says nothing
+            # about why. The environment is deliberately blank: this job also tags
+            # and pushes to master, so gating it on an environment would gate the
+            # whole release rather than just the upload.
+            - name: Publish to PyPI
+              if: inputs.publish_pypi
+              run: uv publish --trusted-publishing always
