@@ -394,6 +394,22 @@ def _merged_phases(
     return kept + fresh
 
 
+def _compile_cache_warm(recorder: _Recorder, previous: dict[str, Any], /) -> bool:
+    """This pass's `compile_cache_warm` reading, or the earlier pass's if it is moot.
+
+    The flag is only meaningful for a pass that actually compiled something --
+    a reload pass samples it anyway (every `_Recorder` does, unconditionally),
+    but that reading says nothing about whether *this* pass's compile was warm
+    or cold, because it never had a `compile` phase to begin with. Keep the
+    training pass's reading in that case rather than overwrite it with an
+    irrelevant one.
+    """
+    compiled_this_pass: bool = any(p.name == "compile" for p in recorder.records)
+    if compiled_this_pass or "compile_cache_warm" not in previous:
+        return recorder.compile_cache_warm
+    return cast(typ="bool", val=previous["compile_cache_warm"])
+
+
 def write(
     run_dir: Path,
     /,
@@ -458,18 +474,7 @@ def write(
         for p in kept
     ]
     phases: list[dict[str, Any]] = _merged_phases(previous, fresh)
-    # `compile_cache_warm` is only meaningful for a pass that actually
-    # compiled something -- a reload pass samples it anyway (every
-    # `_Recorder` does, unconditionally), but that reading says nothing
-    # about whether *this* pass's compile deconvolve warm or cold, because it never
-    # had a `compile` phase to begin with. Keep the training pass's reading
-    # in that case rather than overwrite it with an irrelevant one.
-    compiled_this_pass: bool = any(p.name == "compile" for p in _recorder.records)
-    warm: bool = (
-        _recorder.compile_cache_warm
-        if compiled_this_pass or "compile_cache_warm" not in previous
-        else previous["compile_cache_warm"]
-    )
+    warm: bool = _compile_cache_warm(_recorder, previous)
     payload: dict[str, Any] = {
         "total_seconds": sum(p["seconds"] for p in phases if p["depth"] == 0),
         "compile_cache_warm": warm,
