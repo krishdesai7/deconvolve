@@ -57,6 +57,7 @@ deconvolve train [-D{gaussian|jets}]
                  [--lr-g <float>]
                  [--lr-d <float>]
                  [--lambda-dispersion <float>]
+                 [--dispersion-mode <total|residual>]
                  [--seed <int>]
                  [--run-dir <path>]
                  [--plots | --no-plots]
@@ -86,6 +87,7 @@ deconvolve train [-D{gaussian|jets}]
 | `--lr-g` | | `float` | `3e-5` | Generator learning rate (<span style="font-variant: small-caps;">Adam</span>). Tuned; see `benchmarks/README.md`. |
 | `--lr-d` | | `float` | `1e-4` | Discriminator learning rate (<span style="font-variant: small-caps;">Adam</span>). |
 | `--lambda-dispersion` | | `float` | `0.015` | Penalty on the variance of the generator's normalized weights. `0` disables it. |
+| `--dispersion-mode` | | `total` \| `residual` | `total` | What `--lambda-dispersion` penalises: the whole weight variance, or only the part the detector averages away, measured against a regressor `h(x)` trained alongside the generator. |
 | `--seed` | | `int` | `None` | Seed for model initialization and shuffle order. Defaults to a random value. |
 
 ### Output

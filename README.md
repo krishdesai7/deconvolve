@@ -120,6 +120,7 @@ sbatch scripts/submit.zsh -Djets
 | `--config`            |              | `Path`        | `None`         | Path to Gaussian YAML config                                                        |
 | `--data-seed`         | `-d`         | `int`         | `42`           | Data generation, shuffle, split and batch order                                     |
 | `--dataset`           | `-D`         | `DatasetName` | `gaussian`     | Dataset type: `gaussian` or `jets`                                                  |
+| `--dispersion-mode`   |              | `DispersionMode` | `total`     | Penalise all of the weight variance (`total`) or only the detector-invisible part (`residual`) |
 | `--hidden-units`      | `-u`         | `int`         | `64`           | Units per hidden layer                                                              |
 | `--lambda-dispersion` |              | `float`       | `0.015`        | Penalty on the variance of `g`'s weights                                            |
 | `--load-run`          | `-r`         | `Path`        | `None`         | Path to an existing run directory to reload                                         |

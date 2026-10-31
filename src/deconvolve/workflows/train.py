@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from ..coretypes import (
         DatasetSplits,
         DeconvolveModel,
+        DispersionMode,
         EventArray,
         Populations,
         RunConfig,
@@ -203,6 +204,7 @@ def _save_run(
     hyperparameters: dict[str, Any],
     run_dir: Path | None = None,
     origins: dict[str, str] | None = None,
+    regressor: DeconvolveModel | None = None,
 ) -> Path:
     """Write models, history and config to a run directory.
 
@@ -229,6 +231,7 @@ def _save_run(
             hyperparameters=hyperparameters,
             run_dir=run_dir,
             origins=origins,
+            regressor=regressor,
         )
 
 
@@ -249,6 +252,7 @@ def _write_run_dir(
     hyperparameters: dict[str, Any],
     run_dir: Path | None,
     origins: dict[str, str] | None = None,
+    regressor: DeconvolveModel | None = None,
 ) -> Path:
     """Everything `_save_run` puts on disk. Split out only so the timer wraps a
     call rather than an indented body."""
@@ -257,6 +261,9 @@ def _write_run_dir(
     artifacts: Path = artifacts_dir(run_dir)
     g.save(filepath=artifacts / "generator.keras")
     d.save(filepath=artifacts / "discriminator.keras")
+    if regressor is not None:
+        # Residual mode's `h(x) = E[w|x]`, from the same epoch as `g` and `d`.
+        regressor.save(filepath=artifacts / "regressor.keras")
     # Every epoch's parameters, not just the selected one's. `scan` already
     # emitted the stack, so dropping it on the floor would make re-scoring a
     # run under a different criterion cost a full retrain.
@@ -486,6 +493,7 @@ def run(
     lr_g: float,
     lr_d: float,
     lambda_dispersion: float,
+    dispersion_mode: DispersionMode,
     log_every: int,
     plots: bool,
     run_dir: Path | None,
@@ -522,6 +530,7 @@ def run(
             lr_g=lr_g,
             lr_d=lr_d,
             lambda_dispersion=lambda_dispersion,
+            dispersion_mode=dispersion_mode,
             log_every=log_every,
             plots=plots,
             run_dir=run_dir,
@@ -563,6 +572,7 @@ def _pipeline(
     lr_g: float,
     lr_d: float,
     lambda_dispersion: float,
+    dispersion_mode: DispersionMode,
     log_every: int,
     plots: bool,
     run_dir: Path | None,
@@ -639,6 +649,7 @@ def _pipeline(
                 lr_g=lr_g,
                 lr_d=lr_d,
                 lambda_dispersion=lambda_dispersion,
+                dispersion_mode=dispersion_mode,
                 log_every=log_every,
             )
         g: DeconvolveModel = result.g
@@ -666,10 +677,12 @@ def _pipeline(
                 "lr_g": lr_g,
                 "lr_d": lr_d,
                 "lambda_dispersion": lambda_dispersion,
+                "dispersion_mode": dispersion_mode.value,
                 **mmd_record,
             },
             run_dir=run_dir,
             origins=origins,
+            regressor=result.h,
         )
 
     with phase("plots"):

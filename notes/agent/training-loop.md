@@ -67,6 +67,15 @@ Loss math is plain `jnp` — `keras.ops` bought backend-agnosticism this module 
 longer has, since `lax.scan` and `jax.random` are both native.
 `stateless_call`/`stateless_apply` are the only Keras calls inside the trace.
 
+**Residual mode adds a third network.** With `--dispersion-mode residual`,
+`train` builds a regressor `h(x)` after `g` and `d` (so their initial weights
+do not depend on the mode) and carries it in `TrainState`. It takes one Adam
+step at `lr_d` on every discriminator batch, fitting `E[w|x]` on the MC rows,
+and `g`'s penalty becomes `weight_residual` against `h(x)`, predicted outside
+the differentiated function. `h` is emitted in `EpochParams` and restored to the
+selected epoch with the other two, but selection never reads it. In total mode
+its lists are empty, so the pytree, and the run, are unchanged.
+
 **`engine.train(fused=False)` is the debugging path.** It runs the identical `_epoch`
 function from an ordinary Python `while` — still one XLA program per epoch, but
 with breakpoints, readable tracebacks and host-side control flow. It is also the

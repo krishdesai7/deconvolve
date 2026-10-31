@@ -35,7 +35,10 @@ and both seeds. `--lr-g` defaults to 3e-5, measured rather than chosen: see
 penalizes the variance of `g`'s normalized MC weights and defaults to **0.015**,
 also measured: it is the same axis `lr_g` acts on indirectly, pushed directly,
 and "The dispersion penalty: the trade made explicit" in `benchmarks/README.md`
-is the paired 12-observable sweep that picked the value. A run left at the
+is the paired 12-observable sweep that picked the value. `--dispersion-mode residual` (opt-in) points the same coefficient at only
+`E[Var(w|x)]`, the part of the spread `d` cannot see, against a regressor
+`h(x) = E[w|x]` trained alongside; see `engine.weight_residual` and
+`notes/superpowers/plans/2026-10-30-residual-dispersion-penalty.md`. A run left at the
 default has the penalty **on**, which is the setting any baseline should be
 compared against.
 

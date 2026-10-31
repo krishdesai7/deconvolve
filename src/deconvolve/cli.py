@@ -19,6 +19,7 @@ from .coretypes import (
     POISON_SENTINEL,
     SUBSTRUCTURE_VARIABLES,
     DatasetName,
+    DispersionMode,
     LogLevel,
     Resample,
 )
@@ -224,6 +225,13 @@ def train_command(
         float,
         typer.Option(min=0.0, help="Penalty on variance of g's weights. 0 to disable."),
     ] = 0.015,
+    dispersion_mode: Annotated[
+        DispersionMode,
+        typer.Option(
+            help="What the dispersion penalty measures: total weight variance, "
+            "or only the part the detector cannot see."
+        ),
+    ] = DispersionMode.total,
     log_every: Annotated[int, typer.Option(min=1, help="Log every N epochs.")] = 1,
     plots: Annotated[bool, typer.Option(help="Draw plots. Metrics still run.")] = True,
     run_dir: Annotated[
@@ -252,6 +260,7 @@ def train_command(
         lr_g=lr_g,
         lr_d=lr_d,
         lambda_dispersion=lambda_dispersion,
+        dispersion_mode=dispersion_mode,
         log_every=log_every,
         plots=plots,
         run_dir=run_dir,

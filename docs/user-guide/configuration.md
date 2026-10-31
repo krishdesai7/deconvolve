@@ -79,6 +79,7 @@ Default:
 | `lr-g` | float ≥ 0 |
 | `lr-d` | float ≥ 0 |
 | `lambda-dispersion` | float ≥ 0 |
+| `dispersion-mode` | `"total"` or `"residual"` |
 | `seed` | integer |
 | `run-dir` | path |
 | `plots` | boolean |
@@ -105,6 +106,7 @@ Default:
     lr-g = 3e-5
     lr-d = 1e-4
     lambda-dispersion = 0.015
+    dispersion-mode = "total"
     seed = None # random
     run-dir = None # a UTC timestamp under `runs/`
     plots = True
@@ -128,6 +130,7 @@ Default:
     lr-g = 3e-5
     lr-d = 1e-4
     lambda-dispersion = 0.015
+    dispersion-mode = "total"
     seed = None # random
     run-dir = None # a UTC timestamp under `runs/`
     plots = True

@@ -21,7 +21,13 @@ from typing import TYPE_CHECKING, override
 
 import numpy as np
 import pytest
-from deconvolve.coretypes import ZXY, DatasetName, Events, Populations
+from deconvolve.coretypes import (
+    ZXY,
+    DatasetName,
+    DispersionMode,
+    Events,
+    Populations,
+)
 from deconvolve.coretypes.events import DatasetSplits
 from deconvolve.data import DeconvolveDataset, parse_gaussian_config
 from deconvolve.training.engine import TrainResult, train
@@ -123,6 +129,7 @@ def _reload(run_dir: Path) -> None:
         lr_g=3e-5,
         lr_d=1e-4,
         lambda_dispersion=0.015,
+        dispersion_mode=DispersionMode.total,
         log_every=1,
         plots=True,
         run_dir=None,
@@ -284,6 +291,7 @@ def test_particle_curve_is_recorded_when_truth_exists(
         lr_g=1e-4,
         lr_d=1e-3,
         lambda_dispersion=0.01,
+        dispersion_mode=DispersionMode.total,
         log_every=1,
         plots=False,
         run_dir=None,
@@ -333,6 +341,7 @@ def test_a_completed_run_keeps_only_two_files_at_its_root(
         lr_g=1e-4,
         lr_d=1e-3,
         lambda_dispersion=0.01,
+        dispersion_mode=DispersionMode.total,
         log_every=1,
         plots=False,
         run_dir=None,
@@ -350,6 +359,57 @@ def test_a_completed_run_keeps_only_two_files_at_its_root(
         "history.npz",
         "params.npz",
     } <= produced
+
+
+def _tiny_run(tmp_path: Path, mode: DispersionMode) -> Path:
+    config_path: Path = tmp_path / "gaussian.yaml"
+    _ = config_path.write_text(data=_GAUSSIAN_CONFIG)
+    workflow.run(
+        32,
+        200,
+        config_path,
+        dataset=DatasetName.gaussian,
+        variables=(),
+        load_run=None,
+        hidden_units=4,
+        n_layers=1,
+        seed=1,
+        data_seed=0,
+        n_epochs=1,
+        n_disc_steps=2,
+        lr_g=1e-4,
+        lr_d=1e-3,
+        lambda_dispersion=0.01,
+        dispersion_mode=mode,
+        log_every=1,
+        plots=False,
+        run_dir=None,
+    )
+    return next((tmp_path / "runs").iterdir())
+
+
+@pytest.mark.writes_default_cache
+def test_residual_run_records_mode_and_saves_regressor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    run_dir: Path = _tiny_run(tmp_path, DispersionMode.residual)
+
+    config: Any = json.loads(s=(run_dir / "config.json").read_text())
+    assert config["dispersion_mode"] == "residual"
+    assert (run_dir / "artifacts" / "regressor.keras").exists()
+
+
+@pytest.mark.writes_default_cache
+def test_total_run_saves_no_regressor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    run_dir: Path = _tiny_run(tmp_path, DispersionMode.total)
+
+    config: Any = json.loads(s=(run_dir / "config.json").read_text())
+    assert config["dispersion_mode"] == "total"
+    assert not (run_dir / "artifacts" / "regressor.keras").exists()
 
 
 class TestParticleCurve:
@@ -471,6 +531,7 @@ def test_run_omits_val_mmd_particle_without_truth(
         lr_g=1e-4,
         lr_d=1e-3,
         lambda_dispersion=0.01,
+        dispersion_mode=DispersionMode.total,
         log_every=1,
         plots=False,
         run_dir=None,
@@ -739,6 +800,7 @@ def test_run_rejects_an_output_directory_on_the_reload_path(tmp_path: Path) -> N
             lr_g=3e-5,
             lr_d=1e-4,
             lambda_dispersion=0.015,
+            dispersion_mode=DispersionMode.total,
             log_every=1,
             plots=True,
             run_dir=tmp_path / "elsewhere",

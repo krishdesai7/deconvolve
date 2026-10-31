@@ -146,7 +146,24 @@ def test_train_converts_typer_values_for_the_workflow(
     # (p = 0.0017), and admissible on Deconvolve's own selection criterion. See
     # "The dispersion penalty" in benchmarks/README.md.
     assert calls[0]["lambda_dispersion"] == pytest.approx(0.015)
+    # Total, not residual: residual is opt-in until it has its own evidence.
+    assert calls[0]["dispersion_mode"] is cli.DispersionMode.total
     assert calls[0]["plots"] is True
+
+
+def test_dispersion_mode_flag_reaches_train(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(*args: object, **hyperparameters: object) -> None:
+        del args
+        calls.append(hyperparameters)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    result = runner.invoke(app, ["train", "--dispersion-mode", "residual"])
+
+    assert result.exit_code == 0, result.output
+    assert calls[0]["dispersion_mode"] is cli.DispersionMode.residual
 
 
 def test_train_forwards_an_explicit_run_dir(
