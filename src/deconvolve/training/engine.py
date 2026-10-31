@@ -43,7 +43,7 @@ from jaxtyping import Array, Float, Int, jaxtyped
 
 # `COMPILE_CACHE_DIR` is a runtime value; `Variables` only annotates, but it
 # annotates `@jaxtyped(beartype)` and beartype resolves at decoration time
-from ..coretypes import COMPILE_CACHE_DIR, Variables, artifacts_dir
+from ..coretypes import COMPILE_CACHE_DIR, Objective, Variables, artifacts_dir
 from ..data import DeviceSplits, EvalSplit, gather, train_indices
 from ..instrumentation import is_enabled, phase
 from .mmd import bandwidths, build_cache, mmd_curve, subsample_indices, weighted_mmd
@@ -98,10 +98,11 @@ EPS: Final[float] = epsilon()
 _HISTORY_KEYS: Final[tuple[str, str, str]] = ("train_d", "train_g", "val_d")
 """The per-epoch history columns the scan records.
 
-Every column is the weighted BCE on the same scale (`_make_pass` negates
-`g_loss` back before recording it, so `train_g` is the BCE at the generator's
-batch rather than the objective g descends). Validation measures the BCE in
-exactly one place: `eval_step` runs once per epoch and both networks are
+Every column is `d`'s unpenalised loss on the same scale -- the weighted BCE,
+or under `Objective.wasserstein` the negated critic gap (`_make_pass` negates
+`g_loss` back before recording it, so `train_g` is that loss at the
+generator's batch rather than the objective g descends). Validation measures
+it in exactly one place: `eval_step` runs once per epoch and both networks are
 scored by that number.
 """
 
@@ -352,6 +353,142 @@ def weighted_bce(
     return total / count
 
 
+@jaxtyped(typechecker=beartype)
+def critic_sums(
+    f_out: Float[Array | NDArray[np.single], " n"],
+    y: Float[Array | NDArray[np.single], " n"],
+    w: Float[Array | NDArray[np.single], " n"],
+    mask: Float[Array | NDArray[np.single], " n"],
+    /,
+) -> Float[Array, " 4"]:
+    """The critic gap's four sums: data `f`, data count, MC `w*f`, MC weight.
+
+    Per class rather than over the batch, because the gap is a difference of
+    two means and a batch's class mix is whatever the permutation drew. Kept
+    as sums so a scan can accumulate them across batches and combine once in
+    `critic_gap_from_sums`.
+    """
+    one: Float[Array, " n"] = jnp.ones_like(a=f_out)
+    data: Float[Array | NDArray[np.single], " n"] = mask * y
+    mc: Float[Array | NDArray[np.single], " n"] = mask * (one - y)
+    return jnp.stack(
+        arrays=[
+            jnp.sum(a=data * f_out),
+            jnp.sum(a=data),
+            jnp.sum(a=mc * w * f_out),
+            jnp.sum(a=mc * w),
+        ]
+    )
+
+
+@jaxtyped(typechecker=beartype)
+def critic_gap_from_sums(sums: Float[Array, " 4"], /) -> Float[Array, ""]:
+    """`E_data[f] - E_sim,w[f]`: the Wasserstein-1 estimate, at an optimal critic."""
+    return sums[0] / (sums[1] + EPS) - sums[2] / (sums[3] + EPS)
+
+
+@jaxtyped(typechecker=beartype)
+def critic_gap(
+    f_out: Float[Array | NDArray[np.single], " n"],
+    y: Float[Array | NDArray[np.single], " n"],
+    w: Float[Array | NDArray[np.single], " n"],
+    mask: Float[Array | NDArray[np.single], " n"],
+    /,
+) -> Float[Array, ""]:
+    """The critic gap over one batch: `critic_sums`, combined.
+
+    The critic ascends it and `g` descends it. Because `normalize_weights` fixes
+    the MC weights' sum, a constant offset in `f` cancels out of `g`'s gradient
+    exactly as it cancels out of the dual itself.
+    """
+    return critic_gap_from_sums(critic_sums(f_out, y, w, mask))
+
+
+@jaxtyped(typechecker=beartype)
+def gradient_penalty(
+    grad_x: Float[Array, " n d"],
+    mask: Float[Array | NDArray[np.single], " n"],
+    /,
+) -> Float[Array, ""]:
+    """One-sided penalty `max(0, |grad_x f| - 1)^2`, averaged over the rows.
+
+    One-sided, not WGAN-GP's two-sided `(|grad_x f| - 1)^2`: the Lipschitz
+    bound is an inequality, and here enforcing it as an equality is fatal.
+    The detector-level gap is tiny, so pinning the slope to 1 everywhere on
+    the support swamps the signal and locks the critic's shape -- on the 1D
+    Gaussian, lambda_gp >= 1 left the critic unable to reach a positive gap
+    at all and selection fell back to epoch 1, where one-sided matched BCE.
+
+    Evaluated at the batch's own points rather than at WGAN-GP's interpolates:
+    a batch's class mix is random, so there is no fixed-shape pairing of data
+    with MC to interpolate between, and the penalty then needs no random key
+    threaded through the scan. Unweighted, because it constrains `f` on the
+    support rather than estimating anything over the reweighted measure. The
+    `EPS` keeps the norm differentiable at a zero gradient.
+    """
+    norm: Float[Array, " n"] = jnp.sqrt(jnp.sum(a=jnp.square(grad_x), axis=-1) + EPS)
+    excess: Float[Array, " n"] = jnp.maximum(norm - 1.0, 0.0)
+    return jnp.sum(a=mask * jnp.square(excess)) / jnp.sum(a=mask)
+
+
+@jaxtyped(typechecker=beartype)
+def critic_loss(
+    f_out: Float[Array | NDArray[np.single], " n"],
+    y: Float[Array | NDArray[np.single], " n"],
+    w: Float[Array | NDArray[np.single], " n"],
+    mask: Float[Array | NDArray[np.single], " n"],
+    /,
+) -> Float[Array, ""]:
+    """The critic's unpenalised loss: it ascends the gap, so the negation."""
+    return -critic_gap(f_out, y, w, mask)
+
+
+def _bce_sum_vector(
+    d_out: Float[Array, " n"],
+    y: Float[Array, " n"],
+    w: Float[Array, " n"],
+    mask: Float[Array, " n"],
+    /,
+) -> Float[Array, " 2"]:
+    return jnp.stack(arrays=bce_sums(d_out, y, w, mask))
+
+
+_OBJECTIVE_FNS: Final[
+    dict[Objective, tuple[Callable[..., Array], Callable[..., Array]]]
+] = {
+    Objective.bce: (weighted_bce, _bce_sum_vector),
+    Objective.wasserstein: (critic_loss, critic_sums),
+}
+"""Each objective's `(loss over a batch, eval sums over a batch)`: `d`'s
+unpenalised loss, and the sums `_make_eval` accumulates to rebuild it."""
+
+
+def _input_gradients(
+    d: DeconvolveModel,
+    d_trainable: Variables,
+    d_non_trainable: Variables,
+    x: Float[Array, " n d"],
+    /,
+) -> Float[Array, " n d"]:
+    """Every row's `grad_x f(x)`, from one backward pass.
+
+    `d` is Dense-only, so no op couples rows and the gradient of the batch's
+    summed score is each row's own input gradient -- no `vmap` needed. A layer
+    that mixes rows (BatchNorm) would make this silently wrong.
+    """
+
+    def _summed(inputs: Float[Array, " n d"]) -> Float[Array, ""]:
+        out, _ = d.stateless_call(
+            trainable_variables=d_trainable,
+            non_trainable_variables=d_non_trainable,
+            inputs=inputs,
+            training=True,
+        )
+        return jnp.sum(a=out)
+
+    return cast(typ="Array", val=jax.grad(_summed)(x))
+
+
 def _make_steps(
     g: DeconvolveModel,
     d: DeconvolveModel,
@@ -360,12 +497,23 @@ def _make_steps(
     # No default: `train` always passes it, and a second copy of the shipped
     # value here is a second place for it to drift.
     lambda_dispersion: float,
+    *,
+    objective: Objective = Objective.bce,
+    lambda_gp: float = 0.0,
 ) -> tuple[TrainStep, TrainStep, EvalStep]:
     """Build the jitted disc/gen/eval steps, closing over the models.
 
     The models are captured rather than passed so jit sees only array
     arguments; each returned function is traced once per input shape.
+
+    `objective` is resolved here, in Python, so each choice traces to its own
+    program and the BCE path is unchanged by the Wasserstein one existing.
+    Whatever the objective, the number each step reports is `d`'s unpenalised
+    loss -- the BCE, or the negated critic gap -- so the history keeps one
+    sign convention and one scale. `lambda_gp` only enters the Wasserstein
+    critic's loss.
     """
+    wasserstein: bool = objective == Objective.wasserstein
 
     @jaxtyped(typechecker=beartype)
     def _weights(
@@ -386,6 +534,8 @@ def _make_steps(
             jnp.squeeze(a=raw_w, axis=-1), y, mask
         ), g_non_trainable
 
+    d_loss, d_sums = _OBJECTIVE_FNS[objective]
+
     @jaxtyped(typechecker=beartype)
     def _disc_loss(
         d_trainable: Variables,
@@ -394,15 +544,21 @@ def _make_steps(
         y: Float[Array, " n"],
         w: Float[Array, " n"],
         mask: Float[Array, " n"],
-    ) -> tuple[Float[Array, ""], Variables]:
+    ) -> tuple[Float[Array, ""], tuple[Variables, Float[Array, ""]]]:
         d_out, d_non_trainable = d.stateless_call(
             trainable_variables=d_trainable,
             non_trainable_variables=d_non_trainable,
             inputs=x,
             training=True,
         )
-        loss: Float[Array, ""] = weighted_bce(jnp.squeeze(a=d_out, axis=-1), y, w, mask)
-        return loss, d_non_trainable
+        loss: Float[Array, ""] = d_loss(jnp.squeeze(a=d_out, axis=-1), y, w, mask)
+        if not wasserstein:
+            return loss, (d_non_trainable, loss)
+        # Penalised for the gradient, reported without, as `_gen_loss` does.
+        penalised: Float[Array, ""] = loss + lambda_gp * gradient_penalty(
+            _input_gradients(d, d_trainable, d_non_trainable, x), mask
+        )
+        return penalised, (d_non_trainable, loss)
 
     @jaxtyped(typechecker=beartype)
     def _gen_loss(
@@ -424,8 +580,9 @@ def _make_steps(
             inputs=x,
             training=False,
         )
-        # g maximizes the BCE that d minimizes, so its loss is the negation.
-        adversarial: Float[Array, ""] = -weighted_bce(
+        # g maximizes the loss that d minimizes, so its loss is the negation:
+        # minus the BCE, or the critic gap itself.
+        adversarial: Float[Array, ""] = -d_loss(
             jnp.squeeze(a=d_out, axis=-1), y, w, mask
         )
         # The penalty steers the gradient but is kept out of the reported
@@ -453,7 +610,7 @@ def _make_steps(
         w, _ = _weights(
             state.g_trainable, state.g_non_trainable, z, y, mask, training=False
         )
-        (loss, d_non_trainable), grads = disc_grad_fn(
+        (_penalised, (d_non_trainable, loss)), grads = disc_grad_fn(
             state.d_trainable, state.d_non_trainable, x, y, w, mask
         )
         d_trainable, opt_d_vars = opt_d.stateless_apply(
@@ -512,8 +669,8 @@ def _make_steps(
         x: Float[Array, " n d"],
         y: Float[Array, " n"],
         mask: Float[Array, " n"],
-    ) -> tuple[Float[Array, ""], Float[Array, ""]]:
-        """Weighted BCE with no updates, both models in inference mode."""
+    ) -> Float[Array, " k"]:
+        """`d`'s loss as sums, no updates, both models in inference mode."""
         w, _ = _weights(
             state.g_trainable, state.g_non_trainable, z, y, mask, training=False
         )
@@ -523,7 +680,7 @@ def _make_steps(
             inputs=x,
             training=False,
         )
-        return bce_sums(jnp.squeeze(a=d_out, axis=-1), y, w, mask)
+        return d_sums(jnp.squeeze(a=d_out, axis=-1), y, w, mask)
 
     return disc_step, gen_step, eval_step
 
@@ -577,23 +734,35 @@ def _make_pass(
 
 def _make_eval(
     eval_step: EvalStep,
+    *,
+    objective: Objective = Objective.bce,
 ) -> Callable[[TrainState, EvalSplit], Float[Array, ""]]:
-    """Build the scanned forward pass over a pre-batched, masked split."""
+    """Build the scanned forward pass over a pre-batched, masked split.
+
+    The scan adds up whatever sums `eval_step` hands back; `objective` says
+    how they combine into the one validation number once the split is done.
+    """
+
+    def _combine(sums: Float[Array, " k"]) -> Float[Array, ""]:
+        if objective == Objective.wasserstein:
+            return -critic_gap_from_sums(sums)
+        return sums[0] / sums[1]
 
     def evaluate(state: TrainState, split: EvalSplit) -> Float[Array, ""]:
         def _body(
-            acc: tuple[Float[Array, ""], Float[Array, ""]],
+            acc: Float[Array, " k"],
             batch: tuple[Float[Array, "b d"], ...],
-        ) -> tuple[tuple[Float[Array, ""], Float[Array, ""]], None]:
+        ) -> tuple[Float[Array, " k"], None]:
             z, x, y, mask = batch
-            total, count = eval_step(state, z, x, y, mask)
-            return (acc[0] + total, acc[1] + count), None
+            return acc + eval_step(state, z, x, y, mask), None
 
-        zero: Float[Array, ""] = jnp.zeros(shape=(), dtype=split.z.dtype)
-        (total, count), _ = lax.scan(
-            f=_body, init=(zero, zero), xs=(split.z, split.x, split.y, split.mask)
+        # `critic_sums` has four, `bce_sums` two.
+        k: int = 4 if objective == Objective.wasserstein else 2
+        zero: Float[Array, " k"] = jnp.zeros(shape=(k,), dtype=split.z.dtype)
+        sums, _ = lax.scan(
+            f=_body, init=zero, xs=(split.z, split.x, split.y, split.mask)
         )
-        return total / count
+        return _combine(sums)
 
     return evaluate
 
@@ -901,6 +1070,8 @@ def train(
     lambda_dispersion: float = 0.015,
     log_every: int = 1,
     *,
+    objective: Objective = Objective.bce,
+    lambda_gp: float = 10.0,
     fused: bool = True,
 ) -> TrainResult:
     """Train the generator and discriminator, then select a checkpoint.
@@ -927,6 +1098,11 @@ def train(
             reproducible after the fact without having to decide up front that
             it is worth reproducing.
         n_disc_steps: Discriminator steps per generator step.
+        objective: The divergence the game minimizes (see `Objective`). The
+            Wasserstein critic gets a linear head and a gradient penalty, and
+            both optimizers drop Adam's momentum (beta_1=0, beta_2=0.9), the
+            WGAN-GP setting.
+        lambda_gp: The gradient penalty's coefficient. Ignored under BCE.
         fused: Whether to run the whole epoch loop as one `lax.scan` (the
             default) or drive the identical per-epoch function from a Python
             `while` for debugging; the two must agree bit-for-bit.
@@ -947,16 +1123,21 @@ def train(
     g: DeconvolveModel = build_generator(
         dim=dim, hidden_units=hidden_units, n_layers=n_layers
     )
+    wasserstein: bool = objective == Objective.wasserstein
     d: DeconvolveModel = build_discriminator(
-        dim=dim, hidden_units=hidden_units, n_layers=n_layers
+        dim=dim, hidden_units=hidden_units, n_layers=n_layers, critic=wasserstein
     )
-    opt_g: StatelessOptimizer = keras.optimizers.Adam(learning_rate=lr_g)
-    opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=lr_d)
+    # Momentum chases a critic whose target moves every step; WGAN-GP drops it.
+    betas: dict[str, float] = {"beta_1": 0.0, "beta_2": 0.9} if wasserstein else {}
+    opt_g: StatelessOptimizer = keras.optimizers.Adam(learning_rate=lr_g, **betas)
+    opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=lr_d, **betas)
     opt_g.build(g.trainable_variables)
     opt_d.build(d.trainable_variables)
 
     state: TrainState = _initial_state(g, d, opt_g, opt_d)
-    disc_step, gen_step, eval_step = _make_steps(g, d, opt_g, opt_d, lambda_dispersion)
+    disc_step, gen_step, eval_step = _make_steps(
+        g, d, opt_g, opt_d, lambda_dispersion, objective=objective, lambda_gp=lambda_gp
+    )
     one_pass: Callable[
         [TrainState, PRNGKeyArray],
         tuple[TrainState, Float[Array, ""], Float[Array, ""]],
@@ -968,7 +1149,7 @@ def train(
         n_disc_steps=n_disc_steps,
     )
     evaluate: Callable[[TrainState, EvalSplit], Float[Array, ""]] = _make_eval(
-        eval_step
+        eval_step, objective=objective
     )
     epoch: Callable[
         [RunCarry, Int[Array, ""]],

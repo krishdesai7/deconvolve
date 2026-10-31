@@ -18,6 +18,7 @@ from ..coretypes import (
     PANEL_COLUMNS,
     PANEL_WIDTH_INCHES,
     PANELS_PER_PAGE,
+    Objective,
     display_order,
 )
 from .evaluate import _get_weights
@@ -708,7 +709,11 @@ def plot_levels(
 def plot_losses(
     history: dict[str, list[float]],
     save_path: Path = Path("plots/losses.pdf"),
+    objective: Objective = Objective.bce,
 ) -> None:
+    if objective == Objective.wasserstein:
+        _plot_critic_gap(history, save_path=save_path)
+        return
     epochs: NDArray[np.uintc] = np.arange(len(history["train_d"]), dtype=np.uintc)
 
     figure: Figure = Figure(figsize=(8, 5))
@@ -761,6 +766,33 @@ def plot_losses(
     _ = ax.set_title(label="Training History")
     _ = ax.legend()
 
+    figure.tight_layout()
+    _save_fig(figure, save_path=Path(save_path))
+
+
+def _plot_critic_gap(history: dict[str, list[float]], save_path: Path) -> None:
+    """The Wasserstein history, sign-flipped back to the gap the critic ascends.
+
+    The columns hold the critic's loss, `-(E_data f - E_sim,w f)`, so the
+    negation is the W1 estimate: positive, and zero at equilibrium rather than
+    at ln 2. There is no fixed scale to centre on, so the axis autoscales.
+    """
+    epochs: NDArray[np.uintc] = np.arange(len(history["train_d"]), dtype=np.uintc)
+    figure: Figure = Figure(figsize=(8, 5))
+    figure.canvas = FigureCanvasPdf(figure)
+    ax: Axes = figure.add_subplot(111)
+    for key, label, color, ls, lw, alpha in (
+        ("train_d", "Train D", "C0", ":", 1, 1.0),
+        ("train_g", "Train G", "C1", ":", 1, 1.0),
+        ("val_d", "Val D", "C0", "--", 3, 0.5),
+    ):
+        gap: NDArray[np.double] = -np.array(object=history[key], dtype=np.double)
+        _ = ax.plot(epochs, gap, label=label, color=color, ls=ls, lw=lw, alpha=alpha)
+    _ = ax.axhline(y=0.0, color="gray", lw=1)
+    _ = ax.set_xlabel(xlabel="Epoch")
+    _ = ax.set_ylabel(ylabel=r"Critic gap ($W_1$ estimate)")
+    _ = ax.set_title(label="Training History")
+    _ = ax.legend()
     figure.tight_layout()
     _save_fig(figure, save_path=Path(save_path))
 

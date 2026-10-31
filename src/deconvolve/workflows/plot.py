@@ -23,7 +23,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..baselines._shared import parse_run_config
-from ..coretypes import DatasetName
+from ..coretypes import DatasetName, Objective
 from ..data import gaussian_config_from_run_config
 from ..evaluation import apply_to_runs
 from ..instrumentation import SHARED_TIMINGS_FILE, timing
@@ -105,6 +105,7 @@ def _plot_run(run_dir: Path, /) -> None:
             config.source.get("best_epoch", -1),
             _display_variables(config.dataset, config.variable_names),
             plots=True,
+            objective=Objective(config.source.get("objective", Objective.bce)),
         )
 
 

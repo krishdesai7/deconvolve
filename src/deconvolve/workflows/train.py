@@ -15,6 +15,7 @@ from ..coretypes import (
     JET_OBS,
     DatasetName,
     GaussianConfig,
+    Objective,
     VarInfo,
     artifacts_dir,
 )
@@ -334,6 +335,7 @@ def _draw_figures(
     /,
     *,
     plots: bool,
+    objective: Objective = Objective.bce,
 ) -> None:
     """Draw a run's figures, unless plots are turned off.
 
@@ -365,7 +367,7 @@ def _draw_figures(
         baselines=baselines,
         variables=variables,
     )
-    plot_losses(history, save_path=artifacts / "losses.pdf")
+    plot_losses(history, save_path=artifacts / "losses.pdf", objective=objective)
     if "val_mmd" in history:
         plot_selection(history, best_epoch, save_path=artifacts / "selection.pdf")
     else:
@@ -490,6 +492,8 @@ def run(
     plots: bool,
     run_dir: Path | None,
     origins: dict[str, str] | None = None,
+    objective: Objective = Objective.bce,
+    lambda_gp: float = 10.0,
 ) -> None:
     """Train (or reload) one run, then report where its wall clock went.
 
@@ -526,6 +530,8 @@ def run(
             plots=plots,
             run_dir=run_dir,
             origins=origins,
+            objective=objective,
+            lambda_gp=lambda_gp,
         )
     finally:
         report()
@@ -567,6 +573,8 @@ def _pipeline(
     plots: bool,
     run_dir: Path | None,
     origins: dict[str, str] | None = None,
+    objective: Objective = Objective.bce,
+    lambda_gp: float = 10.0,
 ) -> Path:
     """The run itself, returning the directory its artifacts landed in."""
     # Each dataset fills in only its own metadata, but the plots and the saved
@@ -596,6 +604,9 @@ def _pipeline(
         # Runs predating seed recording used the then-hardcoded default of 42.
         data_seed: int = saved_config.data_seed
         saved_best_epoch = saved_config.source.get("best_epoch", -1)
+        # Absent on a run saved before the Wasserstein objective existed,
+        # which is to say a BCE run.
+        objective = Objective(saved_config.source.get("objective", Objective.bce))
         if dataset == DatasetName.jets:
             variables = tuple(saved_config.variable_names)
         else:
@@ -640,6 +651,8 @@ def _pipeline(
                 lr_d=lr_d,
                 lambda_dispersion=lambda_dispersion,
                 log_every=log_every,
+                objective=objective,
+                lambda_gp=lambda_gp,
             )
         g: DeconvolveModel = result.g
         best_epoch = result.best_epoch
@@ -666,6 +679,8 @@ def _pipeline(
                 "lr_g": lr_g,
                 "lr_d": lr_d,
                 "lambda_dispersion": lambda_dispersion,
+                "objective": str(objective),
+                "lambda_gp": lambda_gp,
                 **mmd_record,
             },
             run_dir=run_dir,
@@ -683,6 +698,7 @@ def _pipeline(
             best_epoch,
             _display_variables(dataset, variables),
             plots=plots,
+            objective=objective,
         )
 
     # Metrics (run last so failures don't block plots/checkpoints)

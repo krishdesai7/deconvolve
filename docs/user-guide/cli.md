@@ -57,6 +57,8 @@ deconvolve train [-D{gaussian|jets}]
                  [--lr-g <float>]
                  [--lr-d <float>]
                  [--lambda-dispersion <float>]
+                 [--objective <objective>]
+                 [--lambda-gp <float>]
                  [--seed <int>]
                  [--run-dir <path>]
                  [--plots | --no-plots]
@@ -86,6 +88,8 @@ deconvolve train [-D{gaussian|jets}]
 | `--lr-g` | | `float` | `3e-5` | Generator learning rate (<span style="font-variant: small-caps;">Adam</span>). Tuned; see `benchmarks/README.md`. |
 | `--lr-d` | | `float` | `1e-4` | Discriminator learning rate (<span style="font-variant: small-caps;">Adam</span>). |
 | `--lambda-dispersion` | | `float` | `0.015` | Penalty on the variance of the generator's normalized weights: your prior on whether the detector response is universal. Use `0` when it is (closure tests, toys); keep the default for real data. See [Choosing the Penalty Strength](../theory/reweighting.md#choosing-the-penalty-strength). |
+| `--objective` | | `Objective` | `bce` | Divergence the adversarial game minimizes. `bce`: weighted BCE against a sigmoid discriminator (Jensen–Shannon). `wasserstein`: a linear-headed critic with a one-sided gradient penalty (Wasserstein-1); both optimizers then run <span style="font-variant: small-caps;">Adam</span> with β₁ = 0, β₂ = 0.9. Experimental. |
+| `--lambda-gp` | | `float` | `10.0` | Gradient-penalty coefficient on the critic. Ignored under `bce`. |
 | `--seed` | | `int` | `None` | Seed for model initialization and shuffle order. Defaults to a random value. |
 
 ### Output

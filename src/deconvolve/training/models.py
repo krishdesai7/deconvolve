@@ -77,12 +77,18 @@ def build_generator(
 
 
 def build_discriminator(
-    dim: int = 1, hidden_units: int = 64, n_layers: int = 2
+    dim: int = 1, hidden_units: int = 64, n_layers: int = 2, *, critic: bool = False
 ) -> DeconvolveModel:
-    """d(x): reco-level events -> data vs MC probability."""
+    """d(x): reco-level events -> data vs MC probability.
+
+    With `critic`, the head is linear instead: an unbounded score `f(x)` for
+    the Wasserstein objective, whose Lipschitz bound comes from the gradient
+    penalty in the loss rather than from anything in the architecture.
+    """
     inputs: KerasTensor = _keras_input(shape=(dim,), dtype="float32")
     x: KerasTensor = inputs
     for _ in range(n_layers):
         x = _keras_dense(hidden_units, activation="relu", dtype="float32")(inputs=x)
-    x = _keras_dense(units=1, activation="sigmoid", dtype="float32")(inputs=x)
+    head: str = "linear" if critic else "sigmoid"
+    x = _keras_dense(units=1, activation=head, dtype="float32")(inputs=x)
     return _keras_model(inputs, outputs=x, name="discriminator")

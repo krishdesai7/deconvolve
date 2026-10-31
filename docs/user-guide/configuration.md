@@ -79,6 +79,8 @@ Default:
 | `lr-g` | float ≥ 0 |
 | `lr-d` | float ≥ 0 |
 | `lambda-dispersion` | float ≥ 0 |
+| `objective` | `bce` or `wasserstein` |
+| `lambda-gp` | float ≥ 0 |
 | `seed` | integer |
 | `run-dir` | path |
 | `plots` | boolean |

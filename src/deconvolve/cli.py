@@ -20,6 +20,7 @@ from .coretypes import (
     SUBSTRUCTURE_VARIABLES,
     DatasetName,
     LogLevel,
+    Objective,
     Resample,
 )
 from .evaluation import evaluate_runs
@@ -231,6 +232,14 @@ def train_command(
             ),
         ),
     ] = 0.015,
+    objective: Annotated[
+        Objective,
+        typer.Option(help="bce (Jensen-Shannon) or wasserstein (penalized critic)."),
+    ] = Objective.bce,
+    lambda_gp: Annotated[
+        float,
+        typer.Option(min=0.0, help="Gradient penalty coefficient. Wasserstein only."),
+    ] = 10.0,
     log_every: Annotated[int, typer.Option(min=1, help="Log every N epochs.")] = 1,
     plots: Annotated[bool, typer.Option(help="Draw plots. Metrics still run.")] = True,
     run_dir: Annotated[
@@ -262,6 +271,8 @@ def train_command(
         log_every=log_every,
         plots=plots,
         run_dir=run_dir,
+        objective=objective,
+        lambda_gp=lambda_gp,
         origins=origins_for(
             ctx,
             resolved,

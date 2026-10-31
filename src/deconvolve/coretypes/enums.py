@@ -24,6 +24,19 @@ class DatasetName(StrEnum):
     jets = auto()
 
 
+class Objective(StrEnum):
+    """Which divergence the adversarial game minimizes at detector level.
+
+    `bce` is the weighted BCE against a sigmoid discriminator: Jensen-Shannon at
+    the optimum. `wasserstein` is the Kantorovich-Rubinstein dual against an
+    unbounded, gradient-penalized critic: Wasserstein-1 at the optimum. Either
+    way `g` only reweights, so the critic's input gradient never reaches `g`.
+    """
+
+    bce = auto()
+    wasserstein = auto()
+
+
 class Resample(StrEnum):
     """Which samples an uncertainty design's bootstrap resamples.
 
