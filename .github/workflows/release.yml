@@ -88,7 +88,9 @@ jobs:
             - name: Read new version
               id: version
               run: |
-                  version=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+                  # Ask uv rather than grepping: tombi aligns `=` signs, so the line's
+                  # spacing is not something to pattern-match on.
+                  version=$(uv version --short)
                   if [ -z "$version" ]; then
                     echo "::error::Could not read version from pyproject.toml"
                     exit 1
