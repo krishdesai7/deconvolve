@@ -4,9 +4,11 @@ guarantee hold for every file, in any order, one file at a time or all of them.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import shutil
+import subprocess  # ruff: ignore[suspicious-subprocess-import] -- `uv cache dir` probe
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
@@ -71,6 +73,31 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     pytest.skip(f"default cache dir {constants.CACHE_DIR} is not writable")
 
 
+@functools.cache
+def _uv_cache_dir() -> str | None:
+    """The cache directory uv resolves under the developer's real configuration.
+
+    Called before `_no_global_config_layer` swaps `XDG_CONFIG_HOME` out, and
+    cached for the session, so it sees `~/.config/uv/uv.toml` (and any
+    `cache-dir` set there). `None` when uv is absent or cannot answer; the
+    OmniFold tests that need uv then fail on their own terms.
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        return None
+    try:
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+            [uv, "cache", "dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip() or None
+
+
 @pytest.fixture(autouse=True)
 def _no_global_config_layer(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
@@ -87,7 +114,17 @@ def _no_global_config_layer(
     before any test-specific `monkeypatch.setenv("XDG_CONFIG_HOME", ...)`
     (e.g. the `project` fixture in `tests/test_config_cli.py`), whose own call
     happens later in fixture setup and so still wins for that test.
+
+    `XDG_CONFIG_HOME` is shared, though: uv reads `$XDG_CONFIG_HOME/uv/uv.toml`
+    too, and the OmniFold tests spawn `uv run` with this environment. Hiding
+    that file silently moves uv's cache back to its default under
+    `$XDG_CACHE_HOME` -- on NERSC a DVS-mounted `$HOME` that does not support
+    `flock`, so uv dies with "Could not acquire lock ... os error 524". So the
+    cache directory uv resolved beforehand is pinned via `UV_CACHE_DIR`, which
+    uv honours without its config file. An explicit `UV_CACHE_DIR` is left alone.
     """
+    if "UV_CACHE_DIR" not in os.environ and (uv_cache := _uv_cache_dir()):
+        monkeypatch.setenv("UV_CACHE_DIR", uv_cache)
     monkeypatch.setenv(
         "XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("no-global-config"))
     )
