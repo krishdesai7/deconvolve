@@ -1,0 +1,14 @@
+{
+  "total_seconds": 3.968016244471073e-06,
+  "compile_cache_warm": true,
+  "phases": [
+    {
+      "name": "plots",
+      "seconds": 3.968016244471073e-06,
+      "depth": 0,
+      "detail": null,
+      "failed": false,
+      "pass": "train"
+    }
+  ]
+}
