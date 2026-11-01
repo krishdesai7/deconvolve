@@ -402,7 +402,7 @@ These are internal training defaults in `src/deconvolve/training/engine.py`; the
 | `n_layers`          | 2       | Number of hidden layers                     |
 
 `lr_g` and `lambda_dispersion` are both measured rather than chosen, and they act on the same axis: the dispersion of `g`'s normalized MC weights. See "What
-tuning actually found" and "The dispersion penalty: the trade made explicit" in `benchmarks/README.md`. The penalty is **on** by default, so a run left at these defaults is the configuration any comparison should be made against.
+tuning actually found" and "The dispersion penalty: the trade made explicit" in `benchmarks/README.md`. The penalty is **on** by default, so a run left at these defaults is the configuration any comparison should be made against. Treat `lambda_dispersion` as a prior on whether the detector response is universal. Set it to `0` when the response is universal by construction, as in closure tests and toys. On the 1D Gaussian that took the particle-level Wasserstein distance from 0.098 to 0.016. Keep the default when unfolding real data with a simulated detector. The reasoning is under "Choosing the Penalty Strength" in `docs/theory/reweighting.md`.
 
 `n_epochs` is not a maximum in the early-stopping sense. `scan` needs a fixed trip count, so every run executes all of them; the best epoch is then restored
 on the host by the detector-level MMD argmin.

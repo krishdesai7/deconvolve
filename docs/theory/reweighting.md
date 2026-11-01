@@ -66,6 +66,29 @@ The training objective is the weighted binary cross-entropy:
 
 \[\min_\beta \sum_{(z_j, x_j) \in \text{Sim.}} w(z_j; \beta) \ln(1 - d(x_j; \phi))\]
 
+### The Dispersion Penalty
+
+The generator step also pays for spread in its weights. The weights are normalized to mean one over Simulation, and \(\lambda\) is set by `--lambda-dispersion`:
+
+\[\min_\beta \sum_{(z_j, x_j) \in \text{Sim.}} w(z_j; \beta) \ln(1 - d(x_j; \phi)) \;+\; \lambda \operatorname{Var}_{\text{Sim.}}\big[w(z; \beta)\big]\]
+
+The discriminator can only check the weights through their average at fixed detector-level features, \(\bar w(x) = \mathbb{E}[w \mid x]\), because the reweighted Simulation is \(\widetilde{q}(x) = \bar w(x)\, q(x)\). That splits the variance into the part the data constrain and the part they cannot see:
+
+\[\operatorname{Var}(w) = \underbrace{\operatorname{Var}\big(\bar w(x)\big)}_{\text{visible}} + \underbrace{\mathbb{E}\big[\operatorname{Var}(w \mid x)\big]}_{\text{residual}}\]
+
+The penalty is a regularizer, not part of the equilibrium. At \(\lambda > 0\) the generator trades a little detector-level agreement for less spread.
+
+### Choosing the Penalty Strength
+
+The unfolded weights carry over to Data only if the detector response \(r(x \mid z)\) is the same in nature and in Simulation. The value of \(\lambda\) states how far you trust that assumption.
+
+- **The response is universal (\(\lambda = 0\)).** For example, a closure test, or a toy whose Data and Simulation are smeared by the same response by construction. Here any spread the data demand is real, and penalizing it biases the result. On the 1D Gaussian benchmark, \(\lambda = 0\) unfolds to a particle-level Wasserstein distance of 0.016. That beats <span style="font-variant: small-caps;">OmniFold</span> (0.023) and IBU (0.042). The default \(\lambda = 0.015\) gives 0.098.
+- **The response may not be universal (\(\lambda \approx 0.015\), the default).** For example, real data unfolded with a simulated detector, or a Pythia/Delphes vs Herwig/Delphes study. Here matching detector level exactly can push response differences, and the generator's own estimation noise, into the weights. Shrinking them protects the particle-level result. On the jets benchmark, \(\lambda = 0.015\) improves the joint particle-level sliced-Wasserstein distance by 87.3 ± 1.0% (three seeds), against 77.3% at \(\lambda = 0\).
+
+Larger values encode stronger doubt. Nothing at detector level can pick \(\lambda\) for you. On jets, \(\lambda = 0.015\) matches detector level slightly *worse* than \(\lambda = 0\) while unfolding better, so a detector-level criterion would choose the wrong one. The value is a modelling assumption, and like the choice of Simulation it belongs in the systematic uncertainty.
+
+An alternative that penalized only the residual term was tested and dropped. It preserves more of the visible spread, but on jets it lost to the total-variance penalty by 3.5 points, beyond seed noise.
+
 ---
 
 ## Theoretical Equilibrium

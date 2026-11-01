@@ -85,7 +85,7 @@ deconvolve train [-D{gaussian|jets}]
 | `--n-disc-steps` | `-k` | `int` | `5` | Discriminator updates per generator update. |
 | `--lr-g` | | `float` | `3e-5` | Generator learning rate (<span style="font-variant: small-caps;">Adam</span>). Tuned; see `benchmarks/README.md`. |
 | `--lr-d` | | `float` | `1e-4` | Discriminator learning rate (<span style="font-variant: small-caps;">Adam</span>). |
-| `--lambda-dispersion` | | `float` | `0.015` | Penalty on the variance of the generator's normalized weights. `0` disables it. |
+| `--lambda-dispersion` | | `float` | `0.015` | Penalty on the variance of the generator's normalized weights: your prior on whether the detector response is universal. Use `0` when it is (closure tests, toys); keep the default for real data. See [Choosing the Penalty Strength](../theory/reweighting.md#choosing-the-penalty-strength). |
 | `--seed` | | `int` | `None` | Seed for model initialization and shuffle order. Defaults to a random value. |
 
 ### Output

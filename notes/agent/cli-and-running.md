@@ -37,7 +37,12 @@ also measured: it is the same axis `lr_g` acts on indirectly, pushed directly,
 and "The dispersion penalty: the trade made explicit" in `benchmarks/README.md`
 is the paired 12-observable sweep that picked the value. A run left at the
 default has the penalty **on**, which is the setting any baseline should be
-compared against.
+compared against. The value is the user's prior on response universality, and
+nothing at detector level can choose it. `0` is right when the response is
+universal by construction (closure tests, toys): on the 1D Gaussian that gives
+W1 0.016 against 0.098 at the default. "Choosing the Penalty Strength" in
+`docs/theory/reweighting.md` has the user-facing version, and
+`notes/working-notes/2026-10-residual-dispersion.md` has the evidence.
 
 Model selection is not a flag: it is fixed to the detector-level MMD argmin
 (see [training-loop.md](training-loop.md)). `--no-plots` skips the figures,
