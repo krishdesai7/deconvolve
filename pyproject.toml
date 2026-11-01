@@ -1,6 +1,8 @@
 [project]
   name            = "deconvolve"
+
   version = "0.3.0"
+
   description     = "Unbinned, full-phase-space unfolding by adversarial reweighting"
   readme          = "README.md"
   requires-python = ">=3.12,<3.15" # Until H5PY releases a 3.15 wheel
