@@ -1,7 +1,7 @@
 [project]
   name            = "deconvolve"
 
-  version = "0.3.0"
+  version = "0.3.1"
 
   description     = "Unbinned, full-phase-space unfolding by adversarial reweighting"
   readme          = "README.md"
