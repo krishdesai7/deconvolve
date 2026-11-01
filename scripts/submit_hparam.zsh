@@ -29,8 +29,18 @@ GPUS_TOTAL=$((NODES * GPUS_PER_NODE))
 
 TRAIN_ARGS="-Djets -n1000000 -l3 -u128 --no-plots ${FIXED_ARGS}"
 
-ARM_DIR="${PROJECT_DIR}/runs/hp_$(date -u +%Y-%m-%dT%H%M%SZ)"
-mkdir -p "${ARM_DIR}"
+# Strict `mkdir`, not `-p`: two submissions in the same second (two lines
+# pasted together) would otherwise share ARM_DIR, and every run dir in it would
+# be written by both jobs -- config from one, metrics from the other, with no
+# error. The loser takes a `-N` suffix, as `workflows/train.py` does for runs.
+stamp="hp_$(date -u +%Y-%m-%dT%H%M%SZ)"
+ARM_DIR="${PROJECT_DIR}/runs/${stamp}"
+suffix=0
+mkdir -p "${PROJECT_DIR}/runs"
+until mkdir "${ARM_DIR}" 2>/dev/null; do
+  suffix=$((suffix + 1))
+  ARM_DIR="${PROJECT_DIR}/runs/${stamp}-${suffix}"
+done
 echo "Arm dir: ${ARM_DIR}"
 echo "Sweeping ${FLAG} over [${LEVELS}] x ${REPLICATE_FLAG} [${SEEDS}], ${FIXED_ARGS} on ${GPUS_TOTAL} GPUs"
 
