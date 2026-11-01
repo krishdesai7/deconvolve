@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, override
 
 import numpy as np
 import pytest
-from deconvolve.coretypes import ZXY, DatasetName, Events, Populations
+from deconvolve.coretypes import ZXY, DatasetName, Events, Objective, Populations
 from deconvolve.coretypes.events import DatasetSplits
 from deconvolve.data import DeconvolveDataset, parse_gaussian_config
 from deconvolve.training.engine import TrainResult, train
@@ -622,8 +622,9 @@ def _stub_best_epoch_reload(
         /,
         *,
         plots: bool,
+        objective: Objective = Objective.bce,
     ) -> None:
-        del run_dir, splits, g, history, dim, var_info, variables, plots
+        del run_dir, splits, g, history, dim, var_info, variables, plots, objective
         seen["best_epoch"] = best_epoch
 
     monkeypatch.setattr(target=workflow, name="_draw_figures", value=fake_draw_figures)
@@ -788,12 +789,19 @@ def test_timing_writes_a_phase_breakdown_into_the_run_dir(
 def test_no_timings_file_when_timing_is_off(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from deconvolve.instrumentation import timing
+
     monkeypatch.chdir(tmp_path)
     _ = (tmp_path / "cfg.yaml").write_text(data=CONFIG_2D)
     params: GaussianConfig = parse_gaussian_config(config_path=tmp_path / "cfg.yaml")
     run_dir: Path = _write_run(tmp_path, gaussian_params=params.model_dump())
 
-    _reload(run_dir)
+    was_enabled: bool = timing.is_enabled()
+    timing.enable(False)
+    try:
+        _reload(run_dir)
+    finally:
+        timing.enable(was_enabled)
 
     assert not (run_dir / "artifacts" / "timings.json").exists()
 
