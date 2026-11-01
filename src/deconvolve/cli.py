@@ -222,7 +222,14 @@ def train_command(
     lr_d: Annotated[float, typer.Option(min=0.0)] = 1e-4,
     lambda_dispersion: Annotated[
         float,
-        typer.Option(min=0.0, help="Penalty on variance of g's weights. 0 to disable."),
+        typer.Option(
+            min=0.0,
+            help=(
+                "Penalty on variance of g's weights: a prior on response "
+                "non-universality. 0 if the response is universal (closure "
+                "tests, toys)."
+            ),
+        ),
     ] = 0.015,
     log_every: Annotated[int, typer.Option(min=1, help="Log every N epochs.")] = 1,
     plots: Annotated[bool, typer.Option(help="Draw plots. Metrics still run.")] = True,
