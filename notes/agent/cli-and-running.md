@@ -78,7 +78,7 @@ deconvolve uncertainty freeze runs/unc_x -B 8 -S 8                    # freeze a
 deconvolve --log-level DEBUG train --config params/1d_default.yaml
 sbatch scripts/submit.zsh                                      # end-to-end 12-var jet run
 sbatch scripts/submit.zsh --dataset gaussian --config params/2d_correlated.yaml
-bash scripts/submit_hparam.zsh                                 # hyperparameter arms, 3 levels x 8 seeds
+zsh scripts/submit_hparam.zsh                                  # hyperparameter arms, 3 levels x 8 seeds
 uv run benchmarks/hparam_collect.py --arm-dir runs/hp_...     # paired comparison of the arms
 ```
 
