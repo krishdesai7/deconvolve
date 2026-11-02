@@ -1,0 +1,278 @@
+{
+  "detector_m": {
+    "wasserstein_before": 0.21180042624473572,
+    "wasserstein_after": 0.012884898111224174,
+    "wasserstein_improvement_pct": 93.91649094400988,
+    "jensenshannon_before": 0.0068829892139782665,
+    "jensenshannon_after": 0.00014643477945422754,
+    "jensenshannon_improvement_pct": 97.87251185637714,
+    "triangular_before": 0.02737427644122165,
+    "triangular_after": 0.0005248867845485082,
+    "triangular_improvement_pct": 98.08255467253883
+  },
+  "detector_M": {
+    "wasserstein_before": 0.22564548254013062,
+    "wasserstein_after": 0.011364083737134933,
+    "wasserstein_improvement_pct": 94.96374418436946,
+    "jensenshannon_before": 0.009804562740611634,
+    "jensenshannon_after": 0.0002507339913033807,
+    "jensenshannon_improvement_pct": 97.44268053622818,
+    "triangular_before": 0.03887416187888195,
+    "triangular_after": 0.0009409976180374936,
+    "triangular_improvement_pct": 97.57937516191524
+  },
+  "detector_w": {
+    "wasserstein_before": 0.2694616913795471,
+    "wasserstein_after": 0.006392619572579861,
+    "wasserstein_improvement_pct": 97.627633249145,
+    "jensenshannon_before": 0.009464201862026471,
+    "jensenshannon_after": 0.0002446047444466286,
+    "jensenshannon_improvement_pct": 97.41547414126843,
+    "triangular_before": 0.03759342429594107,
+    "triangular_after": 0.0009716599532339838,
+    "triangular_improvement_pct": 97.41534597757062
+  },
+  "detector_tau21": {
+    "wasserstein_before": 0.12169796228408813,
+    "wasserstein_after": 0.011474600061774254,
+    "wasserstein_improvement_pct": 90.57124717093595,
+    "jensenshannon_before": 0.0034371780844483736,
+    "jensenshannon_after": 0.00014528457225340693,
+    "jensenshannon_improvement_pct": 95.7731438789642,
+    "triangular_before": 0.01369343577692478,
+    "triangular_after": 0.0005767574823269727,
+    "triangular_improvement_pct": 95.78807326574034
+  },
+  "detector_zg": {
+    "wasserstein_before": 0.05911783128976822,
+    "wasserstein_after": 0.01287677139043808,
+    "wasserstein_improvement_pct": 78.21846453175505,
+    "jensenshannon_before": 0.0006598115675579333,
+    "jensenshannon_after": 0.00011636477685688177,
+    "jensenshannon_improvement_pct": 82.3639380425587,
+    "triangular_before": 0.00263245596330835,
+    "triangular_after": 0.00046540074845827624,
+    "triangular_improvement_pct": 82.3206634813605
+  },
+  "detector_sdm": {
+    "wasserstein_before": 0.22838443517684937,
+    "wasserstein_after": 0.007315995637327433,
+    "wasserstein_improvement_pct": 96.79663124517995,
+    "jensenshannon_before": 0.008530355701996804,
+    "jensenshannon_after": 0.00013833319580954065,
+    "jensenshannon_improvement_pct": 98.37834199836286,
+    "triangular_before": 0.033910407865831924,
+    "triangular_after": 0.0005412897455859217,
+    "triangular_improvement_pct": 98.40376515750692
+  },
+  "detector_q": {
+    "wasserstein_before": 0.08001705259084702,
+    "wasserstein_after": 0.005316585302352905,
+    "wasserstein_improvement_pct": 93.35568465694641,
+    "jensenshannon_before": 0.0016183919455883666,
+    "jensenshannon_after": 0.00011397045913412961,
+    "jensenshannon_improvement_pct": 92.95779619734232,
+    "triangular_before": 0.0064094544911384955,
+    "triangular_after": 0.00042865832138380927,
+    "triangular_improvement_pct": 93.3120935334441
+  },
+  "detector_f_ch": {
+    "wasserstein_before": 0.05701275169849396,
+    "wasserstein_after": 0.025531377643346786,
+    "wasserstein_improvement_pct": 55.21812772979835,
+    "jensenshannon_before": 0.0011887737552899681,
+    "jensenshannon_after": 0.00018588297336077347,
+    "jensenshannon_improvement_pct": 84.36346928643016,
+    "triangular_before": 0.004747775759525648,
+    "triangular_after": 0.0007433337739715091,
+    "triangular_improvement_pct": 84.34353660279491
+  },
+  "detector_lha": {
+    "wasserstein_before": 0.2661406993865967,
+    "wasserstein_after": 0.006644948851317167,
+    "wasserstein_improvement_pct": 97.5032195877472,
+    "jensenshannon_before": 0.009704716371340714,
+    "jensenshannon_after": 0.00024311298403504353,
+    "jensenshannon_improvement_pct": 97.4948986169963,
+    "triangular_before": 0.03854194306721233,
+    "triangular_after": 0.0009689915943947383,
+    "triangular_improvement_pct": 97.48587767693773
+  },
+  "detector_ang2": {
+    "wasserstein_before": 0.2594219744205475,
+    "wasserstein_after": 0.005291103385388851,
+    "wasserstein_improvement_pct": 97.96042590562838,
+    "jensenshannon_before": 0.008116169949855836,
+    "jensenshannon_after": 0.00019769001248515854,
+    "jensenshannon_improvement_pct": 97.56424503544717,
+    "triangular_before": 0.032246673292294935,
+    "triangular_after": 0.0007580525318254477,
+    "triangular_improvement_pct": 97.64920702066165
+  },
+  "detector_ptd": {
+    "wasserstein_before": 0.263461172580719,
+    "wasserstein_after": 0.0043575577437877655,
+    "wasserstein_improvement_pct": 98.34603417987418,
+    "jensenshannon_before": 0.00851607965780662,
+    "jensenshannon_after": 0.00013928203098406914,
+    "jensenshannon_improvement_pct": 98.3644818205007,
+    "triangular_before": 0.03381242270704301,
+    "triangular_after": 0.0005521525314550538,
+    "triangular_improvement_pct": 98.3670128099397
+  },
+  "detector_n_ch": {
+    "wasserstein_before": 0.2236669957637787,
+    "wasserstein_after": 0.007950546219944954,
+    "wasserstein_improvement_pct": 96.44536459534613,
+    "jensenshannon_before": 0.007676705997712002,
+    "jensenshannon_after": 0.00013018690081573566,
+    "jensenshannon_improvement_pct": 98.30413069284486,
+    "triangular_before": 0.030463201977427367,
+    "triangular_after": 0.000482892861811011,
+    "triangular_improvement_pct": 98.41483222226992
+  },
+  "particle_m": {
+    "wasserstein_before": 0.11691063642501831,
+    "wasserstein_after": 0.10136835277080536,
+    "wasserstein_improvement_pct": 13.29415708397168,
+    "jensenshannon_before": 0.0021367366045281517,
+    "jensenshannon_after": 0.0019538562485557007,
+    "jensenshannon_improvement_pct": 8.558862874576711,
+    "triangular_before": 0.008490154215311518,
+    "triangular_after": 0.0077511575095527,
+    "triangular_improvement_pct": 8.704161161479007
+  },
+  "particle_M": {
+    "wasserstein_before": 0.2593221068382263,
+    "wasserstein_after": 0.06752155721187592,
+    "wasserstein_improvement_pct": 73.96228264719518,
+    "jensenshannon_before": 0.007967702634899862,
+    "jensenshannon_after": 0.0007248204529412463,
+    "jensenshannon_improvement_pct": 90.9030182707069,
+    "triangular_before": 0.03160243072281108,
+    "triangular_after": 0.0028651325057988813,
+    "triangular_improvement_pct": 90.9338223666106
+  },
+  "particle_w": {
+    "wasserstein_before": 0.2884509563446045,
+    "wasserstein_after": 0.009743377566337585,
+    "wasserstein_improvement_pct": 96.62217186248554,
+    "jensenshannon_before": 0.011709237414479509,
+    "jensenshannon_after": 0.0003076026055359811,
+    "jensenshannon_improvement_pct": 97.37299198361455,
+    "triangular_before": 0.04649800353265521,
+    "triangular_after": 0.0012012755606562917,
+    "triangular_improvement_pct": 97.41650077553837
+  },
+  "particle_tau21": {
+    "wasserstein_before": 0.2635386288166046,
+    "wasserstein_after": 0.05230274423956871,
+    "wasserstein_improvement_pct": 80.15367064994257,
+    "jensenshannon_before": 0.010837808026128888,
+    "jensenshannon_after": 0.0011447167135088957,
+    "jensenshannon_improvement_pct": 89.4377469064861,
+    "triangular_before": 0.04306464895181679,
+    "triangular_after": 0.0045414217601896225,
+    "triangular_improvement_pct": 89.4544089625093
+  },
+  "particle_zg": {
+    "wasserstein_before": 0.11028935760259628,
+    "wasserstein_after": 0.011463912203907967,
+    "wasserstein_improvement_pct": 89.60560433653474,
+    "jensenshannon_before": 0.001999396164239386,
+    "jensenshannon_after": 0.00019578683680104692,
+    "jensenshannon_improvement_pct": 90.20770168999857,
+    "triangular_before": 0.007909920535231468,
+    "triangular_after": 0.000782520158721386,
+    "triangular_improvement_pct": 90.10710467651383
+  },
+  "particle_sdm": {
+    "wasserstein_before": 0.2563527524471283,
+    "wasserstein_after": 0.03110622987151146,
+    "wasserstein_improvement_pct": 87.86584907921868,
+    "jensenshannon_before": 0.010263163489918953,
+    "jensenshannon_after": 0.0006021365866229068,
+    "jensenshannon_improvement_pct": 94.13303132884555,
+    "triangular_before": 0.04077962888432954,
+    "triangular_after": 0.002185700707410556,
+    "triangular_improvement_pct": 94.64021432463193
+  },
+  "particle_q": {
+    "wasserstein_before": 0.07867725193500519,
+    "wasserstein_after": 0.009375317953526974,
+    "wasserstein_improvement_pct": 88.08382636283247,
+    "jensenshannon_before": 0.0020891699979464036,
+    "jensenshannon_after": 0.00016766301062631908,
+    "jensenshannon_improvement_pct": 91.97465927659658,
+    "triangular_before": 0.008196929360756418,
+    "triangular_after": 0.0006234786184715406,
+    "triangular_improvement_pct": 92.39375391647873
+  },
+  "particle_f_ch": {
+    "wasserstein_before": 0.04780661314725876,
+    "wasserstein_after": 0.02542724832892418,
+    "wasserstein_improvement_pct": 46.81227835445987,
+    "jensenshannon_before": 0.0011391476454470574,
+    "jensenshannon_after": 0.00024994577044465264,
+    "jensenshannon_improvement_pct": 78.05852722922833,
+    "triangular_before": 0.004550223620192225,
+    "triangular_after": 0.0009993305615003901,
+    "triangular_improvement_pct": 78.0377703402152
+  },
+  "particle_lha": {
+    "wasserstein_before": 0.30729198455810547,
+    "wasserstein_after": 0.011640667915344238,
+    "wasserstein_improvement_pct": 96.21185435992291,
+    "jensenshannon_before": 0.012671364668795,
+    "jensenshannon_after": 0.0003369808918006878,
+    "jensenshannon_improvement_pct": 97.34061089228574,
+    "triangular_before": 0.05027978497211944,
+    "triangular_after": 0.0012905828315049326,
+    "triangular_improvement_pct": 97.43319739290737
+  },
+  "particle_ang2": {
+    "wasserstein_before": 0.25816309452056885,
+    "wasserstein_after": 0.009255468845367432,
+    "wasserstein_improvement_pct": 96.41487530874402,
+    "jensenshannon_before": 0.009188837167885613,
+    "jensenshannon_after": 0.000288404204050923,
+    "jensenshannon_improvement_pct": 96.86136342627904,
+    "triangular_before": 0.03650343342715932,
+    "triangular_after": 0.0010931408540740654,
+    "triangular_improvement_pct": 97.00537524434415
+  },
+  "particle_ptd": {
+    "wasserstein_before": 0.2403944730758667,
+    "wasserstein_after": 0.03230012208223343,
+    "wasserstein_improvement_pct": 86.56370020951366,
+    "jensenshannon_before": 0.008651928005342776,
+    "jensenshannon_after": 0.0006183969579153571,
+    "jensenshannon_improvement_pct": 92.852495333601,
+    "triangular_before": 0.034261380459893194,
+    "triangular_after": 0.002446854706552777,
+    "triangular_improvement_pct": 92.85827169335137
+  },
+  "particle_n_ch": {
+    "wasserstein_before": 0.23759618401527405,
+    "wasserstein_after": 0.056569408625364304,
+    "wasserstein_improvement_pct": 76.1909439497868,
+    "jensenshannon_before": 0.006678040177020915,
+    "jensenshannon_after": 0.0004783311884186146,
+    "jensenshannon_improvement_pct": 92.83725201198178,
+    "triangular_before": 0.026504408425703667,
+    "triangular_after": 0.0018917059384601434,
+    "triangular_improvement_pct": 92.86267435938849
+  },
+  "joint": {
+    "detector": {
+      "sliced_wasserstein_before": 0.15377306888694875,
+      "sliced_wasserstein_after": 0.009142325307038845,
+      "sliced_wasserstein_improvement_pct": 94.05466420536868
+    },
+    "particle": {
+      "sliced_wasserstein_before": 0.17606013279873878,
+      "sliced_wasserstein_after": 0.03435653732594801,
+      "sliced_wasserstein_improvement_pct": 80.48590741140568
+    }
+  }
+}

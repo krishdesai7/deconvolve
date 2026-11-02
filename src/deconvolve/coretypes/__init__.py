@@ -16,6 +16,7 @@ from .constants import (
     CACHE_ENV_VAR,
     CACHE_FILENAMES,
     COMPILE_CACHE_DIR,
+    DEFAULT_LAMBDA_DISPERSION,
     DEFAULT_PURITY_THRESHOLD,
     EVENT_DTYPE,
     GENERATORS,
@@ -23,6 +24,7 @@ from .constants import (
     JET_OBS,
     JET_VARIABLE_GROUPS,
     JOINT_METRICS_KEY,
+    LAMBDA_GP,
     LOG2,
     LOG_RHO_FLOOR,
     METRIC_DISPLAY_SCALE,
@@ -40,7 +42,7 @@ from .constants import (
     display_order,
     figure_pages,
 )
-from .enums import DatasetName, LogLevel, Resample
+from .enums import DatasetName, LogLevel, Objective, Resample
 from .events import ZXY, DatasetSplits, Events, Populations, Split
 from .results import IBUResult, UnfoldingPopulations, VariableOutcome
 from .types import (
@@ -70,6 +72,7 @@ __all__: Final[Sequence[str]] = (
     "CACHE_ENV_VAR",
     "CACHE_FILENAMES",
     "COMPILE_CACHE_DIR",
+    "DEFAULT_LAMBDA_DISPERSION",
     "DEFAULT_PURITY_THRESHOLD",
     "EVENT_DTYPE",
     "GENERATORS",
@@ -77,6 +80,7 @@ __all__: Final[Sequence[str]] = (
     "JET_OBS",
     "JET_VARIABLE_GROUPS",
     "JOINT_METRICS_KEY",
+    "LAMBDA_GP",
     "LOG2",
     "LOG_RHO_FLOOR",
     "METRIC_DISPLAY_SCALE",
@@ -108,6 +112,7 @@ __all__: Final[Sequence[str]] = (
     "LogLevel",
     "MetricRecord",
     "Nested",
+    "Objective",
     "Populations",
     "Resample",
     "RunConfig",

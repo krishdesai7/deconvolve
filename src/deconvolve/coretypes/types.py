@@ -80,11 +80,12 @@ class StatelessOptimizer(Protocol):
 # `jax.value_and_grad(..., has_aux=True)` reveals as `(...) -> tuple[Any, Any]`,
 # so naming the real shape here is a legal narrowing that types the
 # destructuring at the call sites instead of leaving it as `Any`.
-type GradsAndAux = tuple[tuple[JaxArray, Variables], Variables]
-#: `g`'s aux carries a second array: the loss it is *scored* on, which is not
-#: the loss it is differentiated through once a dispersion penalty is on. See
-#: `engine.weight_dispersion`.
-type GenGradsAndAux = tuple[tuple[JaxArray, tuple[Variables, JaxArray]], Variables]
+#: Both networks' aux carries a second array: the loss each is *scored* on,
+#: which is not the loss it is differentiated through once a penalty is on --
+#: the dispersion penalty for `g` (see `engine.weight_dispersion`), the
+#: gradient penalty for a Wasserstein critic (`engine.gradient_penalty`).
+type GradsAndAux = tuple[tuple[JaxArray, tuple[Variables, JaxArray]], Variables]
+type GenGradsAndAux = GradsAndAux
 
 
 class DiscGradFn(Protocol):
@@ -132,9 +133,11 @@ class TrainStep(Protocol):
 class EvalStep(Protocol):
     """A traced forward pass with no updates.
 
-    Returns the *unnormalized* masked loss and the mask total, so a scan over
-    batches can accumulate both and divide once --- a true mean over the split
-    rather than a mean of per-batch means.
+    Returns the *unnormalized* masked sums the objective's validation number
+    is built from, stacked into one vector, so a scan over batches can
+    accumulate them and combine once --- a true mean over the split rather
+    than a mean of per-batch means. For BCE that is `(loss total, mask
+    total)`; for the critic gap it is the per-class sums `critic_sums` lists.
     """
 
     def __call__(
@@ -145,7 +148,7 @@ class EvalStep(Protocol):
         y: JaxArray,
         mask: JaxArray,
         /,
-    ) -> tuple[JaxArray, JaxArray]: ...
+    ) -> JaxArray: ...
 
 
 # ---------------------------------

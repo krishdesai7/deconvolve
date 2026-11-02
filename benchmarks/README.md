@@ -258,6 +258,81 @@ visibly worse. It is taken because jet mass is not privileged here — every
 unfolding method struggles with it, for the reasons §4 measures — and eleven
 observables improving by ~6 points is the better honest number to report.
 
+### The Wasserstein objective
+
+`--objective wasserstein` swaps the sigmoid discriminator for a linear-headed
+critic under a one-sided gradient penalty, so the game minimizes a Wasserstein-1
+estimate in place of Jensen-Shannon. `g` still only reweights: this is not a
+WGAN any more than the default is a GAN. It was tested in the hope that a
+different divergence would move along the §2 manifold. **At its tuned setting it
+is not better than BCE, and it follows the same trade-off curve at a rescaled
+coefficient.** It stays available as an experimental option.
+
+The decisive comparison, replicated over `data_seed` (0--7) at `--seed 0`, n=8,
+paired. Floors are distance from the best arm in `mmd_test`, at the measured
+floor of 1.159e-4:
+
+|   Objective |     λ | 12 obs ± SD | 11 obs | jet mass |   ESS | Δ MMD (floors) |
+| :---------- | ----: | ----------: | -----: | -------: | ----: | -------------: |
+|         BCE |  0.01 | 85.02 ± 1.96 | 91.01 |     19.1 | 82.7% |           +0.6 |
+|         BCE | 0.015 | 85.42 ± 1.28 | 91.30 |     20.7 | 84.7% |           +1.0 |
+| Wasserstein |  0.25 | 83.02 ± 2.35 | 89.22 |     14.8 | 82.7% |           +0.0 |
+| Wasserstein |   0.5 | 84.34 ± 1.97 | 90.62 |     15.2 | 85.6% |           +0.5 |
+| Wasserstein |  0.75 | 82.78 ± 1.40 | 89.17 |     12.5 | 87.2% |           +1.1 |
+
+Wasserstein at 0.5 against BCE: **−0.69 ± 0.60 (p = 0.29)** at λ=0.01 and
+**−1.08 ± 0.60 (p = 0.12)** at λ=0.015. Against its own neighbours, 0.25 is
+−1.32 ± 0.57 (p = 0.055) and 0.75 is −1.55 ± 0.51 (p = 0.019). All five arms are
+inside the two-floor tied set. The one gain that repeated is `M`, +5.4 ± 0.8
+against BCE at 0.01; `f_ch` tends the other way (−10.4 ± 4.7, p = 0.06).
+
+**The earlier win did not replicate.** At `--data-seed 42` over eight `--seed`
+replicates, Wasserstein at 0.5 scored 84.91 against
+BCE's 84.24 at 0.015 (+0.67 ± 0.30, p = 0.062). Those replicates are near-copies
+(see `scripts/README.md`), and 0.5 was the best of several levels. This is why the
+table above is the one to read.
+
+**The coefficient does not carry across objectives.** At `--data-seed 42`, n=8:
+
+|     λ |   BCE | Wasserstein | BCE mass | Wasserstein mass | Wasserstein Δ MMD (floors) |
+| ----: | ----: | ----------: | -------: | ---------------: | -------------------------: |
+| 0.015 | 84.24 |       80.84 |     17.5 |             29.0 |                       +0.9 |
+|   0.5 | 19.62 |       84.91 |     33.7 |             18.1 |                       +0.0 |
+|   1.5 |  7.81 |       82.20 |     13.8 |             17.6 |                       +2.9 |
+|     5 |  2.63 |       62.43 |      4.7 |             74.2 |                      +69.8 |
+
+So each objective has its own default (`DEFAULT_LAMBDA_DISPERSION`). The first
+Wasserstein sweep left λ at 0.015 and lost by 4.2 ± 0.67, which looked like a
+verdict on the objective and was mostly the wrong coefficient.
+
+**Rescale λ by 30--50x and the curves line up** with "The dispersion penalty"
+above, on the 11 non-mass observables:
+
+| Wasserstein λ | Scores | BCE λ | Scores |
+| ------------: | :--- | ----: | :--- |
+| 0.015 | 85.6, mass 29.0, ESS 77.0% | 0 | 85.65, mass 32.57, ESS 74.3% |
+| 0.5 | 90.62--90.98, mass 15.2--18.1, ESS 85.6% | 0.01 | 91.02, mass 18.54, ESS 82.8% |
+| 5 | 61.4, mass 74.2, ESS 95.8%, +69.8 floors | 0.1 | 55.42, mass 78.87, ESS 95.7%, +67.6 floors |
+
+These compare across sweeps and code versions, so they are suggestive rather than
+paired. The shape is what matters: the aggregate still peaks where mass bottoms
+out, and mass still recovers only once the criterion rejects the arm. **No
+admissible Wasserstein arm recovers jet mass either.** §2 and §4 are properties of
+the problem, and a different divergence does not get around them.
+
+**The gradient penalty coefficient is not a knob.** λ_gp at 0.1, 1 and 10 scored
+79.26, 79.37 and 79.95 at λ=0.015, within a standard error, so it is the constant
+`LAMBDA_GP` rather than an option. The penalty does have to be one-sided: the
+two-sided form left the critic unable to open a gap on the 1D Gaussian.
+
+**The costs.** Training takes ~30% longer, 22.7 s against 17.5 s per 100 epochs,
+from the extra backward pass the penalty needs. W₁ has no smooth minimum, so `g`
+oscillates near the solution: selected epochs at λ=0.5 split between 48 and 90 at
+fixed data, where BCE at 0.015 selected epoch 40 in seven of eight seeds. Loose
+weights also amplify numerical differences between allocations: Wasserstein at
+λ=0.015 scored 79.95, 79.39 and 80.84 on identical configs, while λ=0.5 reproduced
+84.91 and BCE at 0.015 moved from 84.14 to 84.24.
+
 ### What was ruled out
 
 Two of these are measurements and two are not, and the difference is the

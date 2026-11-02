@@ -185,6 +185,44 @@ def test_train_defaults_to_no_explicit_run_dir(monkeypatch: pytest.MonkeyPatch) 
     assert calls[0]["run_dir"] is None
 
 
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        # The tuned value for each objective: a BCE default under Wasserstein
+        # scores ~4 points below BCE and is the noisiest arm measured.
+        pytest.param([], 0.015, id="bce-default"),
+        pytest.param(["--objective", "wasserstein"], 0.5, id="wasserstein-default"),
+        pytest.param(
+            ["--objective", "wasserstein", "--lambda-dispersion", "0.25"],
+            0.25,
+            id="wasserstein-explicit",
+        ),
+        pytest.param(["--lambda-dispersion", "0"], 0.0, id="explicit-zero-is-kept"),
+    ],
+)
+def test_train_resolves_lambda_dispersion_by_objective(
+    monkeypatch: pytest.MonkeyPatch, arguments: list[str], expected: float
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        del args
+        calls.append(kwargs)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    assert runner.invoke(app, ["train", *arguments]).exit_code == 0
+    assert calls[0]["lambda_dispersion"] == pytest.approx(expected)
+
+
+def test_train_has_no_gradient_penalty_option() -> None:
+    """Flat from 0.1 to 10 at particle level, so it is a constant, not a knob."""
+    result = runner.invoke(app, ["train", "--lambda-gp", "1"])
+
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+
 def test_report_takes_the_run_directory_positionally(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

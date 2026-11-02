@@ -6,6 +6,7 @@ import os
 from typing import TYPE_CHECKING, cast
 
 import pytest
+from deconvolve import cli
 from deconvolve.cli import app
 from deconvolve.config import Layer, Resolved, origins_for
 from deconvolve.config.show import render
@@ -85,6 +86,40 @@ def test_a_pyproject_tool_ran_table_is_read(project: Path) -> None:
 
     assert result.exit_code == 0
     assert "321" in result.stdout
+
+
+def test_a_configured_lambda_dispersion_beats_the_objective_default(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ = (project / "deconvolve.toml").write_text(
+        '[train]\nobjective = "wasserstein"\nlambda-dispersion = 0.25\n'
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        del args
+        calls.append(kwargs)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    assert runner.invoke(app, ["train"]).exit_code == 0
+    assert calls[0]["lambda_dispersion"] == pytest.approx(0.25)
+
+
+def test_a_configured_objective_selects_its_lambda_dispersion(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ = (project / "deconvolve.toml").write_text('[train]\nobjective = "wasserstein"\n')
+    calls: list[dict[str, object]] = []
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        del args
+        calls.append(kwargs)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    assert runner.invoke(app, ["train"]).exit_code == 0
+    assert calls[0]["lambda_dispersion"] == pytest.approx(0.5)
 
 
 def test_an_out_of_range_config_value_is_rejected_by_click(project: Path) -> None:

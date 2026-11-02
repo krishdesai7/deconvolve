@@ -79,6 +79,7 @@ Default:
 | `lr-g` | float ≥ 0 |
 | `lr-d` | float ≥ 0 |
 | `lambda-dispersion` | float ≥ 0 |
+| `objective` | `bce` or `wasserstein` |
 | `seed` | integer |
 | `run-dir` | path |
 | `plots` | boolean |
@@ -104,7 +105,8 @@ Default:
     n-disc-steps = 5
     lr-g = 3e-5
     lr-d = 1e-4
-    lambda-dispersion = 0.015
+    lambda-dispersion = 0.015 # 0.5 under objective = "wasserstein"
+    objective = "bce"
     seed = None # random
     run-dir = None # a UTC timestamp under `runs/`
     plots = True
@@ -127,7 +129,8 @@ Default:
     n-disc-steps = 5
     lr-g = 3e-5
     lr-d = 1e-4
-    lambda-dispersion = 0.015
+    lambda-dispersion = 0.015 # 0.5 under objective = "wasserstein"
+    objective = "bce"
     seed = None # random
     run-dir = None # a UTC timestamp under `runs/`
     plots = True

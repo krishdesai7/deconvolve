@@ -8,7 +8,7 @@ models. They do NOT train to convergence -- that is cluster work.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -21,9 +21,11 @@ from deconvolve.coretypes import (
     TRUTH_SENTINEL,
     ZXY,
     Events,
+    Objective,
     Split,
 )
 from deconvolve.data import DeconvolveDataset, DeviceSplits, train_indices
+from deconvolve.training import engine
 from deconvolve.training.engine import (
     EPS,
     TrainResult,
@@ -31,6 +33,11 @@ from deconvolve.training.engine import (
     _make_steps,
     _use_compilation_cache,
     bce_sums,
+    critic_gap,
+    critic_gap_from_sums,
+    critic_loss,
+    critic_sums,
+    gradient_penalty,
     load_params,
     normalize_weights,
     save_params,
@@ -330,13 +337,23 @@ class TestTrainSteps:
 
     @staticmethod
     def _setup(
-        dim: int = 2, n: int = 64, lambda_dispersion: float = 0.0
+        dim: int = 2,
+        n: int = 64,
+        lambda_dispersion: float = 0.0,
+        *,
+        objective: Objective = Objective.bce,
+        lambda_gp: float = 0.0,
     ) -> tuple[tuple[TrainStep, TrainStep, EvalStep], TrainState, tuple[Array, ...]]:
         from deconvolve.training.models import build_discriminator, build_generator
 
         set_random_seed(0)
         g: DeconvolveModel = build_generator(dim=dim, hidden_units=8, n_layers=1)
-        d: DeconvolveModel = build_discriminator(dim=dim, hidden_units=8, n_layers=1)
+        d: DeconvolveModel = build_discriminator(
+            dim=dim,
+            hidden_units=8,
+            n_layers=1,
+            critic=objective == Objective.wasserstein,
+        )
         opt_g: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-2)
         opt_d: StatelessOptimizer = keras.optimizers.Adam(learning_rate=1e-2)
         opt_g.build(g.trainable_variables)
@@ -364,7 +381,16 @@ class TestTrainSteps:
                 np.ones(shape=n),
             )
         )
-        return _make_steps(g, d, opt_g, opt_d, lambda_dispersion), state, batch
+        steps = _make_steps(
+            g,
+            d,
+            opt_g,
+            opt_d,
+            lambda_dispersion,
+            objective=objective,
+            lambda_gp=lambda_gp,
+        )
+        return steps, state, batch
 
     @pytest.mark.slow
     def test_disc_step_updates_only_the_discriminator(self) -> None:
@@ -408,6 +434,142 @@ class TestTrainSteps:
             actual=float(total) / float(count), desired=float(d_loss), rtol=1e-6
         )
         assert int(count) == len(batch[2])
+
+
+class TestCriticLoss:
+    """The Wasserstein objective's loss math, on hand-checkable batches."""
+
+    @staticmethod
+    def _batch() -> tuple[NDArray[np.single], ...]:
+        """Two data rows, two MC rows, all real."""
+        y = np.array([1, 1, 0, 0], dtype=np.single)
+        f = np.array([2.0, 4.0, 1.0, 3.0], dtype=np.single)
+        # Normalized as `normalize_weights` leaves them: data 1, MC summing to 2.
+        w = np.array([1.0, 1.0, 1.5, 0.5], dtype=np.single)
+        return f, y, w, np.ones(shape=4, dtype=np.single)
+
+    def test_gap_is_data_mean_minus_weighted_mc_mean(self) -> None:
+        f, y, w, mask = self._batch()
+        # data mean 3; MC weighted mean (1.5*1 + 0.5*3) / 2 = 1.5.
+        np.testing.assert_allclose(
+            actual=float(critic_gap(f, y, w, mask)), desired=1.5, rtol=1e-6
+        )
+        np.testing.assert_allclose(
+            actual=float(critic_loss(f, y, w, mask)), desired=-1.5, rtol=1e-6
+        )
+
+    def test_gap_ignores_a_constant_offset_in_the_critic(self) -> None:
+        """The dual is defined up to a constant, and so is the gap built on it."""
+        f, y, w, mask = self._batch()
+        np.testing.assert_allclose(
+            actual=float(critic_gap(f + np.single(7.0), y, w, mask)),
+            desired=float(critic_gap(f, y, w, mask)),
+            rtol=1e-6,
+        )
+
+    def test_sums_split_across_batches_rebuild_the_whole_gap(self) -> None:
+        """What lets `_make_eval` scan: per-class sums add, means do not."""
+        f, y, w, mask = self._batch()
+        # Each half holds one data and one MC row, so neither is degenerate.
+        halves = [np.array([0, 2]), np.array([1, 3])]
+        summed = sum(critic_sums(f[s], y[s], w[s], mask[s]) for s in halves)
+        np.testing.assert_allclose(
+            actual=float(critic_gap_from_sums(jnp.asarray(summed))),
+            desired=float(critic_gap(f, y, w, mask)),
+            rtol=1e-6,
+        )
+
+    def test_masked_rows_are_inert(self) -> None:
+        f, y, w, mask = self._batch()
+        # A steep MC score with a large weight, which would swamp the gap if
+        # the mask let it in.
+        f_p, y_p, w_p, mask_p = (
+            np.append(a, v).astype(np.single)
+            for a, v in zip((f, y, w, mask), (9e3, 0, 5, 0), strict=True)
+        )
+        np.testing.assert_allclose(
+            actual=float(critic_gap(f_p, y_p, w_p, mask_p)),
+            desired=float(critic_gap(f, y, w, mask)),
+            rtol=1e-6,
+        )
+
+    def test_penalty_is_one_sided(self) -> None:
+        """Only slopes above 1 cost anything; a flat critic is free.
+
+        Two-sided would charge the flat one 1.0, which is what locked the
+        critic's shape against a gap this small.
+        """
+        unit = jnp.asarray([[0.6, 0.8], [1.0, 0.0]])
+        flat = jnp.zeros(shape=(2, 2))
+        double = jnp.asarray([[1.2, 1.6], [2.0, 0.0]])
+        ones = np.ones(shape=2, dtype=np.single)
+        assert float(gradient_penalty(unit, ones)) < 1e-6
+        assert float(gradient_penalty(flat, ones)) < 1e-6
+        np.testing.assert_allclose(
+            actual=float(gradient_penalty(double, ones)), desired=1.0, rtol=1e-5
+        )
+        # A masked row does not count, however steep.
+        steep = jnp.asarray([[0.6, 0.8], [30.0, 40.0]])
+        assert float(gradient_penalty(steep, np.array([1, 0], dtype=np.single))) < 1e-6
+
+
+class TestWassersteinSteps:
+    """The step contract `TestTrainSteps` pins, held under the critic too."""
+
+    @staticmethod
+    def _setup(
+        lambda_gp: float = 10.0,
+    ) -> tuple[tuple[TrainStep, TrainStep, EvalStep], TrainState, tuple[Array, ...]]:
+        return TestTrainSteps._setup(
+            objective=Objective.wasserstein, lambda_gp=lambda_gp
+        )
+
+    @pytest.mark.slow
+    def test_steps_update_only_their_own_network(self) -> None:
+        (disc_step, gen_step, _), state, batch = self._setup()
+        after_d, d_loss = disc_step(state, *batch)
+        after_g, g_loss = gen_step(state, *batch)
+        assert np.isfinite(float(d_loss))
+        assert np.isfinite(float(g_loss))
+        for before, d_new, g_new in zip(
+            state.g_trainable, after_d.g_trainable, after_g.g_trainable, strict=True
+        ):
+            np.testing.assert_array_equal(actual=np.asarray(d_new), desired=before)
+            assert not np.allclose(a=np.asarray(g_new), b=np.asarray(before))
+        for before, d_new, g_new in zip(
+            state.d_trainable, after_d.d_trainable, after_g.d_trainable, strict=True
+        ):
+            assert not np.allclose(a=np.asarray(d_new), b=np.asarray(before))
+            np.testing.assert_array_equal(actual=np.asarray(g_new), desired=before)
+
+    def test_losses_are_opposite_and_reported_without_the_penalty(self) -> None:
+        """Both steps report `d`'s unpenalised loss, as the BCE path does.
+
+        Under a heavy penalty the reported number must not move: the penalty
+        steers the critic's gradient and stays out of the history.
+        """
+        (disc_step, gen_step, eval_step), state, batch = self._setup(lambda_gp=1e3)
+        _, d_loss = disc_step(state, *batch)
+        _, g_loss = gen_step(state, *batch)
+        np.testing.assert_allclose(
+            actual=float(g_loss), desired=-float(d_loss), rtol=1e-6
+        )
+        # eval_step hands back the four sums, unreduced; combined, the gap.
+        np.testing.assert_allclose(
+            actual=float(critic_gap_from_sums(eval_step(state, *batch))),
+            desired=-float(d_loss),
+            rtol=1e-5,
+        )
+
+    def test_the_penalty_reaches_the_critic_gradient(self) -> None:
+        (free, _, _), state, batch = self._setup(lambda_gp=0.0)
+        (held, _, _), _, _ = self._setup(lambda_gp=10.0)
+        unpenalised, _ = free(state, *batch)
+        penalised, _ = held(state, *batch)
+        assert not all(
+            np.allclose(a=np.asarray(a), b=np.asarray(b))
+            for a, b in zip(unpenalised.d_trainable, penalised.d_trainable, strict=True)
+        )
 
 
 @pytest.mark.slow
@@ -805,12 +967,14 @@ class TestFusion:
         )
 
     @pytest.mark.slow
-    def test_fused_and_eager_runs_agree(self) -> None:
+    @pytest.mark.parametrize("objective", list(Objective))
+    def test_fused_and_eager_runs_agree(self, objective: Objective) -> None:
         """`fused=False` is the debugging path, so it must not be a second model.
 
         It runs the identical epoch function from a Python `while` instead of a
         `lax.while_loop`, so the two differ only in how XLA is allowed to
-        associate the reductions -- not in the arithmetic.
+        associate the reductions -- not in the arithmetic. Under either
+        objective, since each traces to its own program.
         """
         splits: DatasetSplits = self._splits()
 
@@ -822,15 +986,24 @@ class TestFusion:
                 n_layers=1,
                 seed=42,
                 n_epochs=3,
+                objective=objective,
                 fused=fused,
             )
 
         fused: TrainResult = run_train(fused=True)
         eager: TrainResult = run_train(fused=False)
-        for key in ("train_d", "train_g", "val_d"):
+        for key in ("train_d", "train_g"):
             np.testing.assert_allclose(
                 actual=fused.history[key], desired=eager.history[key], rtol=1e-10
             )
+        # The training columns are exact, so the state is. The critic gap's
+        # validation number combines four accumulated sums, and XLA associates
+        # that reduction differently inside the fused program: one float32 ULP
+        # (~8e-8) on an occasional epoch, and nothing fed back into training.
+        val_rtol: float = 1e-10 if objective == Objective.bce else 1e-6
+        np.testing.assert_allclose(
+            actual=fused.history["val_d"], desired=eager.history["val_d"], rtol=val_rtol
+        )
         # Selection reads the same curves, so it must land on the same epoch.
         assert fused.best_epoch == eager.best_epoch
 
@@ -1155,6 +1328,51 @@ class TestDispersionPenalty:
             lr_g=1e-2,
             lambda_dispersion=lambda_dispersion,
         )
+
+    @pytest.mark.parametrize(
+        ("objective", "passed", "expected"),
+        [
+            pytest.param(Objective.bce, None, 0.015, id="bce-default"),
+            pytest.param(Objective.wasserstein, None, 0.5, id="wasserstein-default"),
+            pytest.param(Objective.wasserstein, 0.25, 0.25, id="explicit"),
+        ],
+    )
+    def test_the_default_coefficient_follows_the_objective(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        objective: Objective,
+        passed: float | None,
+        expected: float,
+    ) -> None:
+        """The API must not reintroduce the trap the CLI closes."""
+
+        class _ReachedError(Exception):
+            pass
+
+        seen: list[float] = []
+
+        def fake_make_steps(
+            *args: object, **kwargs: object
+        ) -> tuple[object, object, object]:
+            del kwargs
+            seen.append(cast("float", args[4]))
+            raise _ReachedError
+
+        monkeypatch.setattr(engine, "_make_steps", fake_make_steps)
+
+        with pytest.raises(_ReachedError):
+            _ = train(
+                self._splits(),
+                dim=1,
+                hidden_units=8,
+                n_layers=1,
+                seed=0,
+                n_epochs=1,
+                lambda_dispersion=passed,
+                objective=objective,
+            )
+
+        assert seen == [pytest.approx(expected)]
 
     def test_zero_coefficient_turns_the_penalty_off(self) -> None:
         """`--lambda-dispersion 0` recovers the pure adversarial objective.

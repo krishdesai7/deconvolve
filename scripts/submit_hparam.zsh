@@ -23,16 +23,39 @@ SEEDS=${SEEDS:-"0 1 2 3 4 5 6 7"}
 REPLICATE_FLAG=${REPLICATE_FLAG:---seed}
 FIXED_ARGS=${FIXED_ARGS:---data-seed 42}
 
-NODES=${NODES:-6}
+NODES=${NODES:-1}
 GPUS_PER_NODE=4
 GPUS_TOTAL=$((NODES * GPUS_PER_NODE))
 
+# The limit follows from the sweep's size. Measured on 6-node jobs from `sacct`,
+# one wave takes up to ~3 min (one wave took 2:35-3:14; two took 4:03-5:20,
+# collect step included). 3 min x 1.5 margin = 4.5 min per wave, rounded up.
+N_RUNS=$(( ${#${=LEVELS}} * ${#${=SEEDS}} ))
+WAVES=$(( (N_RUNS + GPUS_TOTAL - 1) / GPUS_TOTAL ))
+LIMIT_MIN=$(( (WAVES * 9 + 1) / 2 ))
+TIME=${TIME:-$(printf '%02d:%02d:00' $((LIMIT_MIN / 60)) $((LIMIT_MIN % 60)))}
+
 TRAIN_ARGS="-Djets -n1000000 -l3 -u128 --no-plots ${FIXED_ARGS}"
 
-ARM_DIR="${PROJECT_DIR}/runs/hp_$(date -u +%Y-%m-%dT%H%M%SZ)"
-mkdir -p "${ARM_DIR}"
+# The collect step pairs on the axis the replicates sample. It raises if that
+# axis has one value, so this cannot be left to its `--pair-on seed` default.
+PAIR_ON="${REPLICATE_FLAG#--}"
+PAIR_ON="${PAIR_ON//-/_}"
+
+# Strict `mkdir`, not `-p`: two submissions in the same second (two lines
+# pasted together) would otherwise share ARM_DIR, and every run dir in it would
+# be written by both jobs -- config from one, metrics from the other, with no
+# error. The loser takes a `-N` suffix, as `workflows/train.py` does for runs.
+stamp="hp_$(date -u +%Y-%m-%dT%H%M%SZ)"
+ARM_DIR="${PROJECT_DIR}/runs/${stamp}"
+suffix=0
+mkdir -p "${PROJECT_DIR}/runs"
+until mkdir "${ARM_DIR}" 2>/dev/null; do
+  suffix=$((suffix + 1))
+  ARM_DIR="${PROJECT_DIR}/runs/${stamp}-${suffix}"
+done
 echo "Arm dir: ${ARM_DIR}"
-echo "Sweeping ${FLAG} over [${LEVELS}] x ${REPLICATE_FLAG} [${SEEDS}], ${FIXED_ARGS} on ${GPUS_TOTAL} GPUs"
+echo "Sweeping ${FLAG} over [${LEVELS}] x ${REPLICATE_FLAG} [${SEEDS}], ${FIXED_ARGS} on ${GPUS_TOTAL} GPUs: ${WAVES} waves, limit ${TIME}"
 
 # `--gpus-per-node` has no short form, and `-G` is NOT it: `-G/--gpus` is the
 # TOTAL across the allocation. Shortened to `-G ${GPUS_PER_NODE}` this asks for
@@ -41,11 +64,11 @@ echo "Sweeping ${FLAG} over [${LEVELS}] x ${REPLICATE_FLAG} [${SEEDS}], ${FIXED_
 # grants one GPU per node instead of four -- the sweep still finishes, in four
 # times the waves. Leave it long.
 JOB=$(sbatch --parsable \
-  -qregular -Cgpu -Am3246_g -t01:00:00 \
+  -qregular -Cgpu -Am3246_g -t"${TIME}" \
   -N "${NODES}" --gpus-per-node="${GPUS_PER_NODE}" \
   -Jran_hparam \
   -o "${ARM_DIR}/slurm-%j.log" \
-  --export="ALL,ARM_DIR=${ARM_DIR},FLAG=${FLAG},LEVELS=${LEVELS},SEEDS=${SEEDS},GPUS_TOTAL=${GPUS_TOTAL},TRAIN_ARGS=${TRAIN_ARGS},REPLICATE_FLAG=${REPLICATE_FLAG},PROJECT_DIR=${PROJECT_DIR}" \
+  --export="ALL,ARM_DIR=${ARM_DIR},FLAG=${FLAG},LEVELS=${LEVELS},SEEDS=${SEEDS},GPUS_TOTAL=${GPUS_TOTAL},TRAIN_ARGS=${TRAIN_ARGS},REPLICATE_FLAG=${REPLICATE_FLAG},PAIR_ON=${PAIR_ON},PROJECT_DIR=${PROJECT_DIR}" \
   <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -71,12 +94,12 @@ for level in ${LEVELS}; do
 done
 wait || true
 
-uv run benchmarks/hparam_collect.py --arm-dir "${ARM_DIR}"
+uv run benchmarks/hparam_collect.py --arm-dir "${ARM_DIR}" --pair-on "${PAIR_ON}"
 EOF
 )
 
 echo "Submitted packed job: ${JOB}"
 echo "Logs:    ${ARM_DIR}/slurm-${JOB}.log  (+ per-run train.log)"
-echo "Collect: uv run benchmarks/hparam_collect.py --arm-dir ${ARM_DIR}"
+echo "Collect: uv run benchmarks/hparam_collect.py --arm-dir ${ARM_DIR} --pair-on ${PAIR_ON}"
 echo "         add --exclude m to score without the observable §4 shows is"
 echo "         limited by a non-universal response rather than by tuning."

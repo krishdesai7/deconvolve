@@ -104,14 +104,14 @@ node generally cannot do. Warm it on a login node:
 
 ## submit_hparam.zsh
 
-One hyperparameter arm sweep, packed into a single multi-node job: three levels of one knob x eight initialization seeds = 24 runs, one A100 each, a single wave on 6 nodes. Run it on a login node with `zsh scripts/submit_hparam.zsh`. Do NOT sbatch this file itself; it computes the arm directory and submits the job. The collect step runs inline at the end of the same job.
+One hyperparameter arm sweep, packed into a single multi-node job: three levels of one knob x eight initialization seeds = 24 runs, one A100 each, six waves on one node. Run it on a login node with `zsh scripts/submit_hparam.zsh`. Do NOT sbatch this file itself; it computes the arm directory and submits the job. The collect step runs inline at the end of the same job.
 
 Run on the login node:
 
 ```shell
     zsh scripts/submit_hparam.zsh                                  # lr_g at 3e-5 / 1e-4 / 3e-4
     FLAG=--lr-d LEVELS="1e-4 3e-4 1e-3" zsh scripts/submit_hparam.zsh
-    NODES=3 zsh scripts/submit_hparam.zsh                          # half the GPUs, two waves
+    NODES=3 zsh scripts/submit_hparam.zsh                          # 12 GPUs, two waves
 ```
 
 ### Why every arm runs the same seeds
@@ -127,7 +127,7 @@ redirect `train.log` into before training starts.
 
 ### Wall clock
 
-`--no-plots`: the figures are a large share of a short run's wall clock and no part of scoring one. Metrics still run, and the collect step reads them. Training itself is ~15s per run at these parameters (`benchmarks/boundary.py`, A100); `-t01:00:00` is margin for the npz load, not for the GPU, since 24 processes read the 1M-event jet cache at once.
+`--no-plots`: the figures are a large share of a short run's wall clock and no part of scoring one. Metrics still run, and the collect step reads them. A run spends ~30 s inside its timers, of which the jet cache read is under 2 s even with 24 processes reading at once, but `sacct` puts a wave at up to ~3 min on 6 nodes, collect step included. The rest is outside the timers (`uv run`, imports, `srun`) and has not been broken down. The limit is 4.5 min per wave, which is that 3 min with a 1.5x margin.
 
 ### Warm up
 
@@ -136,7 +136,9 @@ If the jet cache has not been populated, a cold cache pulls 3.3GB from Zenodo in
 ### Options
 
 - `FLAG`, `LEVELS`, `SEEDS`: The arm axis and its levels, and the seeds swept at each. The collect step reads the knob off the saved configs, so changing `FLAG` to another flag needs no change downstream. Three levels around the default, so the read is a trend across levels, and at n=8 against SD 1.9 the argmax of two arms is mostly luck.
-- `NODES`: n=8 x 3 levels = 24 runs. `NODES=6` -> 24 A100s -> a single wave, so the wall clock is one run's. Lower `NODES` to use fewer GPUs at the cost of extra waves.
+- `NODES`: n=8 x 3 levels = 24 runs. The default `NODES=1` -> 4 A100s -> six waves and ~18 min. On `regular` every reserved node is charged, idle or not, and 6-node jobs waited 42 min to 2h12 in the queue, so raise this only when the wall clock matters more than the wait.
+- `TIME`: The job's limit, derived from the number of waves (18 min for 16 runs on one node, 27 for 24, 36 for 32). Override it when a run takes longer than the defaults, since the 3 min wave was measured at `-n1000000 -l3 -u128`.
+- `REPLICATE_FLAG`, `FIXED_ARGS`: The axis the replicates sample, and the arguments held fixed. The collect step's `--pair-on` follows `REPLICATE_FLAG`, because it raises when the axis it pairs on has only one value.
 - `TRAIN_ARGS`, `PROJECT_DIR`, `ARM_DIR`: passed straight through to the job; see the script for their defaults.
 - `JOB`: The submitted job's ID, echoed for the logs listed above.
 

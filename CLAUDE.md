@@ -18,28 +18,27 @@ Deconvolve is an adversarial machine learning package that uses adversarial lear
 
 ## Tooling Preferences
 
-- Prefer `fd` over `find`, `rg` over `grep`, and `fzf` for fuzzy finding. `find`/`grep` are fine as fallbacks.
 - When working with Python, you may invoke the relevant `/astral:<skill>` for uv, ty, and ruff.
 
 ## Reference Docs
 
 Everything below is detail this file used to carry inline. Read the linked file when a task touches that area; don't load all of them speculatively.
 
-| Doc                                                              | Covers                                                                   |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [notes/agent/data-model.md](notes/agent/data-model.md)           | `Populations`/`ZXY`/device-resident split types; jet column ordering     |
-| [notes/agent/structure.md](notes/agent/structure.md)             | Full source tree, `runs/` and `.cache/` layout                           |
-| [notes/agent/cli-and-running.md](notes/agent/cli-and-running.md) | CLI reference, `just` recipes, test markers, `scripts/submit.zsh`        |
-| [notes/agent/training-loop.md](notes/agent/training-loop.md)     | `engine.py`'s fused `lax.scan` program and host-side checkpoint selection |
-| [notes/agent/seeding.md](notes/agent/seeding.md)                 | `data_seed` vs `seed`, batch order, leakage-check                        |
-| [notes/agent/precision.md](notes/agent/precision.md)             | The float32 pin, where it doesn't reach, and reproducibility gotchas     |
-| [notes/agent/tech-stack.md](notes/agent/tech-stack.md)           | Dependencies, Keras/JAX backend pin, Gaussian config YAML format         |
-| [notes/agent/caching.md](notes/agent/caching.md)                 | `DECONVOLVE_CACHE_DIR`, dev-tool caches, the XLA compilation cache              |
-| [notes/agent/reporting.md](notes/agent/reporting.md)             | `deconvolve report`, the LaTeX template, figure pagination                      |
-| [notes/agent/timing.md](notes/agent/timing.md)                   | `DECONVOLVE_TIMING=1`, `timings.json` phase structure                           |
-| [notes/agent/omnifold.md](notes/agent/omnifold.md)               | The OmniFold baseline's subprocess boundary and SLURM job                |
-| [notes/agent/uncertainty.md](notes/agent/uncertainty.md)         | The bootstrap x seed variance design                                     |
-| [notes/agent/releasing.md](notes/agent/releasing.md)             | The Actions release workflow and versioning policy                       |
+| Doc                                                              | Covers                                                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [notes/agent/data-model.md](notes/agent/data-model.md)           | `Populations`/`ZXY`/device-resident split types; jet column ordering                 |
+| [notes/agent/structure.md](notes/agent/structure.md)             | Full source tree, `runs/` and `.cache/` layout                                       |
+| [notes/agent/cli-and-running.md](notes/agent/cli-and-running.md) | CLI reference, `just` recipes, test markers, `scripts/submit.zsh`                    |
+| [notes/agent/training-loop.md](notes/agent/training-loop.md)     | `engine.py`'s fused `lax.scan` program and host-side checkpoint selection            |
+| [notes/agent/seeding.md](notes/agent/seeding.md)                 | `data_seed` vs `seed`, batch order, leakage-check                                    |
+| [notes/agent/precision.md](notes/agent/precision.md)             | The float32 pin, where it doesn't reach, and reproducibility gotchas                 |
+| [notes/agent/tech-stack.md](notes/agent/tech-stack.md)           | Dependencies, Keras/JAX backend pin, Gaussian config YAML format                     |
+| [notes/agent/caching.md](notes/agent/caching.md)                 | `DECONVOLVE_CACHE_DIR`, dev-tool caches, the XLA compilation cache                   |
+| [notes/agent/reporting.md](notes/agent/reporting.md)             | `deconvolve report`, the LaTeX template, figure pagination                           |
+| [notes/agent/timing.md](notes/agent/timing.md)                   | `DECONVOLVE_TIMING=1`, `timings.json` phase structure                                |
+| [notes/agent/omnifold.md](notes/agent/omnifold.md)               | The OmniFold baseline's subprocess boundary and SLURM job                            |
+| [notes/agent/uncertainty.md](notes/agent/uncertainty.md)         | The bootstrap x seed variance design                                                 |
+| [notes/agent/releasing.md](notes/agent/releasing.md)             | The Actions release workflow and versioning policy                                   |
 | [notes/agent/configuration.md](notes/agent/configuration.md)     | The five config layers, discovery order, `deconvolve config show`, the design freeze |
 
 Module-level detail lives in docstrings (package `__init__.py`, module, class, function, and a string literal after a module constant), which `docs/api/` renders; `benchmarks/README.md` and `scripts/README.md` cover the code outside the package.
@@ -48,18 +47,18 @@ Module-level detail lives in docstrings (package `__init__.py`, module, class, f
 
 Source files carry no pointers into `notes/`; this is the map. Line numbers drift, so the symbol is the durable half.
 
-| Source                                                            | Notes                                                    |
-| ----------------------------------------------------------------- | -------------------------------------------------------- |
-| `coretypes/constants.py:30` `EVENT_DTYPE`                          | [precision.md](notes/agent/precision.md)                 |
-| `coretypes/constants.py:32` `CACHE_ENV_VAR`, `CACHE_DIR`           | [caching.md](notes/agent/caching.md)                     |
-| `coretypes/constants.py:98` `SUBSTRUCTURE_VARIABLES`, `:214` `JET_DISPLAY_ORDER` | [data-model.md](notes/agent/data-model.md) |
-| `evaluation/evaluate.py:130` recorded `variables`                 | [data-model.md](notes/agent/data-model.md)               |
-| `evaluation/evaluate.py:245` `_counts` (scatter-add)              | [precision.md](notes/agent/precision.md)                 |
-| `instrumentation/timing.py:12` `compile_cache_warm`               | [timing.md](notes/agent/timing.md), [caching.md](notes/agent/caching.md) |
-| `instrumentation/timing.py:356` `write`, `:252` `_ordered`        | [timing.md](notes/agent/timing.md)                       |
-| `baselines/omnifold.py:1` module docstring                        | [omnifold.md](notes/agent/omnifold.md)                   |
-| `baselines/omnifold.py:229` `_record_iteration_timings`, `:334`   | [timing.md](notes/agent/timing.md)                       |
-| `config/show.py:1` module docstring                               | [configuration.md](notes/agent/configuration.md)         |
+| Source                                                                           | Notes                                                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `coretypes/constants.py:30` `EVENT_DTYPE`                                        | [precision.md](notes/agent/precision.md)                                 |
+| `coretypes/constants.py:32` `CACHE_ENV_VAR`, `CACHE_DIR`                         | [caching.md](notes/agent/caching.md)                                     |
+| `coretypes/constants.py:98` `SUBSTRUCTURE_VARIABLES`, `:214` `JET_DISPLAY_ORDER` | [data-model.md](notes/agent/data-model.md)                               |
+| `evaluation/evaluate.py:130` recorded `variables`                                | [data-model.md](notes/agent/data-model.md)                               |
+| `evaluation/evaluate.py:245` `_counts` (scatter-add)                             | [precision.md](notes/agent/precision.md)                                 |
+| `instrumentation/timing.py:12` `compile_cache_warm`                              | [timing.md](notes/agent/timing.md), [caching.md](notes/agent/caching.md) |
+| `instrumentation/timing.py:356` `write`, `:252` `_ordered`                       | [timing.md](notes/agent/timing.md)                                       |
+| `baselines/omnifold.py:1` module docstring                                       | [omnifold.md](notes/agent/omnifold.md)                                   |
+| `baselines/omnifold.py:229` `_record_iteration_timings`, `:334`                  | [timing.md](notes/agent/timing.md)                                       |
+| `config/show.py:1` module docstring                                              | [configuration.md](notes/agent/configuration.md)                         |
 
 ## Maintaining This File
 
