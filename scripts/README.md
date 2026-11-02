@@ -138,6 +138,7 @@ If the jet cache has not been populated, a cold cache pulls 3.3GB from Zenodo in
 - `FLAG`, `LEVELS`, `SEEDS`: The arm axis and its levels, and the seeds swept at each. The collect step reads the knob off the saved configs, so changing `FLAG` to another flag needs no change downstream. Three levels around the default, so the read is a trend across levels, and at n=8 against SD 1.9 the argmax of two arms is mostly luck.
 - `NODES`: n=8 x 3 levels = 24 runs. The default `NODES=1` -> 4 A100s -> six waves and ~18 min. On `regular` every reserved node is charged, idle or not, and 6-node jobs waited 42 min to 2h12 in the queue, so raise this only when the wall clock matters more than the wait.
 - `TIME`: The job's limit, derived from the number of waves (18 min for 16 runs on one node, 27 for 24, 36 for 32). Override it when a run takes longer than the defaults, since the 3 min wave was measured at `-n1000000 -l3 -u128`.
+- `REPLICATE_FLAG`, `FIXED_ARGS`: The axis the replicates sample, and the arguments held fixed. The collect step's `--pair-on` follows `REPLICATE_FLAG`, because it raises when the axis it pairs on has only one value.
 - `TRAIN_ARGS`, `PROJECT_DIR`, `ARM_DIR`: passed straight through to the job; see the script for their defaults.
 - `JOB`: The submitted job's ID, echoed for the logs listed above.
 

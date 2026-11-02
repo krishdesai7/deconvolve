@@ -89,6 +89,21 @@ Larger values encode stronger doubt. Nothing at detector level can pick \(\lambd
 
 An alternative that penalized only the residual term was tested and dropped. It preserves more of the visible spread, but on jets it lost to the total-variance penalty by 3.5 points, beyond seed noise.
 
+### The Wasserstein Objective
+
+`--objective wasserstein` replaces the sigmoid discriminator with a linear-headed critic \(f\) under a one-sided gradient penalty. The game then plays over the gap \(\mathbb{E}_{p}[f(x)] - \mathbb{E}_{q}[w(z) f(x)]\), a Wasserstein-1 estimate at the critic's optimum, in place of the Jensen–Shannon divergence. The generator still only reweights, so the method is no more a Wasserstein GAN than the default is a GAN: the critic's input gradient never reaches \(g\).
+
+It is experimental, and BCE remains the default because this objective is not better overall. On the 12-observable jets benchmark (mean particle-level Wasserstein improvement, eight data seeds, paired), the tuned arms are:
+
+| Objective | \(\lambda\) | Mean of 12 | \(M\) | \(f_{ch}\) | Jet mass |
+| :--- | --: | --: | --: | --: | --: |
+| BCE | 0.015 | 85.4 | 87.8 | 84.5 | 20.7 |
+| Wasserstein | 0.5 | 84.3 | 90.6 | 74.0 | 15.2 |
+
+The difference in the mean, −1.08 ± 0.60, is not significant. The consistent gain is on the jet's total mass \(M\), and it comes with a tendency to lose on \(f_{ch}\). The objective also does not lift the limit on jet mass. Each epoch takes about 30% longer to train, and the selected epoch varies more between seeds.
+
+The two objectives need very different penalty strengths. The default of \(\lambda = 0.5\) under Wasserstein is about 30 times the BCE default; at \(\lambda = 0.015\) it scores about 4 points lower, and BCE at \(\lambda = 0.5\) barely reweights at all (a mean of 19.6). Retune \(\lambda\) if you change objective.
+
 ---
 
 ## Theoretical Equilibrium

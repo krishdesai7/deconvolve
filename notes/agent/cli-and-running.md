@@ -44,6 +44,12 @@ W1 0.016 against 0.098 at the default. "Choosing the Penalty Strength" in
 `docs/theory/reweighting.md` has the user-facing version, and
 `notes/working-notes/2026-10-residual-dispersion.md` has the evidence.
 
+`--objective wasserstein` is experimental and changes that default to **0.5**:
+`coretypes.constants.DEFAULT_LAMBDA_DISPERSION` holds both, and an explicit value
+always wins. The gradient penalty is the constant `LAMBDA_GP`, still recorded in
+`config.json`, and `deconvolve uncertainty` has no objective option, so it is
+always BCE. "The Wasserstein objective" in `benchmarks/README.md` has the sweeps.
+
 Model selection is not a flag: it is fixed to the detector-level MMD argmin
 (see [training-loop.md](training-loop.md)). `--no-plots` skips the figures,
 which are a large share of a short run's wall clock and no part of scoring
