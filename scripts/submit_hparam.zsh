@@ -37,6 +37,11 @@ TIME=${TIME:-$(printf '%02d:%02d:00' $((LIMIT_MIN / 60)) $((LIMIT_MIN % 60)))}
 
 TRAIN_ARGS="-Djets -n1000000 -l3 -u128 --no-plots ${FIXED_ARGS}"
 
+# The collect step pairs on the axis the replicates sample. It raises if that
+# axis has one value, so this cannot be left to its `--pair-on seed` default.
+PAIR_ON="${REPLICATE_FLAG#--}"
+PAIR_ON="${PAIR_ON//-/_}"
+
 # Strict `mkdir`, not `-p`: two submissions in the same second (two lines
 # pasted together) would otherwise share ARM_DIR, and every run dir in it would
 # be written by both jobs -- config from one, metrics from the other, with no
@@ -63,7 +68,7 @@ JOB=$(sbatch --parsable \
   -N "${NODES}" --gpus-per-node="${GPUS_PER_NODE}" \
   -Jran_hparam \
   -o "${ARM_DIR}/slurm-%j.log" \
-  --export="ALL,ARM_DIR=${ARM_DIR},FLAG=${FLAG},LEVELS=${LEVELS},SEEDS=${SEEDS},GPUS_TOTAL=${GPUS_TOTAL},TRAIN_ARGS=${TRAIN_ARGS},REPLICATE_FLAG=${REPLICATE_FLAG},PROJECT_DIR=${PROJECT_DIR}" \
+  --export="ALL,ARM_DIR=${ARM_DIR},FLAG=${FLAG},LEVELS=${LEVELS},SEEDS=${SEEDS},GPUS_TOTAL=${GPUS_TOTAL},TRAIN_ARGS=${TRAIN_ARGS},REPLICATE_FLAG=${REPLICATE_FLAG},PAIR_ON=${PAIR_ON},PROJECT_DIR=${PROJECT_DIR}" \
   <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -89,12 +94,12 @@ for level in ${LEVELS}; do
 done
 wait || true
 
-uv run benchmarks/hparam_collect.py --arm-dir "${ARM_DIR}"
+uv run benchmarks/hparam_collect.py --arm-dir "${ARM_DIR}" --pair-on "${PAIR_ON}"
 EOF
 )
 
 echo "Submitted packed job: ${JOB}"
 echo "Logs:    ${ARM_DIR}/slurm-${JOB}.log  (+ per-run train.log)"
-echo "Collect: uv run benchmarks/hparam_collect.py --arm-dir ${ARM_DIR}"
+echo "Collect: uv run benchmarks/hparam_collect.py --arm-dir ${ARM_DIR} --pair-on ${PAIR_ON}"
 echo "         add --exclude m to score without the observable §4 shows is"
 echo "         limited by a non-universal response rather than by tuning."
