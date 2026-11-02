@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
+from .enums import Objective
+
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from typing import Final, LiteralString
 
 
@@ -28,6 +30,25 @@ if TYPE_CHECKING:
 # downstream -- the containers, the models, `JAX_ENABLE_X64` -- follows from
 # this line.
 EVENT_DTYPE: Final[type[np.single]] = np.single
+
+DEFAULT_LAMBDA_DISPERSION: Final[Mapping[Objective, float]] = {
+    Objective.bce: 0.015,
+    Objective.wasserstein: 0.5,
+}
+"""The dispersion penalty's tuned coefficient for each objective.
+
+A coefficient does not carry across objectives: Wasserstein at 0.015 scores ~4
+points below BCE, and BCE at 0.5 barely reweights at all. See "The Wasserstein
+objective" in `benchmarks/README.md`.
+"""
+
+LAMBDA_GP: Final[float] = 10.0
+"""The Wasserstein critic's gradient penalty coefficient.
+
+A constant because it is not a knob: 0.1, 1 and 10 agree at particle level
+within a standard error. See "The Wasserstein objective" in
+`benchmarks/README.md`.
+"""
 
 CACHE_ENV_VAR: Final[LiteralString] = "DECONVOLVE_CACHE_DIR"
 """The environment variable that relocates `CACHE_DIR`."""

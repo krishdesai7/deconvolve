@@ -15,6 +15,7 @@ from .config import ConfigError, default_map, discover, load, origins_for
 from .config.show import render
 from .config.spec import build_spec
 from .coretypes import (
+    DEFAULT_LAMBDA_DISPERSION,
     DEFAULT_PURITY_THRESHOLD,
     POISON_SENTINEL,
     SUBSTRUCTURE_VARIABLES,
@@ -222,24 +223,22 @@ def train_command(
     lr_g: Annotated[float, typer.Option(min=0.0)] = 3e-5,
     lr_d: Annotated[float, typer.Option(min=0.0)] = 1e-4,
     lambda_dispersion: Annotated[
-        float,
+        float | None,
         typer.Option(
             min=0.0,
             help=(
                 "Penalty on variance of g's weights: a prior on response "
                 "non-universality. 0 if the response is universal (closure "
-                "tests, toys)."
+                "tests, toys). Default: 0.015 under bce, 0.5 under wasserstein."
             ),
         ),
-    ] = 0.015,
+    ] = None,
     objective: Annotated[
         Objective,
-        typer.Option(help="bce (Jensen-Shannon) or wasserstein (penalized critic)."),
+        typer.Option(
+            help="bce (Jensen-Shannon) or wasserstein (penalized critic, experimental)."
+        ),
     ] = Objective.bce,
-    lambda_gp: Annotated[
-        float,
-        typer.Option(min=0.0, help="Gradient penalty coefficient. Wasserstein only."),
-    ] = 10.0,
     log_every: Annotated[int, typer.Option(min=1, help="Log every N epochs.")] = 1,
     plots: Annotated[bool, typer.Option(help="Draw plots. Metrics still run.")] = True,
     run_dir: Annotated[
@@ -267,12 +266,15 @@ def train_command(
         n_disc_steps=n_disc_steps,
         lr_g=lr_g,
         lr_d=lr_d,
-        lambda_dispersion=lambda_dispersion,
+        lambda_dispersion=(
+            DEFAULT_LAMBDA_DISPERSION[objective]
+            if lambda_dispersion is None
+            else lambda_dispersion
+        ),
         log_every=log_every,
         plots=plots,
         run_dir=run_dir,
         objective=objective,
-        lambda_gp=lambda_gp,
         origins=origins_for(
             ctx,
             resolved,

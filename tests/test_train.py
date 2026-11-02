@@ -8,7 +8,7 @@ models. They do NOT train to convergence -- that is cluster work.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -25,6 +25,7 @@ from deconvolve.coretypes import (
     Split,
 )
 from deconvolve.data import DeconvolveDataset, DeviceSplits, train_indices
+from deconvolve.training import engine
 from deconvolve.training.engine import (
     EPS,
     TrainResult,
@@ -1327,6 +1328,51 @@ class TestDispersionPenalty:
             lr_g=1e-2,
             lambda_dispersion=lambda_dispersion,
         )
+
+    @pytest.mark.parametrize(
+        ("objective", "passed", "expected"),
+        [
+            pytest.param(Objective.bce, None, 0.015, id="bce-default"),
+            pytest.param(Objective.wasserstein, None, 0.5, id="wasserstein-default"),
+            pytest.param(Objective.wasserstein, 0.25, 0.25, id="explicit"),
+        ],
+    )
+    def test_the_default_coefficient_follows_the_objective(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        objective: Objective,
+        passed: float | None,
+        expected: float,
+    ) -> None:
+        """The API must not reintroduce the trap the CLI closes."""
+
+        class _ReachedError(Exception):
+            pass
+
+        seen: list[float] = []
+
+        def fake_make_steps(
+            *args: object, **kwargs: object
+        ) -> tuple[object, object, object]:
+            del kwargs
+            seen.append(cast("float", args[4]))
+            raise _ReachedError
+
+        monkeypatch.setattr(engine, "_make_steps", fake_make_steps)
+
+        with pytest.raises(_ReachedError):
+            _ = train(
+                self._splits(),
+                dim=1,
+                hidden_units=8,
+                n_layers=1,
+                seed=0,
+                n_epochs=1,
+                lambda_dispersion=passed,
+                objective=objective,
+            )
+
+        assert seen == [pytest.approx(expected)]
 
     def test_zero_coefficient_turns_the_penalty_off(self) -> None:
         """`--lambda-dispersion 0` recovers the pure adversarial objective.

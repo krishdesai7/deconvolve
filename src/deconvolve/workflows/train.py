@@ -13,6 +13,7 @@ import numpy as np
 from ..baselines._shared import parse_run_config
 from ..coretypes import (
     JET_OBS,
+    LAMBDA_GP,
     DatasetName,
     GaussianConfig,
     Objective,
@@ -493,7 +494,6 @@ def run(
     run_dir: Path | None,
     origins: dict[str, str] | None = None,
     objective: Objective = Objective.bce,
-    lambda_gp: float = 10.0,
 ) -> None:
     """Train (or reload) one run, then report where its wall clock went.
 
@@ -531,7 +531,6 @@ def run(
             run_dir=run_dir,
             origins=origins,
             objective=objective,
-            lambda_gp=lambda_gp,
         )
     finally:
         report()
@@ -574,7 +573,6 @@ def _pipeline(
     run_dir: Path | None,
     origins: dict[str, str] | None = None,
     objective: Objective = Objective.bce,
-    lambda_gp: float = 10.0,
 ) -> Path:
     """The run itself, returning the directory its artifacts landed in."""
     # Each dataset fills in only its own metadata, but the plots and the saved
@@ -652,7 +650,6 @@ def _pipeline(
                 lambda_dispersion=lambda_dispersion,
                 log_every=log_every,
                 objective=objective,
-                lambda_gp=lambda_gp,
             )
         g: DeconvolveModel = result.g
         best_epoch = result.best_epoch
@@ -680,7 +677,7 @@ def _pipeline(
                 "lr_d": lr_d,
                 "lambda_dispersion": lambda_dispersion,
                 "objective": str(objective),
-                "lambda_gp": lambda_gp,
+                "lambda_gp": LAMBDA_GP,
                 **mmd_record,
             },
             run_dir=run_dir,

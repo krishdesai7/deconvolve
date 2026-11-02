@@ -43,7 +43,14 @@ from jaxtyping import Array, Float, Int, jaxtyped
 
 # `COMPILE_CACHE_DIR` is a runtime value; `Variables` only annotates, but it
 # annotates `@jaxtyped(beartype)` and beartype resolves at decoration time
-from ..coretypes import COMPILE_CACHE_DIR, Objective, Variables, artifacts_dir
+from ..coretypes import (
+    COMPILE_CACHE_DIR,
+    DEFAULT_LAMBDA_DISPERSION,
+    LAMBDA_GP,
+    Objective,
+    Variables,
+    artifacts_dir,
+)
 from ..data import DeviceSplits, EvalSplit, gather, train_indices
 from ..instrumentation import is_enabled, phase
 from .mmd import bandwidths, build_cache, mmd_curve, subsample_indices, weighted_mmd
@@ -1067,11 +1074,10 @@ def train(
     n_disc_steps: int = 5,
     lr_g: float = 3e-5,
     lr_d: float = 1e-4,
-    lambda_dispersion: float = 0.015,
+    lambda_dispersion: float | None = None,
     log_every: int = 1,
     *,
     objective: Objective = Objective.bce,
-    lambda_gp: float = 10.0,
     fused: bool = True,
 ) -> TrainResult:
     """Train the generator and discriminator, then select a checkpoint.
@@ -1098,16 +1104,21 @@ def train(
             reproducible after the fact without having to decide up front that
             it is worth reproducing.
         n_disc_steps: Discriminator steps per generator step.
+        lambda_dispersion: The penalty on the variance of `g`'s weights. `None`
+            takes the objective's tuned value (`DEFAULT_LAMBDA_DISPERSION`),
+            since the two objectives need values ~30x apart.
         objective: The divergence the game minimizes (see `Objective`). The
             Wasserstein critic gets a linear head and a gradient penalty, and
             both optimizers drop Adam's momentum (beta_1=0, beta_2=0.9), the
             WGAN-GP setting.
-        lambda_gp: The gradient penalty's coefficient. Ignored under BCE.
         fused: Whether to run the whole epoch loop as one `lax.scan` (the
             default) or drive the identical per-epoch function from a Python
             `while` for debugging; the two must agree bit-for-bit.
     """
     _use_compilation_cache()
+
+    if lambda_dispersion is None:
+        lambda_dispersion = DEFAULT_LAMBDA_DISPERSION[objective]
 
     if seed is None:
         # No-argument SeedSequence always fills `entropy` with int drawn from OS.
@@ -1136,7 +1147,7 @@ def train(
 
     state: TrainState = _initial_state(g, d, opt_g, opt_d)
     disc_step, gen_step, eval_step = _make_steps(
-        g, d, opt_g, opt_d, lambda_dispersion, objective=objective, lambda_gp=lambda_gp
+        g, d, opt_g, opt_d, lambda_dispersion, objective=objective, lambda_gp=LAMBDA_GP
     )
     one_pass: Callable[
         [TrainState, PRNGKeyArray],
