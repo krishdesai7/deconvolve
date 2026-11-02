@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+Released on 2026-11-02.
+
+### Preview features
+
+- feat: add experimental Wasserstein objective (`--objective wasserstein`) ([#26](https://github.com/krishdesai7/deconvolve/pull/26))
+
 ## 0.3.1
 
 Released on 2026-11-01.
